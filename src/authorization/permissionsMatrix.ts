@@ -1,0 +1,235 @@
+import { Permission } from '../types/authorization';
+import { OrganizationRole, PlatformRole } from '../types/auth';
+
+export type AppRoleCode = PlatformRole | OrganizationRole;
+
+/**
+ * Matriz imutável de permissões por perfil (Princípio do Menor Privilégio)
+ */
+export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Permission[]>> = {
+  // Superadministrador da plataforma (Escopo Global)
+  platform_super_admin: [
+    'platform:view_overview',
+    'platform:view_organizations',
+    'platform:view_audit',
+    'platform:manage_governance',
+    'audit:view_platform',
+    'personal_account:view_profile',
+    'personal_account:manage_preferences',
+  ],
+
+  // Proprietário da organização (Governança e Supervisão Plena)
+  owner: [
+    'organization:view_overview',
+    'organization:view_settings',
+    'organization:manage_settings',
+    'organization:manage_governance',
+    'users_and_access:view',
+    'users_and_access:manage',
+    'users_and_access:manage_roles',
+    'clients:view',
+    'clients:create',
+    'clients:edit',
+    'client_capturer_assignments:view',
+    'client_capturer_assignments:manage',
+    'properties:view',
+    'properties:create',
+    'properties:edit',
+    'properties:geospatial:view',
+    'properties:geospatial:edit',
+    // Módulo 004: Governança e Supervisão
+    'appraisals:view',
+    'appraisal_requests:view_queue',
+    'appraisal_requests:assign',
+    'technical_professionals:verify',
+    'technical_professionals:manage_capabilities',
+    // Outros módulos
+    'proposals:view',
+    'proposals:create',
+    'proposals:edit',
+    'documents:view',
+    'documents:upload',
+    'documents:manage',
+    'surveys_and_visits:view',
+    'surveys_and_visits:schedule',
+    'surveys_and_visits:execute',
+    'schedule:view',
+    'schedule:manage',
+    'fleet:view',
+    'fleet:manage',
+    'finance:view_overview',
+    'finance:view_records',
+    'finance:manage_operations',
+    'audit:view_organization',
+    'personal_account:view_profile',
+    'personal_account:manage_preferences',
+  ],
+
+  // Administrador da empresa (Operação cotidiana da empresa)
+  company_admin: [
+    'organization:view_overview',
+    'organization:view_settings',
+    'organization:manage_settings',
+    'users_and_access:view',
+    'users_and_access:manage',
+    'clients:view',
+    'clients:create',
+    'clients:edit',
+    'client_capturer_assignments:view',
+    'client_capturer_assignments:manage',
+    'properties:view',
+    'properties:create',
+    'properties:edit',
+    'properties:geospatial:view',
+    'properties:geospatial:edit',
+    // Módulo 004: Gestão Operacional e Atribuição
+    'appraisals:view',
+    'appraisal_requests:view_queue',
+    'appraisal_requests:assign',
+    'technical_professionals:verify',
+    'technical_professionals:manage_capabilities',
+    // Outros módulos
+    'proposals:view',
+    'proposals:create',
+    'proposals:edit',
+    'documents:view',
+    'documents:upload',
+    'documents:manage',
+    'surveys_and_visits:view',
+    'surveys_and_visits:schedule',
+    'surveys_and_visits:execute',
+    'schedule:view',
+    'schedule:manage',
+    'fleet:view',
+    'fleet:manage',
+    'finance:view_overview',
+    'finance:view_records',
+    'personal_account:view_profile',
+    'personal_account:manage_preferences',
+  ],
+
+  // Gerente (Coordenação operacional, agenda e equipe)
+  manager: [
+    'organization:view_overview',
+    'users_and_access:view',
+    'clients:view',
+    'clients:create',
+    'clients:edit',
+    'client_capturer_assignments:view',
+    'client_capturer_assignments:manage',
+    'properties:view',
+    'properties:create',
+    'properties:edit',
+    'properties:geospatial:view',
+    'properties:geospatial:edit',
+    // Módulo 004: Fila, Atribuição e Homologação
+    'appraisals:view',
+    'appraisal_requests:view_queue',
+    'appraisal_requests:assign',
+    'technical_professionals:verify',
+    // Outros módulos
+    'proposals:view',
+    'proposals:create',
+    'proposals:edit',
+    'documents:view',
+    'documents:upload',
+    'documents:manage',
+    'surveys_and_visits:view',
+    'surveys_and_visits:schedule',
+    'surveys_and_visits:execute',
+    'schedule:view',
+    'schedule:manage',
+    'fleet:view',
+    'fleet:manage',
+    'personal_account:view_profile',
+    'personal_account:manage_preferences',
+  ],
+
+  // Projetista (Elaboração agronômica, laudos e propostas)
+  project_designer: [
+    'organization:view_overview',
+    'clients:view',
+    'client_capturer_assignments:view',
+    'properties:view',
+    'properties:create',
+    'properties:edit',
+    'properties:geospatial:view',
+    'properties:geospatial:edit',
+    // Módulo 004: Laudos e Solicitações Atribuídas
+    'appraisals:view',
+    'appraisals:view_assigned',
+    'appraisals:create',
+    'appraisals:edit',
+    'appraisals:edit_assigned',
+    'appraisals:review',
+    'appraisals:issue',
+    'appraisal_requests:view_assigned',
+    'technical_professionals:view_self',
+    'technical_professionals:update_self',
+    // Outros módulos
+    'proposals:view',
+    'proposals:create',
+    'proposals:edit',
+    'documents:view',
+    'documents:upload',
+    'surveys_and_visits:view',
+    'surveys_and_visits:schedule',
+    'schedule:view',
+    'personal_account:view_profile',
+    'personal_account:manage_preferences',
+  ],
+
+  // Financeiro (Gestão financeira e consulta operacional)
+  finance: [
+    'organization:view_overview',
+    'finance:view_overview',
+    'finance:view_records',
+    'finance:manage_operations',
+    'clients:view',
+    'properties:view',
+    'proposals:view',
+    'documents:view',
+    'personal_account:view_profile',
+    'personal_account:manage_preferences',
+  ],
+
+  // Captador (Prospecção de produtores, solicitações e upload preliminar)
+  capturer: [
+    'organization:view_overview',
+    'clients:view',
+    'clients:create',
+    'client_capturer_assignments:view',
+    'properties:view',
+    'properties:create',
+    'properties:edit',
+    'properties:geospatial:view',
+    // Módulo 004: Solicitações de Laudo e Acompanhamento de Status
+    'appraisal_requests:create',
+    'appraisal_requests:view_related',
+    'appraisal_requests:upload_documents',
+    'appraisals:view_status_related',
+    // Outros módulos
+    'proposals:view',
+    'proposals:create',
+    'documents:view',
+    'documents:upload',
+    'surveys_and_visits:view',
+    'schedule:view',
+    'personal_account:view_profile',
+    'personal_account:manage_preferences',
+  ],
+
+  // Nenhum papel atribuído
+  none: [],
+};
+
+export const ROLE_PERMISSIONS_SET_MAP: ReadonlyMap<AppRoleCode, ReadonlySet<Permission>> = new Map(
+  Object.entries(ROLE_PERMISSIONS_MATRIX).map(([role, permissions]) => [
+    role as AppRoleCode,
+    new Set(permissions),
+  ])
+);
+
+export function getRolePermissions(role: AppRoleCode): readonly Permission[] {
+  return ROLE_PERMISSIONS_MATRIX[role] || [];
+}

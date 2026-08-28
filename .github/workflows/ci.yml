@@ -1,0 +1,50 @@
+name: AgroCore CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-test:
+    name: Lint, Build & Homologação Integral (Módulos 001 a 005)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Código Fonte
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js (22.x)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Instalar Dependências
+        run: npm ci
+
+      - name: Verificação Estrita de Tipagem e Sintaxe (Lint)
+        run: npm run lint
+
+      - name: Compilação de Produção (Vite Build & Service Worker)
+        run: npm run build
+
+      - name: Bateria de Testes — Módulo 001 (Autenticação, Sessão, RBAC)
+        run: npm run test:module-001
+
+      - name: Bateria de Testes — Módulo 002 (Gestão de Clientes e Produtores)
+        run: npm run test:module-002
+
+      - name: Bateria de Testes — Módulo 003 (Gestão Territorial e Imóveis)
+        run: npm run test:module-003
+
+      - name: Bateria de Testes — Módulo 004 (Laudos Periciais e NBR 14653)
+        run: npm run test:module-004
+
+      - name: Bateria de Testes — Módulo 005 (Propostas de Crédito e Serviços)
+        run: npm run test:module-005

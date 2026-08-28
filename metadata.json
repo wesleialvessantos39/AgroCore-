@@ -1,0 +1,6 @@
+{
+  "name": "AgroCore",
+  "description": "Plataforma institucional e de gestão para escritórios de crédito e consultoria rural.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
