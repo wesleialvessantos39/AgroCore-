@@ -10,12 +10,12 @@ import { AppraisalStatus } from '../types/appraisal';
  * Matriz estrita de transições válidas de estado de Laudo
  */
 export const ALLOWED_APPRAISAL_TRANSITIONS: Readonly<Record<AppraisalStatus, readonly AppraisalStatus[]>> = {
-  draft: ['data_collection', 'visit_to_schedule', 'review', 'ready_to_issue', 'cancelled'],
-  data_collection: ['draft', 'visit_to_schedule', 'visit_scheduled', 'fieldwork', 'analysis', 'review', 'ready_to_issue', 'cancelled'],
+  draft: ['data_collection', 'visit_to_schedule', 'cancelled'],
+  data_collection: ['draft', 'visit_to_schedule', 'visit_scheduled', 'fieldwork', 'analysis', 'cancelled'],
   visit_to_schedule: ['visit_scheduled', 'data_collection', 'cancelled'],
   visit_scheduled: ['fieldwork', 'visit_to_schedule', 'cancelled'],
   fieldwork: ['analysis', 'awaiting_information', 'data_collection', 'cancelled'],
-  analysis: ['review', 'awaiting_information', 'data_collection', 'ready_to_issue', 'cancelled'],
+  analysis: ['review', 'awaiting_information', 'data_collection', 'cancelled'],
   awaiting_information: ['analysis', 'data_collection', 'fieldwork', 'cancelled'],
   review: ['ready_to_issue', 'analysis', 'awaiting_information', 'cancelled'],
   ready_to_issue: ['review', 'analysis', 'issued', 'cancelled'],
