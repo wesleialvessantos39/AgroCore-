@@ -56,7 +56,36 @@ export interface ProposalsContextValue {
     input: UpdateProposalInput
   ) => Promise<MutationResult<Proposal>>;
   readonly submitProposal: (proposalId: ProposalId) => Promise<MutationResult<Proposal>>;
+  readonly assignProposalReviewer: (
+    proposalId: ProposalId,
+    reviewerUserId: string,
+    reasonIfReassignment?: string
+  ) => Promise<MutationResult<Proposal>>;
+  readonly startProposalReview: (proposalId: ProposalId) => Promise<MutationResult<Proposal>>;
+  readonly requestProposalChanges: (
+    proposalId: ProposalId,
+    reasons: string
+  ) => Promise<MutationResult<Proposal>>;
+  readonly approveProposal: (
+    proposalId: ProposalId,
+    notes?: string
+  ) => Promise<MutationResult<Proposal>>;
+  readonly rejectProposal: (
+    proposalId: ProposalId,
+    reason: string
+  ) => Promise<MutationResult<Proposal>>;
+  readonly markProposalPresented: (
+    proposalId: ProposalId,
+    input: any
+  ) => Promise<MutationResult<Proposal>>;
+  readonly recordProposalDecision: (
+    proposalId: ProposalId,
+    input: any
+  ) => Promise<MutationResult<Proposal>>;
   readonly cancelProposal: (proposalId: ProposalId, reason?: string) => Promise<MutationResult<Proposal>>;
+  readonly getProposalHistory: (proposalId: ProposalId) => Promise<readonly any[]>;
+  readonly getProposalSnapshots: (proposalId: ProposalId) => Promise<readonly any[]>;
+  readonly getProposalReviewAssignments: (proposalId: ProposalId) => Promise<readonly any[]>;
 }
 
 const ProposalsContext = createContext<ProposalsContextValue | null>(null);
@@ -248,17 +277,150 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
     [appContext, canEdit, loadProposals, proposalAppService]
   );
 
+  const assignProposalReviewer = useCallback(
+    async (
+      proposalId: ProposalId,
+      reviewerUserId: string,
+      reasonIfReassignment?: string
+    ): Promise<MutationResult<Proposal>> => {
+      if (!appContext) {
+        return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
+      }
+
+      try {
+        const assigned = await proposalAppService.assignProposalReviewer(
+          proposalId,
+          reviewerUserId,
+          appContext,
+          undefined,
+          reasonIfReassignment
+        );
+        await loadProposals();
+        return { success: true, data: assigned };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao atribuir revisor.';
+        return { success: false, error: msg };
+      }
+    },
+    [appContext, loadProposals, proposalAppService]
+  );
+
+  const startProposalReview = useCallback(
+    async (proposalId: ProposalId): Promise<MutationResult<Proposal>> => {
+      if (!appContext) {
+        return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
+      }
+
+      try {
+        const started = await proposalAppService.startProposalReview(proposalId, appContext);
+        await loadProposals();
+        return { success: true, data: started };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao iniciar revisão.';
+        return { success: false, error: msg };
+      }
+    },
+    [appContext, loadProposals, proposalAppService]
+  );
+
+  const requestProposalChanges = useCallback(
+    async (proposalId: ProposalId, reasons: string): Promise<MutationResult<Proposal>> => {
+      if (!appContext) {
+        return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
+      }
+
+      try {
+        const req = await proposalAppService.requestProposalChanges(proposalId, reasons, appContext);
+        await loadProposals();
+        return { success: true, data: req };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao solicitar ajustes.';
+        return { success: false, error: msg };
+      }
+    },
+    [appContext, loadProposals, proposalAppService]
+  );
+
+  const approveProposal = useCallback(
+    async (proposalId: ProposalId, notes?: string): Promise<MutationResult<Proposal>> => {
+      if (!appContext) {
+        return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
+      }
+
+      try {
+        const approved = await proposalAppService.approveProposal(proposalId, appContext, undefined, notes);
+        await loadProposals();
+        return { success: true, data: approved };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao aprovar proposta.';
+        return { success: false, error: msg };
+      }
+    },
+    [appContext, loadProposals, proposalAppService]
+  );
+
+  const rejectProposal = useCallback(
+    async (proposalId: ProposalId, reason: string): Promise<MutationResult<Proposal>> => {
+      if (!appContext) {
+        return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
+      }
+
+      try {
+        const rejected = await proposalAppService.rejectProposal(proposalId, reason, appContext);
+        await loadProposals();
+        return { success: true, data: rejected };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao rejeitar proposta.';
+        return { success: false, error: msg };
+      }
+    },
+    [appContext, loadProposals, proposalAppService]
+  );
+
+  const markProposalPresented = useCallback(
+    async (proposalId: ProposalId, input: any): Promise<MutationResult<Proposal>> => {
+      if (!appContext) {
+        return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
+      }
+
+      try {
+        const presented = await proposalAppService.markProposalPresented(proposalId, input, appContext);
+        await loadProposals();
+        return { success: true, data: presented };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao registrar apresentação.';
+        return { success: false, error: msg };
+      }
+    },
+    [appContext, loadProposals, proposalAppService]
+  );
+
+  const recordProposalDecision = useCallback(
+    async (proposalId: ProposalId, input: any): Promise<MutationResult<Proposal>> => {
+      if (!appContext) {
+        return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
+      }
+
+      try {
+        const decided = await proposalAppService.recordProposalDecision(proposalId, input, appContext);
+        await loadProposals();
+        return { success: true, data: decided };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao registrar decisão.';
+        return { success: false, error: msg };
+      }
+    },
+    [appContext, loadProposals, proposalAppService]
+  );
+
   const cancelProposal = useCallback(
     async (proposalId: ProposalId, reason?: string): Promise<MutationResult<Proposal>> => {
       if (!appContext) {
         return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
       }
-      if (!canEdit) {
-        return { success: false, error: 'Acesso negado: sem permissão para cancelar propostas.' };
-      }
 
       try {
-        const cancelled = await proposalAppService.cancelProposal(proposalId, appContext, reason);
+        const cancelled = await proposalAppService.cancelProposal(proposalId, appContext, undefined, reason);
         await loadProposals();
         return { success: true, data: cancelled };
       } catch (err: unknown) {
@@ -266,7 +428,43 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, canEdit, loadProposals, proposalAppService]
+    [appContext, loadProposals, proposalAppService]
+  );
+
+  const getProposalHistory = useCallback(
+    async (proposalId: ProposalId): Promise<readonly any[]> => {
+      if (!appContext) return [];
+      try {
+        return await proposalAppService.getProposalHistory(proposalId, appContext);
+      } catch {
+        return [];
+      }
+    },
+    [appContext, proposalAppService]
+  );
+
+  const getProposalSnapshots = useCallback(
+    async (proposalId: ProposalId): Promise<readonly any[]> => {
+      if (!appContext) return [];
+      try {
+        return await proposalAppService.getProposalSnapshots(proposalId, appContext);
+      } catch {
+        return [];
+      }
+    },
+    [appContext, proposalAppService]
+  );
+
+  const getProposalReviewAssignments = useCallback(
+    async (proposalId: ProposalId): Promise<readonly any[]> => {
+      if (!appContext) return [];
+      try {
+        return await proposalAppService.getProposalReviewAssignments(proposalId, appContext);
+      } catch {
+        return [];
+      }
+    },
+    [appContext, proposalAppService]
   );
 
   const contextValue = useMemo<ProposalsContextValue>(
@@ -288,7 +486,17 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       createProposal,
       updateProposal,
       submitProposal,
+      assignProposalReviewer,
+      startProposalReview,
+      requestProposalChanges,
+      approveProposal,
+      rejectProposal,
+      markProposalPresented,
+      recordProposalDecision,
       cancelProposal,
+      getProposalHistory,
+      getProposalSnapshots,
+      getProposalReviewAssignments,
     }),
     [
       status,
@@ -307,7 +515,17 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       createProposal,
       updateProposal,
       submitProposal,
+      assignProposalReviewer,
+      startProposalReview,
+      requestProposalChanges,
+      approveProposal,
+      rejectProposal,
+      markProposalPresented,
+      recordProposalDecision,
       cancelProposal,
+      getProposalHistory,
+      getProposalSnapshots,
+      getProposalReviewAssignments,
     ]
   );
 

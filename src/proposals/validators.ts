@@ -29,6 +29,13 @@ export function getClientDocument(client: Client): string {
 export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, string> = {
   draft: 'Rascunho',
   submitted: 'Submetida',
+  under_review: 'Em Revisão Técnica',
+  changes_requested: 'Ajustes Solicitados',
+  approved: 'Aprovada',
+  presented: 'Apresentada ao Cliente',
+  accepted: 'Aceita pelo Cliente',
+  declined: 'Declinada pelo Cliente',
+  rejected: 'Rejeitada na Análise',
   expired: 'Expirada',
   cancelled: 'Cancelada',
 };
@@ -56,11 +63,18 @@ export {
 } from './financialCalculator';
 
 /**
- * Máquina de estados oficial para a Fundação do Módulo 005
+ * Máquina de estados oficial do Pipeline Comercial (OE-005.003)
  */
 export const ALLOWED_STATUS_TRANSITIONS: Record<ProposalStatus, readonly ProposalStatus[]> = {
   draft: ['submitted', 'cancelled'],
-  submitted: ['expired', 'cancelled'],
+  submitted: ['under_review', 'cancelled'],
+  under_review: ['changes_requested', 'approved', 'rejected', 'cancelled'],
+  changes_requested: ['submitted', 'cancelled'],
+  approved: ['presented', 'cancelled'],
+  presented: ['accepted', 'declined', 'expired', 'cancelled'],
+  accepted: [],
+  declined: [],
+  rejected: [],
   expired: [],
   cancelled: [],
 };
@@ -69,6 +83,10 @@ export function canTransitionProposalStatus(from: ProposalStatus, to: ProposalSt
   if (from === to) return true;
   const allowed = ALLOWED_STATUS_TRANSITIONS[from];
   return allowed ? allowed.includes(to) : false;
+}
+
+export function isTerminalProposalStatus(status: ProposalStatus): boolean {
+  return ['accepted', 'declined', 'rejected', 'expired', 'cancelled'].includes(status);
 }
 
 export interface ValidationResult {

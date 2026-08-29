@@ -21,7 +21,10 @@ try {
   console.log('1. Executando testes de domínio e isolamento multitenant...');
   runScript('scripts/test-proposals-foundation.ts');
 
-  console.log('\n2. Executando auditoria de tema e conformidade visual...');
+  console.log('\n2. Executando testes do Pipeline Comercial, pareceres e ciclo de vida (OE-005.003)...');
+  runScript('scripts/test-proposals-pipeline.ts');
+
+  console.log('\n3. Executando auditoria de tema e conformidade visual...');
   runScript('scripts/test-proposals-theme.js');
 
   console.log('\n====================================================');

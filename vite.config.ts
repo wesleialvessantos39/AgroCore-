@@ -14,12 +14,15 @@ function stripPreviewPlugin(isProduction: boolean) {
         ? path.resolve(path.dirname(importer), id).replace(/\\/g, '/')
         : id.replace(/\\/g, '/');
 
+      const lowerTarget = normalizedTarget.toLowerCase();
+      const lowerId = id.toLowerCase();
+
       // Intercepta gatewayFactory relativo ou absoluto
       if (
-        normalizedTarget.includes('gatewayFactory') ||
-        normalizedTarget.includes('requestGatewayFactory') ||
-        id.includes('gatewayFactory') ||
-        id.includes('requestGatewayFactory')
+        lowerTarget.includes('gatewayfactory') ||
+        lowerTarget.includes('requestgatewayfactory') ||
+        lowerId.includes('gatewayfactory') ||
+        lowerId.includes('requestgatewayfactory')
       ) {
         if (
           normalizedTarget.includes('/clients/capturerAssignmentGatewayFactory') ||
@@ -68,7 +71,7 @@ function stripPreviewPlugin(isProduction: boolean) {
           normalizedTarget.includes('geometryGatewayFactory') ||
           id.includes('geometryGatewayFactory')
         ) {
-          return '\0virtual:production-properties-gateway-factory';
+          return '\0virtual:production-property-geometry-gateway-factory';
         }
         if (
           normalizedTarget.includes('/properties/gatewayFactory') ||
@@ -179,6 +182,16 @@ function stripPreviewPlugin(isProduction: boolean) {
         `;
       }
 
+      if (id === '\0virtual:production-property-geometry-gateway-factory') {
+        return `
+          import { UnavailablePropertyGeometryGateway } from '/src/properties/geometry/unavailableGeometryGateway.ts';
+          export function getPropertyGeometryGateway() {
+            return new UnavailablePropertyGeometryGateway();
+          }
+          export function setPropertyGeometryGatewayForTesting() {}
+        `;
+      }
+
       if (id === '\0virtual:production-appraisals-gateway-factory') {
         return `
           import { UnavailableAppraisalGateway } from '/src/appraisals/unavailableGateway.ts';
@@ -262,13 +275,6 @@ function stripPreviewPlugin(isProduction: boolean) {
             async configureInitialOrganization() { return false; }
             async clearPreference() {}
           }
-          export class PreviewAppraisalGateway {}
-          export class PreviewAppraisalRequestGateway {}
-          export class PreviewTechnicalProfessionalGateway {}
-          export class PreviewClientCapturerAssignmentGateway {}
-          export class PreviewAppraisalNotificationsGateway {}
-          export class PreviewOrganizationMembersGateway {}
-          export class PreviewProposalGateway {}
         `;
       }
 

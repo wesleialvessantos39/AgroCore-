@@ -75,10 +75,20 @@ export type Permission =
   | 'technical_professionals:verify'
   | 'technical_professionals:manage_capabilities'
 
-  // Escopo: Propostas de Crédito
+  // Escopo: Propostas de Crédito e Serviços Técnicos (Módulo 005)
   | 'proposals:view'
+  | 'proposals:view_related'
+  | 'proposals:view_financials'
   | 'proposals:create'
   | 'proposals:edit'
+  | 'proposals:edit_draft'
+  | 'proposals:submit'
+  | 'proposals:assign_review'
+  | 'proposals:review'
+  | 'proposals:approve'
+  | 'proposals:present'
+  | 'proposals:record_decision'
+  | 'proposals:cancel'
 
   // Escopo: Documentos
   | 'documents:view'
