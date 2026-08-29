@@ -636,6 +636,32 @@ async function runTests() {
     ...mockNormative,
   });
 
+  // Transicionar status de acordo com o ciclo canônico até ready_to_issue
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: realAppraisal.id,
+    newStatus: 'data_collection',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: realAppraisal.id,
+    newStatus: 'analysis',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: realAppraisal.id,
+    newStatus: 'review',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: realAppraisal.id,
+    newStatus: 'ready_to_issue',
+    actorUserId: responsibleUserId,
+  });
+
   // 7.1 Rejeita emissão por ator sem a permissão "appraisals:issue"
   let missingPermCaught = false;
   try {
