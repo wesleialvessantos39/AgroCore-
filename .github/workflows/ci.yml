@@ -34,6 +34,9 @@ jobs:
       - name: Compilação de Produção (Vite Build & Service Worker)
         run: npm run build
 
+      - name: Ciclo de Vida e Atualização do Service Worker
+        run: npm run test:sw-lifecycle && npm run test:multi-build-update
+
       - name: Bateria de Testes — Módulo 001 (Autenticação, Sessão, RBAC)
         run: npm run test:module-001
 
@@ -48,3 +51,6 @@ jobs:
 
       - name: Bateria de Testes — Módulo 005 (Propostas de Crédito e Serviços)
         run: npm run test:module-005
+
+      - name: Auditoria Global de Rebranding
+        run: npm run test:rebranding

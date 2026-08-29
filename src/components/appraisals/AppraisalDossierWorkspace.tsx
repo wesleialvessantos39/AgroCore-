@@ -68,7 +68,6 @@ export interface AppraisalDossierWorkspaceProps {
   readonly getNormativeSection: (appraisalId: string) => Promise<AppraisalNormativeSection>;
   readonly saveNormativeSection: (appraisalId: string, section: AppraisalNormativeSection) => Promise<AppraisalNormativeSection>;
   readonly listIssuedVersions: (appraisalId: string) => Promise<readonly AppraisalIssuedVersion[]>;
-  readonly saveIssuedVersion: (version: AppraisalIssuedVersion) => Promise<AppraisalIssuedVersion>;
   readonly issueAppraisalVersion?: (appraisalId: string) => Promise<AppraisalIssuedVersion>;
 }
 
@@ -87,7 +86,6 @@ export function AppraisalDossierWorkspace({
   getNormativeSection,
   saveNormativeSection,
   listIssuedVersions,
-  saveIssuedVersion,
   issueAppraisalVersion,
 }: AppraisalDossierWorkspaceProps) {
   const [activeSection, setActiveSection] = useState<DossierSectionKey | 'issuance'>('identification');
@@ -164,12 +162,6 @@ export function AppraisalDossierWorkspace({
   const handleDeleteSample = async (sampleId: string) => {
     await deleteMarketSample(appraisal.id, sampleId);
     setSamples((prev) => prev.filter((s) => s.id !== sampleId));
-  };
-
-  // Handlers de Emissão
-  const handleIssueVersion = async (version: AppraisalIssuedVersion) => {
-    const saved = await saveIssuedVersion(version);
-    setIssuedVersions((prev) => [saved, ...prev]);
   };
 
   const [calculationError, setCalculationError] = useState<string | null>(null);

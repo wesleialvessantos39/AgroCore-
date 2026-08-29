@@ -30,6 +30,7 @@ import { AppraisalNormativeSection } from '../../types/appraisalNormative';
 import { AppraisalIssuedVersion } from '../../types/appraisalVersioning';
 import { APPRAISAL_THEME } from '../../appraisals/theme';
 import { evaluateAppraisalReadiness } from '../../appraisals/readinessEvaluator';
+import { calculateSampleHomogenization } from '../../appraisals/homogenizationEngine';
 import { formatBRL } from '../../appraisals/decimalMath';
 
 interface AppraisalIssuancePanelProps {
@@ -63,13 +64,15 @@ export function AppraisalIssuancePanel({
 
   // Avaliação de Prontidão em Tempo Real
   const readiness = useMemo(() => {
+    const statistics = calculateSampleHomogenization(samples).stats;
     return evaluateAppraisalReadiness({
       appraisal,
       dossier,
       calculations: calculation,
+      statistics,
       normative,
     });
-  }, [appraisal, dossier, calculation, normative]);
+  }, [appraisal, dossier, samples, calculation, normative]);
 
   // Apenas o projetista responsável técnico cadastrado tem permissão legal para emitir o laudo
   const isDesignatedResponsible = useMemo(() => {

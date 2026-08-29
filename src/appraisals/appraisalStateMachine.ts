@@ -10,14 +10,14 @@ import { AppraisalStatus } from '../types/appraisal';
  * Matriz estrita de transições válidas de estado de Laudo
  */
 export const ALLOWED_APPRAISAL_TRANSITIONS: Readonly<Record<AppraisalStatus, readonly AppraisalStatus[]>> = {
-  draft: ['data_collection', 'visit_to_schedule', 'review', 'ready_to_issue', 'issued', 'cancelled'],
-  data_collection: ['draft', 'visit_to_schedule', 'visit_scheduled', 'fieldwork', 'analysis', 'review', 'ready_to_issue', 'issued', 'cancelled'],
+  draft: ['data_collection', 'visit_to_schedule', 'review', 'ready_to_issue', 'cancelled'],
+  data_collection: ['draft', 'visit_to_schedule', 'visit_scheduled', 'fieldwork', 'analysis', 'review', 'ready_to_issue', 'cancelled'],
   visit_to_schedule: ['visit_scheduled', 'data_collection', 'cancelled'],
   visit_scheduled: ['fieldwork', 'visit_to_schedule', 'cancelled'],
   fieldwork: ['analysis', 'awaiting_information', 'data_collection', 'cancelled'],
-  analysis: ['review', 'awaiting_information', 'data_collection', 'ready_to_issue', 'issued', 'cancelled'],
+  analysis: ['review', 'awaiting_information', 'data_collection', 'ready_to_issue', 'cancelled'],
   awaiting_information: ['analysis', 'data_collection', 'fieldwork', 'cancelled'],
-  review: ['ready_to_issue', 'analysis', 'awaiting_information', 'issued', 'cancelled'],
+  review: ['ready_to_issue', 'analysis', 'awaiting_information', 'cancelled'],
   ready_to_issue: ['review', 'analysis', 'issued', 'cancelled'],
   issued: ['superseded'],
   superseded: [],
@@ -101,7 +101,7 @@ export function transitionAppraisal(
     }
   }
 
-  // 4. Regra de Fundação (OE-004.001): A transição para "issued" permanece fechada por ausência de motor de cálculo e elegibilidade completa
+  // 4. A emissão somente pode ocorrer pelo serviço canônico, após prontidão e elegibilidade completas.
   if (next === 'issued' && !context.canIssueDirectly) {
     return {
       success: false,

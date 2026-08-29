@@ -3,6 +3,10 @@ import path from 'path';
 
 console.log('--- TESTE REAL DE DOIS BUILDS DE PRODUÇÃO E MECANISMO DE ATUALIZAÇÃO ---');
 
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
 // 1. Lê a versão atual do SW (Build 1)
 const sw1 = fs.readFileSync('dist/sw.js', 'utf-8');
 const version1 = sw1.match(/const CACHE_VERSION = '([^']+)';/)[1];
@@ -27,8 +31,8 @@ for (const cacheName of mockCacheStorage) {
 }
 
 console.log(`[Build 2 Ativação] Caches marcados para remoção:`, cachesToDelete);
-console.assert(cachesToDelete.includes(version1), 'Cache da versão 1 DEVE ser removido na ativação da versão 2');
-console.assert(!cachesToDelete.includes('other-app-cache-xyz'), 'Caches de outras origens/aplicações NÃO devem ser tocados');
-console.assert(!cachesToDelete.includes(version2), 'Cache da versão 2 DEVE ser preservado');
+assert(cachesToDelete.includes(version1), 'Cache da versão 1 DEVE ser removido na ativação da versão 2');
+assert(!cachesToDelete.includes('other-app-cache-xyz'), 'Caches de outras origens/aplicações NÃO devem ser tocados');
+assert(!cachesToDelete.includes(version2), 'Cache da versão 2 DEVE ser preservado');
 
 console.log('✓ Teste de ciclo de atualização entre builds concluído com 100% de conformidade.');

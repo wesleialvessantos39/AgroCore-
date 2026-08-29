@@ -11,6 +11,7 @@ import {
   PROPOSAL_TYPE_LABELS,
   formatCentsToBRL,
   parseBRLToCents,
+  parsePercentageInput,
   validateProposalInput,
   getClientDisplayName,
   getClientDocument,
@@ -132,9 +133,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
     const parsedValidity = validityDays ? parseInt(validityDays, 10) : 30;
     const parsedTerm = financingTermMonths ? parseInt(financingTermMonths, 10) : undefined;
     const parsedGrace = gracePeriodMonths ? parseInt(gracePeriodMonths, 10) : undefined;
-    const parsedInterest = interestRateAnnualPercentage
-      ? parseFloat(interestRateAnnualPercentage.replace(',', '.'))
-      : undefined;
+    const parsedInterest = parsePercentageInput(interestRateAnnualPercentage);
 
     if (isEdit && initialData) {
       const updatePayload: UpdateProposalInput = {

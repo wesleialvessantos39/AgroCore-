@@ -84,7 +84,6 @@ export function AppraisalsPage() {
     getNormativeSection,
     saveNormativeSection,
     listIssuedVersions,
-    saveIssuedVersion,
     issueAppraisalVersion,
   } = useAppraisals();
 
@@ -151,7 +150,6 @@ export function AppraisalsPage() {
         getNormativeSection={getNormativeSection}
         saveNormativeSection={saveNormativeSection}
         listIssuedVersions={listIssuedVersions}
-        saveIssuedVersion={saveIssuedVersion}
         issueAppraisalVersion={issueAppraisalVersion}
       />
     );

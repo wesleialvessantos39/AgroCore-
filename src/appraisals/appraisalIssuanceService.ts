@@ -9,7 +9,7 @@
  * 3. Recarrega o perfil técnico do responsável cadastrado;
  * 4. Recarrega dossiê, amostras, estatísticas, cálculos e enquadramento normativo;
  * 5. Valida organização ativa e integridade multitenant;
- * 6. Valida permissão RBAC 'appraisals:issue' (ou 'appraisals:edit'/'appraisals:create' para o responsável);
+ * 6. Valida exclusivamente a permissão RBAC 'appraisals:issue';
  * 7. Exige que o ator seja o projetista responsável técnico cadastrado no laudo;
  * 8. Exige perfil verificado ('manually_verified') com capacidade rural/urbana compatível;
  * 9. Exige ART, RRT ou TRT compatível e comprovada;
@@ -148,6 +148,10 @@ export class AppraisalIssuanceService {
           throw new Error('Não é possível emitir versão de um laudo cancelado.');
         }
 
+        if (appraisal.status !== 'ready_to_issue') {
+          throw new Error('A emissão formal exige que o laudo esteja no estado "ready_to_issue".');
+        }
+
         // 2. Exigir que o ator seja o projetista responsável técnico cadastrado
         if (!appraisal.responsibleUserId) {
           throw new Error('O laudo não possui um Responsável Técnico designado.');
@@ -242,7 +246,10 @@ export class AppraisalIssuanceService {
 
         // 10. Listar Versões Anteriores para Versionamento Atômico
         const previousVersions = await appraisalGateway.listIssuedVersions(activeOrganizationId, appraisalId);
-        const nextVersionNumber = previousVersions.length + 1;
+        const nextVersionNumber = previousVersions.reduce(
+          (highest, version) => Math.max(highest, version.versionNumber),
+          0
+        ) + 1;
         const now = new Date().toISOString();
 
         // 11. Construir Snapshot Canônico com Dados Reais
@@ -320,15 +327,12 @@ export class AppraisalIssuanceService {
           snapshot,
         };
 
-        // 13. Salvar Versão no Gateway
-        const savedVersion = await appraisalGateway.saveIssuedVersion(activeOrganizationId, newIssuedVersion);
-
-        // 14. Atualizar Status do Laudo para 'issued'
-        const updatedAppraisal = await appraisalGateway.updateAppraisalStatus({
+        // 13 e 14. Commit atômico da versão imutável e do status do laudo.
+        const committed = await appraisalGateway.commitIssuedVersion({
           organizationId: activeOrganizationId,
           appraisalId: appraisal.id,
-          newStatus: 'issued',
           actorUserId: actor.userId,
+          version: newIssuedVersion,
         });
 
         // 15. Emitir Evento de Domínio
@@ -348,8 +352,8 @@ export class AppraisalIssuanceService {
         });
 
         const finalResult: IssueAppraisalVersionResult = {
-          issuedVersion: savedVersion,
-          updatedAppraisal,
+          issuedVersion: committed.issuedVersion,
+          updatedAppraisal: committed.updatedAppraisal,
         };
 
         AppraisalIssuanceService.idempotencyStore.set(idempKey, {

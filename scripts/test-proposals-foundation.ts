@@ -17,13 +17,25 @@ import {
 import {
   formatCentsToBRL,
   parseBRLToCents,
+  parsePercentageInput,
   validateProposalInput,
 } from '../src/proposals/validators';
+import {
+  calculateProposalFinancialSummary,
+  calculateSimpleInterestCents,
+  divideBigIntWithRounding,
+} from '../src/proposals/financialCalculator';
 import { CreateProposalInput, ProposalDomainError } from '../src/types/proposals';
 import { Client } from '../src/types/client';
 import { Property } from '../src/types/property';
 import { OrganizationMember } from '../src/auth/organizationMembersGateway';
 import { ClientCapturerAssignmentGateway } from '../src/types/clientCapturerAssignment';
+import {
+  getProposalDetailPath,
+  getProposalEditPath,
+} from '../src/routes/paths';
+import { findRouteDefinition } from '../src/routes/routeMatrix';
+import { getSafeRedirectUrl } from '../src/routes/safeNavigation';
 
 let passedCount = 0;
 let failedCount = 0;
@@ -66,6 +78,42 @@ async function runTests() {
   );
   assert(parseBRLToCents('100') === 10000, 'Converte "100" para 10.000 centavos');
   assert(parseBRLToCents('0,05') === 5, 'Converte "0,05" para 5 centavos');
+  assert(
+    divideBigIntWithRounding(5n, 2n, 'half_even') === 2n &&
+      divideBigIntWithRounding(7n, 2n, 'half_even') === 4n,
+    'Arredondamento bancário meio-par resolve empates para o inteiro par'
+  );
+  assert(
+    calculateSimpleInterestCents(10_000, 10.5, 12) === 1_050,
+    'Calcula taxa anual fracionária sem perda intermediária de centavos'
+  );
+  assert(
+    parsePercentageInput('10,50') === 10.5 &&
+      Number.isNaN(parsePercentageInput('10,5abc')),
+    'Parser de taxa aceita decimal completo e rejeita sufixo parcial'
+  );
+
+  let unsafePrincipalRejected = false;
+  try {
+    calculateProposalFinancialSummary({
+      principalCents: Number.MAX_SAFE_INTEGER + 1,
+    });
+  } catch {
+    unsafePrincipalRejected = true;
+  }
+  assert(unsafePrincipalRejected, 'Rejeita principal fora do intervalo de inteiros seguros');
+
+  let totalOverflowRejected = false;
+  try {
+    calculateProposalFinancialSummary({
+      principalCents: Number.MAX_SAFE_INTEGER,
+      interestRateAnnualPercentage: 100,
+      financingTermMonths: 12,
+    });
+  } catch {
+    totalOverflowRejected = true;
+  }
+  assert(totalOverflowRejected, 'Rejeita estouro do total financeiro estimado');
 
   // --- GRUPO 2: Validações de Entrada ---
   console.log('\n--- GRUPO 2: Validações de Entrada Cadastrais ---');
@@ -318,6 +366,65 @@ async function runTests() {
   }
   assert(versionConflictCaught, 'Rejeita atualização com version conflict (optimistic lock)');
 
+  // 4.1 Concorrência real: duas atualizações simultâneas com a mesma versão
+  const concurrentProposal = await appService.createProposal(
+    {
+      clientId: 'cli-produtor-1',
+      propertyId: 'prop-fazenda-1',
+      title: 'Proposta para Teste de Concorrência',
+      proposalType: 'credit',
+      category: 'investimento',
+      requestedAmountCents: 20_000_000,
+      idempotencyKey: 'idem-concurrency-create',
+    },
+    ctxOrgA
+  );
+  const delayedContext: ProposalAppContext = {
+    ...ctxOrgA,
+    propertyResolver: async (id) => {
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      return propertiesStore[id] || null;
+    },
+  };
+  const concurrentResults = await Promise.allSettled([
+    appService.updateProposal(
+      concurrentProposal.id,
+      {
+        title: 'Atualização Concorrente A',
+        propertyId: 'prop-fazenda-1',
+        expectedVersion: concurrentProposal.version,
+        idempotencyKey: 'idem-concurrent-a',
+      },
+      delayedContext
+    ),
+    appService.updateProposal(
+      concurrentProposal.id,
+      {
+        title: 'Atualização Concorrente B',
+        propertyId: 'prop-fazenda-1',
+        expectedVersion: concurrentProposal.version,
+        idempotencyKey: 'idem-concurrent-b',
+      },
+      delayedContext
+    ),
+  ]);
+  const fulfilledUpdates = concurrentResults.filter((result) => result.status === 'fulfilled');
+  const rejectedUpdates = concurrentResults.filter((result) => result.status === 'rejected');
+  const concurrencyRejected = rejectedUpdates.some(
+    (result) =>
+      result.status === 'rejected' &&
+      result.reason instanceof ProposalDomainError &&
+      result.reason.code === 'CONCURRENCY_CONFLICT'
+  );
+  const concurrentFinal = await appService.getProposalById(concurrentProposal.id, ctxOrgA);
+  assert(
+    fulfilledUpdates.length === 1 &&
+      rejectedUpdates.length === 1 &&
+      concurrencyRejected &&
+      concurrentFinal.version === concurrentProposal.version + 1,
+    'Promise.all: exatamente uma atualização vence e a outra recebe CONCURRENCY_CONFLICT'
+  );
+
   // 5. Isolamento Multitenant: Org B não consegue acessar
   const ctxOrgB: ProposalAppContext = {
     ...ctxOrgA,
@@ -372,6 +479,23 @@ async function runTests() {
     }
   }
   assert(permDeniedCaught, 'Deny-by-default: Bloqueia criação para usuário sem permissão');
+
+  // 6.1 Rotas dinâmicas e redirecionamentos seguros
+  const hostileProposalId = 'prop/123?next=https://example.invalid';
+  const safeDetailPath = getProposalDetailPath(hostileProposalId);
+  const safeEditPath = getProposalEditPath(hostileProposalId);
+  assert(
+    safeDetailPath === '/propostas/prop%2F123%3Fnext%3Dhttps%3A%2F%2Fexample.invalid' &&
+      safeEditPath.endsWith('/editar'),
+    'Builders de rotas de propostas codificam identificadores não confiáveis'
+  );
+  assert(
+    findRouteDefinition('/propostas/prop-123')?.requiredPermissions === 'proposals:view' &&
+      findRouteDefinition('/propostas/prop-123/editar')?.requiredPermissions === 'proposals:edit' &&
+      getSafeRedirectUrl('/propostas/prop-123') === '/propostas/prop-123' &&
+      getSafeRedirectUrl('//example.invalid/propostas') === '/sistema',
+    'Matriz e navegação reconhecem propostas internas e bloqueiam open redirect'
+  );
 
   // 7. Submissão e Cancelamento Canônicos
   console.log('\n--- GRUPO 4: Submissão e Cancelamento Canônicos com Trava ---');
