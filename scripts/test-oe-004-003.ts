@@ -636,6 +636,25 @@ async function runTests() {
     ...mockNormative,
   });
 
+  // Transicionar status de acordo com o ciclo canônico até ready_to_issue
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: realAppraisal.id,
+    newStatus: 'data_collection',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: realAppraisal.id,
+    newStatus: 'analysis',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: realAppraisal.id,
+    newStatus: 'review',
+    actorUserId: responsibleUserId,
+  });
   const appraisalReadyToIssue = await appraisalGw.updateAppraisalStatus({
     organizationId: orgId,
     appraisalId: realAppraisal.id,
@@ -761,6 +780,24 @@ async function runTests() {
     propertyType: 'rural',
     purpose: 'Teste de segurança',
     origin: 'technical_initiative',
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: genericBypassAppraisal.id,
+    newStatus: 'data_collection',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: genericBypassAppraisal.id,
+    newStatus: 'analysis',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: genericBypassAppraisal.id,
+    newStatus: 'review',
+    actorUserId: responsibleUserId,
   });
   await appraisalGw.updateAppraisalStatus({
     organizationId: orgId,
