@@ -12,11 +12,24 @@ const FORBIDDEN_TOKENS = [
   'zinc-',
   'neutral-',
   'stone-',
-  'rose-',
-  'amber-',
-  'emerald-',
   'red-',
+  'orange-',
+  'amber-',
   'yellow-',
+  'lime-',
+  'green-',
+  'emerald-',
+  'teal-',
+  'cyan-',
+  'sky-',
+  'blue-',
+  'indigo-',
+  'violet-',
+  'purple-',
+  'fuchsia-',
+  'pink-',
+  'rose-',
+  'black',
 ];
 
 const TARGET_DIRECTORIES = [
@@ -31,14 +44,12 @@ let errorsFound = 0;
 
 function scanFile(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8');
-  const lines = content.split('\n');
+  const sourceWithoutComments = content
+    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
+    .replace(/(^|\s)\/\/.*$/gm, '$1');
+  const lines = sourceWithoutComments.split('\n');
 
   lines.forEach((line, idx) => {
-    // Ignora comentários que documentam proibições
-    if (line.includes('PROHIBITED') || line.includes('FORBIDDEN') || line.includes('proibida')) {
-      return;
-    }
-
     FORBIDDEN_TOKENS.forEach((token) => {
       // Procura ocorrências de classes Tailwind com os tokens proibidos
       const regex = new RegExp(`\\b(bg|text|border|ring|fill|stroke)-${token}`, 'g');
@@ -48,6 +59,12 @@ function scanFile(filePath) {
         errorsFound++;
       }
     });
+
+    if (/\bdark:/.test(line)) {
+      console.error(`[VIOLAÇÃO DE TEMA] ${filePath}:${idx + 1} -> Contém variante proibida: dark:`);
+      console.error(`  Linha: ${line.trim()}`);
+      errorsFound++;
+    }
   });
 }
 

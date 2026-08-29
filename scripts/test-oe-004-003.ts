@@ -655,12 +655,16 @@ async function runTests() {
     newStatus: 'review',
     actorUserId: responsibleUserId,
   });
-  await appraisalGw.updateAppraisalStatus({
+  const appraisalReadyToIssue = await appraisalGw.updateAppraisalStatus({
     organizationId: orgId,
     appraisalId: realAppraisal.id,
     newStatus: 'ready_to_issue',
     actorUserId: responsibleUserId,
   });
+  assert(
+    appraisalReadyToIssue.status === 'ready_to_issue',
+    '7.0 Laudo precisa alcançar ready_to_issue antes da emissão formal'
+  );
 
   // 7.1 Rejeita emissão por ator sem a permissão "appraisals:issue"
   let missingPermCaught = false;
@@ -764,6 +768,67 @@ async function runTests() {
   assert(
     concResults[0].issuedVersion.id === concResults[1].issuedVersion.id,
     '7.5 Emissões concorrentes resolvem de forma atômica e segura com serialização via lock'
+  );
+
+  // 7.6 O caminho genérico de status não pode contornar o commit canônico de emissão
+  const genericBypassAppraisal = await appraisalGw.createAppraisal({
+    organizationId: orgId,
+    clientId: realClient.id,
+    propertyId: realProperty.id,
+    responsibleUserId,
+    title: 'Laudo para Teste de Bloqueio do Atalho Genérico',
+    propertyType: 'rural',
+    purpose: 'Teste de segurança',
+    origin: 'technical_initiative',
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: genericBypassAppraisal.id,
+    newStatus: 'data_collection',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: genericBypassAppraisal.id,
+    newStatus: 'analysis',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: genericBypassAppraisal.id,
+    newStatus: 'review',
+    actorUserId: responsibleUserId,
+  });
+  await appraisalGw.updateAppraisalStatus({
+    organizationId: orgId,
+    appraisalId: genericBypassAppraisal.id,
+    newStatus: 'ready_to_issue',
+    actorUserId: responsibleUserId,
+  });
+  let genericIssuanceRejected = false;
+  try {
+    await appraisalGw.updateAppraisalStatus({
+      organizationId: orgId,
+      appraisalId: genericBypassAppraisal.id,
+      newStatus: 'issued',
+      actorUserId: responsibleUserId,
+    });
+  } catch {
+    genericIssuanceRejected = true;
+  }
+  const bypassAfterAttempt = await appraisalGw.getAppraisalById(
+    orgId,
+    genericBypassAppraisal.id
+  );
+  const bypassVersions = await appraisalGw.listIssuedVersions(
+    orgId,
+    genericBypassAppraisal.id
+  );
+  assert(
+    genericIssuanceRejected &&
+      bypassAfterAttempt?.status === 'ready_to_issue' &&
+      bypassVersions.length === 0,
+    '7.6 Atualização genérica não emite laudo nem cria versão órfã'
   );
 
   console.log('\n====================================================');

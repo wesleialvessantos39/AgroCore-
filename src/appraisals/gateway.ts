@@ -56,6 +56,18 @@ export interface UpdateAppraisalStatusInput {
   readonly cancellationReason?: string;
 }
 
+export interface CommitIssuedVersionInput {
+  readonly organizationId: string;
+  readonly appraisalId: AppraisalId;
+  readonly actorUserId: string;
+  readonly version: AppraisalIssuedVersion;
+}
+
+export interface CommitIssuedVersionResult {
+  readonly issuedVersion: AppraisalIssuedVersion;
+  readonly updatedAppraisal: Appraisal;
+}
+
 export interface AppraisalGateway {
   // Operações com Laudos
   listAppraisals(
@@ -80,6 +92,7 @@ export interface AppraisalGateway {
     command: StartDirectAppraisalCommand,
     actorUserId: string,
     propertyType?: 'rural' | 'urban',
+    technicalProfessionalProfileId?: TechnicalProfessionalProfileId,
     signal?: AbortSignal
   ): Promise<Appraisal>;
 
@@ -175,11 +188,10 @@ export interface AppraisalGateway {
     signal?: AbortSignal
   ): Promise<readonly AppraisalIssuedVersion[]>;
 
-  saveIssuedVersion(
-    organizationId: string,
-    version: AppraisalIssuedVersion,
+  commitIssuedVersion(
+    input: CommitIssuedVersionInput,
     signal?: AbortSignal
-  ): Promise<AppraisalIssuedVersion>;
+  ): Promise<CommitIssuedVersionResult>;
 
   // Operações com Solicitações de Laudo (Captador & Fila)
   createAppraisalRequest(

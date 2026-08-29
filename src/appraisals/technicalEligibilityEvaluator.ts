@@ -10,7 +10,7 @@
  * 4. Situação Cadastral e Documento de Responsabilidade (ART / RRT / TRT)
  * 5. Capacidades Técnicas Verificadas (VerifiedTechnicalCapability) — Sem inferência automática
  * 6. Independência Estrita entre Escopo Rural e Urbano
- * 7. Emissão ("canIssue") Globalmente Bloqueada na Fundação Arquitetural
+ * 7. Emissão condicionada à permissão explícita appraisals:issue
  */
 
 import {
@@ -69,15 +69,24 @@ export function evaluateTechnicalEligibility(
 
   // 3. Verificação de Permissão RBAC (Autorização do Sistema)
   // Apenas appraisals:view é estritamente INSUFICIENTE para elaborar ou assinar laudos técnicos.
-  const hasAppraisalPermission =
-    params.userPermissions.includes('appraisals:create') ||
-    params.userPermissions.includes('appraisals:edit') ||
-    params.userPermissions.includes('appraisals:issue');
+  const isIssueIntent = params.intent === 'issue';
+  const hasAppraisalPermission = isIssueIntent
+    ? params.userPermissions.includes('appraisals:issue')
+    : params.userPermissions.includes('appraisals:create') ||
+      params.userPermissions.includes('appraisals:edit');
 
   if (!hasAppraisalPermission) {
     reasonCodes.push('missing_rbac_permission');
-    reasons.push('Usuário não possui permissão RBAC para criar ou editar laudos (permissão de apenas visualizar não confere capacidade de elaboração técnica).');
-    missingRequirements.push('Permissão RBAC appraisals:create ou appraisals:edit.');
+    reasons.push(
+      isIssueIntent
+        ? 'Usuário não possui a permissão RBAC explícita appraisals:issue para emitir laudos.'
+        : 'Usuário não possui permissão RBAC para criar ou editar laudos (permissão de apenas visualizar não confere capacidade de elaboração técnica).'
+    );
+    missingRequirements.push(
+      isIssueIntent
+        ? 'Permissão RBAC appraisals:issue.'
+        : 'Permissão RBAC appraisals:create ou appraisals:edit.'
+    );
   }
 
   // 4. Verificação de Perfil Profissional Técnico
@@ -225,7 +234,10 @@ export function evaluateTechnicalEligibility(
     profile.status === 'manually_verified' &&
     reasonCodes.length === 0;
 
-  const canIssue = isFullyEligible;
+  const canIssue =
+    isFullyEligible &&
+    params.intent === 'issue' &&
+    params.userPermissions.includes('appraisals:issue');
   const decision = isFullyEligible ? 'allowed' : 'denied';
 
   return {

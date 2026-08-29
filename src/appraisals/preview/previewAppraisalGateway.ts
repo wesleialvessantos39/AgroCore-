@@ -36,6 +36,8 @@ import { AppraisalNormativeSection } from '../../types/appraisalNormative';
 import { AppraisalIssuedVersion } from '../../types/appraisalVersioning';
 import {
   AppraisalGateway,
+  CommitIssuedVersionInput,
+  CommitIssuedVersionResult,
   CreateAppraisalInput,
   UpdateAppraisalStatusInput,
 } from '../gateway';
@@ -226,6 +228,7 @@ export class PreviewAppraisalGateway implements AppraisalGateway {
     command: StartDirectAppraisalCommand,
     actorUserId: string,
     propertyType: 'rural' | 'urban' = 'rural',
+    technicalProfessionalProfileId?: string,
     signal?: AbortSignal
   ): Promise<Appraisal> {
     if (signal?.aborted) {
@@ -258,6 +261,7 @@ export class PreviewAppraisalGateway implements AppraisalGateway {
       clientId: command.clientId,
       propertyId: command.propertyId,
       responsibleUserId: actorUserId,
+      technicalProfessionalProfileId,
       origin: 'technical_initiative',
       status: 'draft',
       purpose: command.purpose,
@@ -334,7 +338,7 @@ export class PreviewAppraisalGateway implements AppraisalGateway {
     const transition = transitionAppraisal(current.status, input.newStatus, {
       actorUserId: input.actorUserId,
       cancellationReason: input.cancellationReason,
-      canIssueDirectly: true,
+      canIssueDirectly: false,
     });
 
     if (!transition.success) {
@@ -1369,25 +1373,70 @@ export class PreviewAppraisalGateway implements AppraisalGateway {
     return Object.freeze([...list]);
   }
 
-  async saveIssuedVersion(
-    organizationId: string,
-    version: AppraisalIssuedVersion,
+  async commitIssuedVersion(
+    input: CommitIssuedVersionInput,
     signal?: AbortSignal
-  ): Promise<AppraisalIssuedVersion> {
+  ): Promise<CommitIssuedVersionResult> {
     if (signal?.aborted) {
       throw new DOMException('Operação cancelada', 'AbortError');
+    }
+
+    const { organizationId, appraisalId, actorUserId, version } = input;
+    const orgAppraisals = this.appraisalsStore.get(organizationId) || [];
+    const appraisalIndex = orgAppraisals.findIndex((item) => item.id === appraisalId);
+    if (appraisalIndex < 0) {
+      throw new Error('Laudo de avaliação não encontrado para a organização informada.');
+    }
+
+    const currentAppraisal = orgAppraisals[appraisalIndex];
+    if (currentAppraisal.status !== 'ready_to_issue') {
+      throw new Error('A emissão formal exige que o laudo esteja no estado "ready_to_issue".');
+    }
+    if (
+      version.organizationId !== organizationId ||
+      version.appraisalId !== appraisalId ||
+      version.issuedByUserId !== actorUserId
+    ) {
+      throw new Error('Metadados da versão emitida divergem do laudo, organização ou ator canônicos.');
     }
 
     let orgMap = this.issuedVersionsStore.get(organizationId);
     if (!orgMap) {
       orgMap = new Map<string, AppraisalIssuedVersion[]>();
-      this.issuedVersionsStore.set(organizationId, orgMap);
     }
 
-    const currentList = orgMap.get(version.appraisalId) || [];
-    const updatedList = [version, ...currentList];
-    orgMap.set(version.appraisalId, updatedList);
-    return version;
+    const currentList = orgMap.get(appraisalId) || [];
+    const nextVersionNumber = currentList.reduce(
+      (highest, item) => Math.max(highest, item.versionNumber),
+      0
+    ) + 1;
+    if (version.versionNumber !== nextVersionNumber) {
+      throw new Error('CONCURRENCY_CONFLICT: número de versão emitida não é o próximo número canônico.');
+    }
+    if (
+      currentList.some(
+        (item) => item.id === version.id || item.versionNumber === version.versionNumber
+      )
+    ) {
+      throw new Error('CONCURRENCY_CONFLICT: versão emitida duplicada.');
+    }
+
+    const now = new Date().toISOString();
+    const updatedAppraisal: Appraisal = Object.freeze({
+      ...currentAppraisal,
+      status: 'issued',
+      issuedAt: now,
+      updatedAt: now,
+    });
+
+    // Commit síncrono em memória: nenhuma falha observável pode ocorrer entre as duas escritas.
+    orgMap.set(appraisalId, [version, ...currentList]);
+    this.issuedVersionsStore.set(organizationId, orgMap);
+    const nextAppraisals = [...orgAppraisals];
+    nextAppraisals[appraisalIndex] = updatedAppraisal;
+    this.appraisalsStore.set(organizationId, nextAppraisals);
+
+    return { issuedVersion: version, updatedAppraisal };
   }
 
   clearAllSessionData(): void {

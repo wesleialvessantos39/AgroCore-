@@ -49,7 +49,11 @@ export const PROPOSAL_CATEGORY_LABELS: Record<ProposalCategory, string> = {
   outros: 'Outros',
 };
 
-export { formatCentsToBRL, parseBRLToCents } from './financialCalculator';
+export {
+  formatCentsToBRL,
+  parseBRLToCents,
+  parsePercentageInput,
+} from './financialCalculator';
 
 /**
  * Máquina de estados oficial para a Fundação do Módulo 005
@@ -134,8 +138,8 @@ export function validateProposalInput(
   }
 
   if (input.financingTermMonths !== undefined && input.financingTermMonths !== null) {
-    if (input.financingTermMonths < 0 || !Number.isInteger(input.financingTermMonths)) {
-      errors.financingTermMonths = 'O prazo de financiamento deve ser um número inteiro de meses positivo.';
+    if (input.financingTermMonths < 1 || !Number.isInteger(input.financingTermMonths)) {
+      errors.financingTermMonths = 'O prazo de financiamento deve ser um número inteiro de meses maior que zero.';
     }
   }
 
@@ -149,8 +153,11 @@ export function validateProposalInput(
     input.interestRateAnnualPercentage !== undefined &&
     input.interestRateAnnualPercentage !== null
   ) {
-    if (input.interestRateAnnualPercentage < 0) {
-      errors.interestRateAnnualPercentage = 'A taxa de juros anual não pode ser negativa.';
+    if (
+      !Number.isFinite(input.interestRateAnnualPercentage) ||
+      input.interestRateAnnualPercentage < 0
+    ) {
+      errors.interestRateAnnualPercentage = 'A taxa de juros anual deve ser um número válido e não negativo.';
     }
   }
 

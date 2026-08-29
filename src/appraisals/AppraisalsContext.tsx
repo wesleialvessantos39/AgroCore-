@@ -27,7 +27,6 @@ import {
   AppraisalId,
   AppraisalListFilters,
   AppraisalListPagination,
-  AppraisalOrigin,
   AppraisalRequest,
   AppraisalRequestId,
   AppraisalRequestListFilters,
@@ -50,13 +49,12 @@ import { getAppraisalRequestGateway } from './requestGatewayFactory';
 import { getClientGateway } from '../clients/gatewayFactory';
 import { getPropertyGateway } from '../properties/gatewayFactory';
 import { getTechnicalProfessionalGateway } from '../technicalProfessionals/gatewayFactory';
-import { evaluateTechnicalEligibility } from './technicalEligibilityEvaluator';
 import { useAuth } from '../auth/useAuth';
 import { useOrganization } from '../organization/useOrganization';
 import { useAuthorization } from '../authorization/useAuthorization';
-import { createAppraisalDomainEvent } from './domainEvents';
 import { evaluateAppraisalAccess } from './appraisalAccessPolicy';
 import { appraisalIssuanceService } from './appraisalIssuanceService';
+import { validateStartDirectAppraisalCommand } from './startDirectAppraisalValidator';
 
 export interface AppraisalsContextValue {
   readonly appraisals: readonly AppraisalSummary[];
@@ -78,17 +76,6 @@ export interface AppraisalsContextValue {
 
   readonly getAppraisalById: (id: AppraisalId) => Promise<Appraisal | null>;
   readonly getRequestById: (id: AppraisalRequestId) => Promise<AppraisalRequest | null>;
-
-  readonly createAppraisal: (input: {
-    clientId: string;
-    propertyId: string;
-    origin?: AppraisalOrigin;
-    purpose: string;
-    title: string;
-    propertyType?: 'rural' | 'urban';
-    observations?: string;
-    appraisalRequestId?: string;
-  }) => Promise<Appraisal>;
 
   readonly startDirectAppraisal: (command: StartDirectAppraisalCommand) => Promise<Appraisal>;
 
@@ -139,7 +126,6 @@ export interface AppraisalsContextValue {
   readonly getNormativeSection: (appraisalId: AppraisalId) => Promise<AppraisalNormativeSection>;
   readonly saveNormativeSection: (appraisalId: AppraisalId, normative: AppraisalNormativeSection) => Promise<AppraisalNormativeSection>;
   readonly listIssuedVersions: (appraisalId: AppraisalId) => Promise<readonly AppraisalIssuedVersion[]>;
-  readonly saveIssuedVersion: (version: AppraisalIssuedVersion) => Promise<AppraisalIssuedVersion>;
   readonly issueAppraisalVersion: (appraisalId: AppraisalId) => Promise<AppraisalIssuedVersion>;
 }
 
@@ -382,132 +368,42 @@ export function AppraisalsProvider({
     [session, activeOrganization?.id]
   );
 
-  const createAppraisal = useCallback(
-    async (input: {
-      clientId: string;
-      propertyId: string;
-      origin?: AppraisalOrigin;
-      purpose: string;
-      title: string;
-      propertyType?: 'rural' | 'urban';
-      observations?: string;
-      appraisalRequestId?: string;
-    }): Promise<Appraisal> => {
-      if (!session?.user?.id || !activeOrganization?.id) {
-        throw new Error('Sessão ou organização ativa não disponível.');
-      }
-
-      // 1. Avaliação de Acesso R1 & R2
-      const accessCheck = evaluateAppraisalAccess({
-        operation: 'create_appraisal',
-        actorUserId: session.user.id,
-        actorRole: session.organizationRole,
-        actorPermissions: Array.from(activePermissions),
-        activeOrganizationId: activeOrganization.id,
-        targetOrganizationId: activeOrganization.id,
-        isMembershipActive: session.organizationRole !== 'none',
-      });
-
-      if (!accessCheck.granted) {
-        throw new Error(accessCheck.reason);
-      }
-
-      // 2. Validação das Fontes Canônicas: Cliente e Imóvel
-      const clientGateway = getClientGateway();
-      const propertyGateway = getPropertyGateway();
-
-      const client = await clientGateway.getClientById(activeOrganization.id, input.clientId);
-      if (!client) {
-        throw new Error('Cliente selecionado não foi encontrado no cadastro canônico da organização.');
-      }
-
-      const property = await propertyGateway.getPropertyById(activeOrganization.id, input.propertyId);
-      if (!property) {
-        throw new Error('Imóvel selecionado não foi encontrado no cadastro territorial da organização.');
-      }
-
-      // Validar vínculo canônico entre imóvel e cliente
-      const isLinkedToClient =
-        property.clientLinks && property.clientLinks.some((link) => link.clientId === input.clientId);
-
-      if (!isLinkedToClient) {
-        throw new Error('O imóvel selecionado não possui vínculo canônico registrado com o cliente informado.');
-      }
-
-      const canonicalPropertyType = property.propertyType;
-
-      // 3. Avaliação Obrigatória de Elegibilidade Técnica Profissional
-      const technicalGateway = getTechnicalProfessionalGateway();
-      const technicalProfile = await technicalGateway.getProfileByUserId(
-        activeOrganization.id,
-        session.user.id
-      );
-
-      const eligibility = evaluateTechnicalEligibility({
-        userId: session.user.id,
-        userPermissions: Array.from(activePermissions),
-        activeOrganizationId: activeOrganization.id,
-        targetOrganizationId: activeOrganization.id,
-        isMembershipActive: session.organizationRole !== 'none',
-        profile: technicalProfile,
-        propertyType: canonicalPropertyType,
-        intent: 'draft_and_edit',
-      });
-
-      if (!eligibility.allowed || !eligibility.eligible || !technicalProfile) {
-        const primaryReason =
-          eligibility.reasons[0] || 'Profissional não elegível tecnicamente para elaboração do laudo.';
-        throw new Error(`Elegibilidade técnica negada: ${primaryReason}`);
-      }
-
-      const originVal = (input as { origin?: string }).origin;
-      if (originVal === 'request_conversion') {
-        throw new Error('Conversão de solicitações requer o serviço transacional da OE-004.002.');
-      }
-
-      const gateway = getAppraisalGateway();
-      const created = await gateway.createAppraisal({
-        organizationId: activeOrganization.id,
-        clientId: input.clientId,
-        propertyId: input.propertyId,
-        responsibleUserId: session.user.id,
-        technicalProfessionalProfileId: technicalProfile.id,
-        appraisalRequestId: input.appraisalRequestId,
-        origin: 'technical_initiative',
-        purpose: input.purpose,
-        title: input.title,
-        propertyType: canonicalPropertyType,
-        observations: input.observations,
-      });
-
-      await loadData();
-      return created;
-    },
-    [session, activeOrganization?.id, activePermissions, loadData]
-  );
-
   const startDirectAppraisal = useCallback(
     async (command: StartDirectAppraisalCommand): Promise<Appraisal> => {
       if (!session?.user?.id || !activeOrganization?.id) {
         throw new Error('Sessão ou organização ativa não disponível.');
       }
 
+      const clientGateway = getClientGateway();
       const propertyGateway = getPropertyGateway();
-      const property = await propertyGateway.getPropertyById(activeOrganization.id, command.propertyId);
-      const propertyType = property?.propertyType || 'rural';
+      const technicalGateway = getTechnicalProfessionalGateway();
+      const validated = await validateStartDirectAppraisalCommand(command, {
+        organizationId: activeOrganization.id,
+        actorUserId: session.user.id,
+        actorRole: session.organizationRole,
+        actorPermissions: Array.from(activePermissions),
+        isMembershipActive: session.organizationRole !== 'none',
+        resolveClient: (clientId) =>
+          clientGateway.getClientById(activeOrganization.id, clientId),
+        resolveProperty: (propertyId) =>
+          propertyGateway.getPropertyById(activeOrganization.id, propertyId),
+        resolveTechnicalProfile: (organizationId, userId) =>
+          technicalGateway.getProfileByUserId(organizationId, userId),
+      });
 
       const gateway = getAppraisalGateway();
       const created = await gateway.startDirectAppraisal(
         activeOrganization.id,
         command,
         session.user.id,
-        propertyType
+        validated.propertyType,
+        validated.technicalProfessionalProfileId
       );
 
       await loadData();
       return created;
     },
-    [session, activeOrganization?.id, loadData]
+    [session, activeOrganization?.id, activePermissions, loadData]
   );
 
   const updateAppraisalStatus = useCallback(
@@ -539,6 +435,12 @@ export function AppraisalsProvider({
 
       if (!accessCheck.granted) {
         throw new Error(accessCheck.reason);
+      }
+
+      if (input.newStatus === 'issued' || input.newStatus === 'superseded') {
+        throw new Error(
+          'A emissão e a substituição de versões exigem comandos canônicos específicos e não podem usar a atualização genérica de status.'
+        );
       }
 
       const updated = await gateway.updateAppraisalStatus({
@@ -896,17 +798,6 @@ export function AppraisalsProvider({
     [activeOrganization]
   );
 
-  const saveIssuedVersion = useCallback(
-    async (version: AppraisalIssuedVersion): Promise<AppraisalIssuedVersion> => {
-      if (!activeOrganization) {
-        throw new Error('Nenhuma organização ativa selecionada.');
-      }
-      const gateway = getAppraisalGateway();
-      return gateway.saveIssuedVersion(activeOrganization.id, version);
-    },
-    [activeOrganization]
-  );
-
   const issueAppraisalVersion = useCallback(
     async (appraisalId: AppraisalId): Promise<AppraisalIssuedVersion> => {
       if (!activeOrganization?.id) {
@@ -956,7 +847,6 @@ export function AppraisalsProvider({
     refreshRequests,
     getAppraisalById,
     getRequestById,
-    createAppraisal,
     startDirectAppraisal,
     updateAppraisalStatus,
     createRequest,
@@ -975,7 +865,6 @@ export function AppraisalsProvider({
     getNormativeSection,
     saveNormativeSection,
     listIssuedVersions,
-    saveIssuedVersion,
     issueAppraisalVersion,
   };
 

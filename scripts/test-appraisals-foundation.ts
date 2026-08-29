@@ -59,6 +59,10 @@ import {
 import { PreviewAppraisalGateway } from '../src/appraisals/preview/previewAppraisalGateway';
 import { PreviewAppraisalRequestGateway } from '../src/appraisals/preview/previewAppraisalRequestGateway';
 import { PreviewTechnicalProfessionalGateway } from '../src/technicalProfessionals/preview/previewTechnicalProfessionalGateway';
+import { validateStartDirectAppraisalCommand } from '../src/appraisals/startDirectAppraisalValidator';
+import { Client } from '../src/types/client';
+import { Property } from '../src/types/property';
+import { TechnicalProfessionalProfile } from '../src/types/technicalProfessional';
 import {
   registerDomainCleanup,
   executeDomainSessionCleanup,
@@ -143,20 +147,115 @@ async function runTests() {
     '4. Criação de laudo recusada quando cliente/imóvel não pertencem à organização ativa'
   );
 
-  const appraisalsContextPath = path.resolve(process.cwd(), 'src/appraisals/AppraisalsContext.tsx');
-  const appraisalsContextContent = fs.readFileSync(appraisalsContextPath, 'utf-8');
+  const directClient: Client = {
+    id: 'client_direct',
+    organizationId: 'org_A',
+    personType: 'individual',
+    name: 'Cliente Direto',
+    cpf: '12345678901',
+    isStateRegistrationExempt: true,
+    contact: { primaryPhone: '0000000000', hasWhatsapp: false },
+    address: {
+      addressType: 'urban',
+      zipCode: '00000000',
+      street: 'Rua Teste',
+      number: '1',
+      isNoNumber: false,
+      neighborhood: 'Centro',
+      city: 'Cidade',
+      state: 'SP',
+    },
+    status: 'active',
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  };
+  const directProperty = {
+    id: 'property_direct',
+    organizationId: 'org_A',
+    propertyType: 'urban',
+    status: 'active',
+    clientLinks: [
+      {
+        clientId: directClient.id,
+        relationship: 'owner',
+        isPrimaryHolder: true,
+        linkedAt: '2026-01-01',
+      },
+    ],
+  } as unknown as Property;
+  const directProfile: TechnicalProfessionalProfile = {
+    id: 'profile_direct',
+    organizationId: 'org_A',
+    userId: 'user_direct',
+    council: 'CAU',
+    registrationNumber: 'A123',
+    registrationUf: 'SP',
+    declaredTitle: 'Arquiteto e Urbanista',
+    discipline: 'architecture',
+    responsibilityDocumentType: 'RRT',
+    status: 'manually_verified',
+    capabilities: [
+      {
+        id: 'cap_direct',
+        organizationId: 'org_A',
+        profileId: 'profile_direct',
+        activityType: 'urban_property_appraisal',
+        scope: 'urban',
+        council: 'CAU',
+        legalReference: 'Lei 12.378/2010',
+        status: 'active',
+        verifiedAt: '2026-01-01',
+        verifiedByUserId: 'admin_1',
+        evidenceOrigin: 'manual_administrative',
+      },
+    ],
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  };
+  const directCommand = {
+    clientId: directClient.id,
+    propertyId: directProperty.id,
+    title: 'Laudo urbano direto',
+    purpose: 'Garantia',
+  };
+  const directValidationContext = {
+    organizationId: 'org_A',
+    actorUserId: 'user_direct',
+    actorRole: 'project_designer' as const,
+    actorPermissions: ['appraisals:create', 'appraisals:edit'] as const,
+    isMembershipActive: true,
+    resolveClient: async () => directClient,
+    resolveProperty: async () => directProperty,
+    resolveTechnicalProfile: async () => directProfile,
+  };
 
+  let unlinkedPropertyRejected = false;
+  try {
+    await validateStartDirectAppraisalCommand(directCommand, {
+      ...directValidationContext,
+      resolveProperty: async () =>
+        ({ ...directProperty, clientLinks: [] } as unknown as Property),
+    });
+  } catch {
+    unlinkedPropertyRejected = true;
+  }
   assert(
-    appraisalsContextContent.includes('O imóvel selecionado não possui vínculo canônico') &&
-    appraisalsContextContent.includes('property.clientLinks') &&
-    appraisalsContextContent.includes('canonicalPropertyType = property.propertyType'),
+    unlinkedPropertyRejected,
     '5. Criação de laudo recusada quando o imóvel não está vinculado ao cliente selecionado'
   );
 
-  assert(
-    appraisalsContextContent.includes('propertyType: canonicalPropertyType'),
-    '6. Derivação determinística de propertyType a partir do cadastro territorial'
+  const validatedDirectSources = await validateStartDirectAppraisalCommand(
+    directCommand,
+    directValidationContext
   );
+  assert(
+    validatedDirectSources.propertyType === 'urban' &&
+      validatedDirectSources.technicalProfessionalProfileId === directProfile.id,
+    '6. Derivação determinística de propertyType e perfil a partir das fontes canônicas'
+  );
+
+  const appraisalsContextPath = path.resolve(process.cwd(), 'src/appraisals/AppraisalsContext.tsx');
+  const appraisalsContextContent = fs.readFileSync(appraisalsContextPath, 'utf-8');
 
   // -------------------------------------------------------------
   // PROVAS 7 A 14: AVALIADOR DE ELEGIBILIDADE TÉCNICA E GOVERNANÇA
@@ -297,8 +396,8 @@ async function runTests() {
     creaRuralEval.profileEvaluated?.discipline === 'agronomy' &&
     creaRuralEval.profileEvaluated?.council === 'CREA' &&
     creaRuralEval.profileEvaluated?.responsibilityDocumentType === 'ART' &&
-    creaRuralEval.canIssue === true,
-    '11. Avaliador aceitando perfil com CREA e ART válidos para rural'
+    creaRuralEval.canIssue === false,
+    '11. Avaliador aceita elaboração rural com CREA/ART, sem confundir criação com emissão'
   );
 
   const cauUrbanEval = evaluateTechnicalEligibility({
@@ -427,10 +526,13 @@ async function runTests() {
     },
   });
   assert(
+    issueIntentEval.canIssue === false &&
+    issueIntentEval.allowed === false &&
+    issueIntentEval.reasonCodes.includes('missing_rbac_permission') &&
     suspendedEval.canIssue === false &&
     viewOnlyEval.canIssue === false &&
     suspendedEval.reasonCodes.includes('council_registration_suspended'),
-    '14. Bloqueio estrito de emissão para perfil suspenso ou sem permissões'
+    '14. Bloqueio estrito de emissão sem appraisals:issue, para perfil suspenso ou sem permissões'
   );
 
   // -------------------------------------------------------------
@@ -454,8 +556,12 @@ async function runTests() {
 
   let invalidEventThrown = false;
   try {
+    const untrustedEventType: unknown = 'tipo_invalido_fake';
+    if (!isValidDomainEventType(untrustedEventType)) {
+      throw new Error('Taxonomia inválida.');
+    }
     createAppraisalDomainEvent({
-      eventType: 'tipo_invalido_fake' as any,
+      eventType: untrustedEventType,
       entityType: 'appraisal',
       entityId: 'app_1',
       organizationId: 'org_A',
@@ -617,9 +723,10 @@ async function runTests() {
   // PROVA 25: BLOQUEIO DE CONVERSÃO ARBITRÁRIA / ORIGEM EM CREATEAPPRAISAL (R4)
   // -------------------------------------------------------------
   assert(
-    appraisalsContextContent.includes('origin: \'technical_initiative\'') &&
-    appraisalsContextContent.includes('Conversão de solicitações requer o serviço transacional da OE-004.002'),
-    '25. Bloqueio de conversão arbitrária/origem inválida em createAppraisal (R4)'
+    !appraisalsContextContent.includes('readonly createAppraisal:') &&
+    appraisalsContextContent.includes('readonly startDirectAppraisal:') &&
+    appraisalsContextContent.includes('readonly convertRequestToAppraisal:'),
+    '25. Contratos públicos separam início direto e conversão, sem createAppraisal manipulável'
   );
 
   // -------------------------------------------------------------
@@ -693,4 +800,3 @@ runTests().catch((err) => {
   console.error('Erro na execução dos testes:', err);
   process.exit(1);
 });
-

@@ -33,6 +33,19 @@ export interface FinancialCalculationResult {
 }
 
 /**
+ * Converte a entrada textual de porcentagem sem aceitar prefixos ou sufixos parciais.
+ * Retorna NaN para conteúdo inválido para que a camada de validação apresente o erro no campo.
+ */
+export function parsePercentageInput(value: string): number | undefined {
+  const normalized = value.trim().replace(',', '.');
+  if (normalized === '') return undefined;
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return Number.NaN;
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+/**
  * Realiza divisão inteira com arredondamento determinístico (Half-Even ou Half-Up).
  */
 export function divideBigIntWithRounding(
@@ -209,11 +222,26 @@ export function calculateProposalFinancialSummary(
   if (!Number.isSafeInteger(principalCents)) {
     throw new Error('Principal em centavos deve ser um número inteiro seguro.');
   }
+  if (!Number.isFinite(interestRateAnnualPercentage) || interestRateAnnualPercentage < 0) {
+    throw new Error('Taxa anual deve ser um número finito não negativo.');
+  }
+  if (!Number.isSafeInteger(financingTermMonths) || financingTermMonths < 1) {
+    throw new Error('Prazo de financiamento deve ser um inteiro seguro maior que zero.');
+  }
+  if (!Number.isSafeInteger(gracePeriodMonths) || gracePeriodMonths < 0) {
+    throw new Error('Carência deve ser um inteiro seguro não negativo.');
+  }
+  if (
+    installmentsCount !== undefined &&
+    (!Number.isSafeInteger(installmentsCount) || installmentsCount < 1)
+  ) {
+    throw new Error('Quantidade de parcelas deve ser um inteiro seguro maior que zero.');
+  }
 
-  const validPrincipal = Math.max(0, Math.floor(principalCents));
-  const validRate = Math.max(0, interestRateAnnualPercentage);
-  const validTerm = Math.max(1, Math.floor(financingTermMonths));
-  const validGrace = Math.max(0, Math.floor(gracePeriodMonths));
+  const validPrincipal = Math.max(0, principalCents);
+  const validRate = interestRateAnnualPercentage;
+  const validTerm = financingTermMonths;
+  const validGrace = gracePeriodMonths;
 
   const estimatedInterestCents = calculateSimpleInterestCents(
     validPrincipal,

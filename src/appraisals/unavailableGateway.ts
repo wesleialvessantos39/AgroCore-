@@ -29,6 +29,8 @@ import { AppraisalNormativeSection } from '../types/appraisalNormative';
 import { AppraisalIssuedVersion } from '../types/appraisalVersioning';
 import {
   AppraisalGateway,
+  CommitIssuedVersionInput,
+  CommitIssuedVersionResult,
   CreateAppraisalInput,
   UpdateAppraisalStatusInput,
 } from './gateway';
@@ -62,6 +64,7 @@ export class UnavailableAppraisalGateway implements AppraisalGateway {
     _command: StartDirectAppraisalCommand,
     _actorUserId: string,
     _propertyType?: 'rural' | 'urban',
+    _technicalProfessionalProfileId?: string,
     _signal?: AbortSignal
   ): Promise<Appraisal> {
     throw new Error('O serviço de laudos de avaliação não está disponível neste ambiente.');
@@ -182,11 +185,10 @@ export class UnavailableAppraisalGateway implements AppraisalGateway {
     throw new Error('O serviço de laudos de avaliação não está disponível neste ambiente.');
   }
 
-  async saveIssuedVersion(
-    _organizationId: string,
-    _version: AppraisalIssuedVersion,
+  async commitIssuedVersion(
+    _input: CommitIssuedVersionInput,
     _signal?: AbortSignal
-  ): Promise<AppraisalIssuedVersion> {
+  ): Promise<CommitIssuedVersionResult> {
     throw new Error('O serviço de laudos de avaliação não está disponível neste ambiente.');
   }
 

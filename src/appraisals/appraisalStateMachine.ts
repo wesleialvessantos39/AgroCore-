@@ -101,7 +101,7 @@ export function transitionAppraisal(
     }
   }
 
-  // 4. Regra de Fundação (OE-004.001): A transição para "issued" permanece fechada por ausência de motor de cálculo e elegibilidade completa
+  // 4. A emissão somente pode ocorrer pelo serviço canônico, após prontidão e elegibilidade completas.
   if (next === 'issued' && !context.canIssueDirectly) {
     return {
       success: false,

@@ -3,6 +3,10 @@ import path from 'path';
 
 console.log('--- TESTE AUTOMATIZADO DO CICLO DE VIDA DO SERVICE WORKER ---');
 
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
 const swContent = fs.readFileSync(path.resolve('dist/sw.js'), 'utf-8');
 
 // 1. Validação de versão e hash
@@ -64,16 +68,16 @@ function isBlockedFromCache(method, urlStr, headers = {}) {
 
 // Testes de bloqueio
 console.log('\n--- TESTES DE POLÍTICA DE SEGURANÇA E BLOQUEIO ---');
-console.assert(isBlockedFromCache('POST', 'https://agrocore.local/sistema') === true, 'POST deve ser bloqueado');
-console.assert(isBlockedFromCache('GET', 'https://externo.com/script.js') === true, 'Origem externa deve ser bloqueada');
-console.assert(isBlockedFromCache('GET', 'https://agrocore.local/sistema', { Authorization: 'Bearer xxx' }) === true, 'Authorization header deve ser bloqueado');
-console.assert(isBlockedFromCache('GET', 'https://agrocore.local/api/credito') === true, '/api/ deve ser bloqueado');
-console.assert(isBlockedFromCache('GET', 'https://agrocore.local/auth/v1/user') === true, '/auth/ deve ser bloqueado');
-console.assert(isBlockedFromCache('GET', 'https://agrocore.local/supabase/rest') === true, '/supabase/ deve ser bloqueado');
-console.assert(isBlockedFromCache('GET', 'https://agrocore.local/firebase/firestore') === true, '/firebase/ deve ser bloqueado');
-console.assert(isBlockedFromCache('GET', 'https://agrocore.local/oauth/callback') === true, '/oauth/ deve ser bloqueado');
-console.assert(isBlockedFromCache('GET', 'https://agrocore.local/sistema?token=secret123') === true, 'Parâmetro token deve ser bloqueado');
-console.assert(isBlockedFromCache('GET', 'https://agrocore.local/assets/index.js') === false, 'Asset estático permitido');
-console.assert(isBlockedFromCache('GET', 'https://agrocore.local/sistema') === false, 'Navegação de página permitida');
+assert(isBlockedFromCache('POST', 'https://agrocore.local/sistema') === true, 'POST deve ser bloqueado');
+assert(isBlockedFromCache('GET', 'https://externo.com/script.js') === true, 'Origem externa deve ser bloqueada');
+assert(isBlockedFromCache('GET', 'https://agrocore.local/sistema', { Authorization: 'Bearer xxx' }) === true, 'Authorization header deve ser bloqueado');
+assert(isBlockedFromCache('GET', 'https://agrocore.local/api/credito') === true, '/api/ deve ser bloqueado');
+assert(isBlockedFromCache('GET', 'https://agrocore.local/auth/v1/user') === true, '/auth/ deve ser bloqueado');
+assert(isBlockedFromCache('GET', 'https://agrocore.local/supabase/rest') === true, '/supabase/ deve ser bloqueado');
+assert(isBlockedFromCache('GET', 'https://agrocore.local/firebase/firestore') === true, '/firebase/ deve ser bloqueado');
+assert(isBlockedFromCache('GET', 'https://agrocore.local/oauth/callback') === true, '/oauth/ deve ser bloqueado');
+assert(isBlockedFromCache('GET', 'https://agrocore.local/sistema?token=secret123') === true, 'Parâmetro token deve ser bloqueado');
+assert(isBlockedFromCache('GET', 'https://agrocore.local/assets/index.js') === false, 'Asset estático permitido');
+assert(isBlockedFromCache('GET', 'https://agrocore.local/sistema') === false, 'Navegação de página permitida');
 
 console.log('✓ Todos os testes de segurança e bloqueio foram aprovados com sucesso.');

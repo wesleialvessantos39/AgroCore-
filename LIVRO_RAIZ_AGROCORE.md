@@ -8,7 +8,7 @@
 - **Identificador de Pacote / Metadata:** AgroCore
 - **Domínio / Namespace Visual:** `agrocore-*`
 - **Sessão / Cache Storage Prefix:** `agrocore:*` / `agrocore-cache-*`
-- **Versão:** 1.0.0 (Em evolução arquitetural contínua)
+- **Versão do pacote:** 0.0.0 (desenvolvimento arquitetural contínuo)
 - **Status do Rebranding Global (OE-GLOBAL.001):** 100% Concluído e Homologado. Nenhuma referência residual ao nome anterior existe no código-fonte, metadados, PWA, scripts ou suítes de testes.
 
 ---
@@ -28,14 +28,11 @@ O **AgroCore** é uma plataforma corporativa e operacional de alta precisão par
 
 ## 3. IDENTIDADE VISUAL E ÍCONES
 
-A identidade visual do AgroCore é centralizada em componentes SVG vetoriais matematicamente balanceados:
+A identidade visual do AgroCore é centralizada nos componentes `BrandLogo.tsx`, `BrandMark.tsx` e `Logo.tsx`.
 
-- **Logo Principal (`AgroCoreLogo.tsx`):**
-  - Núcleo tecnológico octogonal de alta precisão.
-  - Folha/broto agronômico estilizado integrado com linhas de circuito que representam dados e produtividade rural.
-  - Gradiente corporativo Verde Esmeralda Profundo (`#1b4d3e` a `#2e7d32`) com realces em Dourado Agrícola / Trigo (`#d97706` / `#f59e0b`).
-- **Favicon & PWA Icons (`public/icon-192.png`, `public/icon-512.png`, `public/favicon.svg`):**
-  - Vetores de alta densidade sem fundo ruidoso, garantindo nitidez e legibilidade em todas as resoluções e telas Retina/OLED.
+- **Paleta oficial exclusiva:** `#0B3D2E` (verde-escuro), `#78C89A` (verde-claro), `#FFFFFF` (branco) e transparências derivadas dessas cores.
+- **Favicon & PWA Icons:** `public/favicon.svg`, `public/icons/icon-192x192.png`, `public/icons/icon-512x512.png` e variantes maskable.
+- **Tema:** módulos 003, 004 e 005 possuem barreiras automatizadas contra famílias Tailwind externas e variantes `dark:*`.
 - **Tipografia:** Famílias sans-serif corporativas de alta legibilidade, com contraste em conformidade com WCAG AA.
 
 ---
@@ -88,7 +85,7 @@ A identidade visual do AgroCore é centralizada em componentes SVG vetoriais mat
   - `OE-003.002-R2`: Purga final e rigorosa de classes de cores residuais (slate, gray, zinc, neutral, stone, black, dark mode classes) em todas as telas e componentes de imóveis (`PropertiesPage.tsx`, `PropertyCreatePage.tsx`, `PropertyEditPage.tsx`, `PropertyForm.tsx`, `PropertyClientSelector.tsx`). Centralização nos tokens do tema oficial AgroCore (`#0B3D2E` Verde-escuro, `#78C89A` Verde-claro e `#FFFFFF` Branco). Validação visual auditada em breakpoints (320px, 390px, 768px, 1024px e 1440px), com contraste WCAG AA, foco acessível e consistência absoluta. Validado via `test:property-theme`, `test:module-003` e compilação de produção.
   - `OE-003.002-R3 / OE-003.002-R4`: Completude Cadastral Canônica e Responsividade Mobile do Cadastro de Imóveis — 100% Concluída e Homologada.
     - **Identificadores Cartorários Oficiais:** Normalização e validação de Código Nacional de Matrícula (CNM - 15 dígitos numéricos) e Código Nacional de Serventias (CNS - 6 dígitos numéricos do cartório), validação de matrícula principal (`isPrimary`), status registral (`registrationStatus`: ativa, encerrada, desmembrada, unificada) e data de certidão (`certificateIssuedAt`).
-    - **Áreas e Matrículas Canônicas:** Abertura estrutural dos campos de áreas declarada, registrada, CAR e SNCR para imóveis rurais (em hectares) e áreas de terreno, construída, privativa e comum para imóveis urbanos (em m²). Total registrado derivado na interface a partir da soma do array de matrículas sem distorção do repositório canônico.
+    - **Áreas e Matrículas Canônicas:** Abertura estrutural dos campos de áreas declarada, registrada, CAR e SNCR para imóveis rurais (em hectares) e áreas de terreno, construída, privativa e comum para imóveis urbanos (em m²). Áreas de matrículas são exibidas individualmente e não são somadas automaticamente, pois podem representar sobreposição territorial.
     - **Localização Completa:** Endereçamento rural canônico com CEP rural opcional, distrito municipal e complemento; endereçamento urbano com ponto de referência, identificação de condomínio/edifício e validação de sem número.
     - **Geodésica e Confrontações:** Coordenada de referência estendida com formato, origem documental (`gnss`, `document`, `manual`), altitude e tipo de altitude (`geometric`, `orthometric`), referencial geodésico SIRGAS2000 e confrontações com origem documental (`source`).
     - **Responsividade e Acessibilidade:** Viewport e theme-color institucionais (#0B3D2E), ausência de escalas artificiais e scroll horizontal em 320px/390px, alvos de toque >= 44px, banner de acompanhamento único no cabeçalho da página e situação ativa como padrão inicial.
@@ -107,21 +104,22 @@ A identidade visual do AgroCore é centralizada em componentes SVG vetoriais mat
     - **Ressalva Geoespacial:** Importação e exportação de arquivos geoespaciais externos (como KML, KMZ, GeoJSON, SHP e DXF) permanecem reservadas para ordens futuras dedicadas.
 
 ### MÓDULO 004: LAUDOS DE AVALIAÇÃO DE IMÓVEIS RURAIS E URBANOS
-- **Status Geral:** Fundação Arquitetural 100% Implementada, Saneada e Homologada (OE-004.001-R1 a R4).
-- **Entregas Concluídas e Homologadas (OE-004.001-R4):**
+- **Status Geral:** Implementado e homologado até a OE-004.003, incluindo o saneamento residual incorporado nesta revisão.
+- **Entregas Concluídas e Homologadas:**
   - **Contratos Tipados de Domínio:** Interfaces estritas sem `any` para `Appraisal`, `AppraisalSummary`, `AppraisalRequest`, `AppraisalVersionMetadata`, `AppraisalDocumentReference`, `TechnicalProfessionalProfile`, `TechnicalEligibilityEvaluation`, `AppraisalDomainEvent` e tipos discriminados para status, origens, conselhos e disciplinas.
   - **Máquinas de Estados Puras:** `appraisalStateMachine.ts` (12 estados do ciclo pericial, matriz de transições permitidas, bloqueio de reversão de emitidos, exigência de justificativa de cancelamento e fechamento estrito de emissão direta) e `appraisalRequestStateMachine.ts` (10 estados do ciclo de captação/atribuição/conversão).
   - **Avaliador de Elegibilidade Técnica:** `technicalEligibilityEvaluator.ts` com separação formal entre RBAC (autorização do sistema) e Habilitação Profissional (conselho CREA/CAU/CFT, situação do registro, impedimentos e compatibilidade de disciplina rural/urbana).
   - **Gerador de Eventos de Domínio:** `domainEvents.ts` com criação imutável de eventos auditáveis (`AppraisalDomainEvent`) e correlação de solicitações e laudos.
   - **Arquitetura de Gateways & Multitenancy:** `PreviewAppraisalGateway`, `PreviewAppraisalRequestGateway` e `PreviewTechnicalProfessionalGateway` estritamente em memória, isolados por organização (`organizationId`), coleções vazias por padrão sem dados simulados/mocks, e contrapartes seguras `Unavailable*Gateway` para ambiente de produção.
   - **Segurança e Governança Comportamental (R4):**
-    - Bloqueio determinístico de abertura de solicitações pelo captador com código tipado `CAPTURER_ASSIGNMENT_NOT_AVAILABLE` até disponibilização do vínculo canônico formal (`ClientCapturerAssignment`) na OE-004.002.
-    - Bloqueio estrito de conversão arbitrária/origem inválida em `createAppraisal` (restringido a `technical_initiative` na fase de fundação).
+    - `ClientCapturerAssignment` ativo e obrigatório no fluxo do captador, com isolamento por organização e histórico de atribuição.
+    - Remoção da operação pública manipulável `createAppraisal`; início direto (`startDirectAppraisal`) e conversão (`convertRequestToAppraisal`) são comandos separados.
+    - Início direto valida cliente, imóvel, vínculo cliente-imóvel, perfil técnico e deriva o tipo territorial exclusivamente do imóvel canônico.
     - Validação de consistência cadastral e sanitização de dados sensíveis em `addRequestDocument`.
     - Purga de permissões legadas/inexistentes (`appraisal_requests:edit`) e restrição de transição de status para perfis autorizados.
-  - **Permissões RBAC e Navegação:** Permissões no catálogo (`appraisals:view`, `appraisals:create`, `appraisals:edit`, `appraisals:view_status_related`, `appraisal_requests:create`, `appraisal_requests:view_queue`, `appraisal_requests:view_related`, `appraisal_requests:upload_documents`, `technical_professionals:view_self`, `technical_professionals:manage_all`), atribuição segura para `project_designer` e `capturer`, rotas canônicas `/laudos` e `/solicitacoes-de-laudo`, metadados de rota, prefixos de navegação segura e itens no menu lateral/gaveta móvel.
+  - **Permissões RBAC e Navegação:** Permissões granulares para laudos e solicitações, incluindo `appraisals:issue`, `appraisal_requests:view_assigned` e `appraisal_requests:assign`. As permissões técnicas reais são `technical_professionals:view_self`, `technical_professionals:update_self`, `technical_professionals:verify` e `technical_professionals:manage_capabilities`; a antiga permissão global foi removida. Rotas canônicas e navegação segura permanecem centralizadas.
   - **Identidade Visual e Purga de Cores (R4):** `AppraisalsPage.tsx`, `AppraisalRequestsPage.tsx` e `theme.ts` estritamente centralizados na paleta AgroCore (`#0B3D2E`, `#78C89A`, `#FFFFFF`), sem classes residuais ou famílias fora da identidade (slate, gray, zinc, neutral, stone, dark:*, rose, red, amber, yellow, emerald, blue).
-  - **Bateria de Homologação:** 28 testes automatizados em `scripts/test-appraisals-foundation.ts`, integração na suíte consolidada `test-module-004.js` (5/5 suítes aprovadas), conformidade total no `lint` (`tsc --noEmit`) e compilação de produção com barreira anti-leak.
+  - **Bateria de Homologação:** `scripts/test-appraisals-foundation.ts` possui 28 provas; `scripts/test-oe-004-002.ts` possui 19; `scripts/test-oe-004-003.ts` possui 37. O agregador `test-module-004.js` executa 7 suítes, incluindo regressões dos Módulos 001 a 003.
 
 ### OE-GLOBAL.001: REBRANDING INTEGRAL PARA AGROCORE
 - **Status:** Homologado e 100% Concluído.
@@ -133,7 +131,7 @@ A identidade visual do AgroCore é centralizada em componentes SVG vetoriais mat
 
 ---
 
-## 6. ARQUITETURA DE LAUDOS DE AVALIAÇÃO (MÓDULO 004 — PLANEJADO)
+## 6. ARQUITETURA DE LAUDOS DE AVALIAÇÃO (IMPLEMENTADA ATÉ OE-004.003)
 
 ### 6.1 Fontes Canônicas e Proibição de Duplicidade Cadastral
 Como diretriz arquitetural inviolável do AgroCore, o módulo de Laudos é estritamente um **consumidor especializado** dos dados cadastrais e territoriais, sendo expressamente proibida a criação de cadastros mestres paralelos.
@@ -170,10 +168,8 @@ Para conciliar a integridade cadastral com o rigor pericial e jurídico de um la
 
 ---
 
-### 6.2 Vínculo entre Cliente e Captador (Evolução Arquitetural do Módulo 002)
-A arquitetura futura do Módulo 002 reconhece que a simples existência do campo `createdByUserId` não é suficiente para representar a governança comercial e o relacionamento contínuo com os clientes da empresa.
-
-Registra-se a entidade conceitual `ClientCapturerAssignment`:
+### 6.2 Vínculo entre Cliente e Captador
+O vínculo comercial é representado pela entidade implementada `ClientCapturerAssignment`:
 - `organizationId`: Isolamento multitenant obrigatório.
 - `clientId`: Referência tipada ao cliente canônico.
 - `capturerUserId`: Usuário com perfil `capturer` formalmente atribuído.
@@ -201,7 +197,7 @@ Registra-se a entidade conceitual `ClientCapturerAssignment`:
 - Perfis administrativos (`owner`, `company_admin`, `manager`, `platform_super_admin`) não possuem autorização para emitir laudos por mera prerrogativa de sua função administrativa no sistema.
 - O sistema não fará alegações falsas de verificação automática perante CREA, CAU, Incra ou outros órgãos sem a existência de integrações oficiais ativas e homologadas.
 
-#### 6.3.2 Entidade Conceitual: `TechnicalProfessionalProfile`
+#### 6.3.2 Entidade Implementada: `TechnicalProfessionalProfile`
 Vinculada ao usuário autenticado e ao escopo da organização:
 - `organizationId`: Empresa empregadora ou contratante.
 - `userId`: Usuário autenticado no sistema.
@@ -211,14 +207,14 @@ Vinculada ao usuário autenticado e ao escopo da organização:
 - `registrationState`: UF do registro profissional e eventuais vistos regionais.
 - `specialties`: Especialidades e atribuições profissionais declaradas.
 - `technicalResponsibilityType`: Tipo de responsabilidade técnica padrão (ART de cargo e função, ART de obra/serviço, RRT correspondente).
-- `verificationStatus`: Estado da conferência interna (`not_provided`, `pending_review`, `manually_verified`, `ineligible`, `suspended`, `expired`, `eligible`).
+- `verificationStatus`: Estado da conferência interna (`not_informed`, `pending_review`, `manually_verified`, `ineligible`, `suspended`, `expired`).
 - `verificationDate`: Data da última conferência documental.
 - `verifiedByUserId`: Responsável administrativo ou técnico que conferiu a certidão de quitação e atribuições.
 - `documentReferences`: Identificadores de documentos comprobatórios anexados (diplomas, carteira profissional, certidão de registro e quitação).
 - `impediments`: Registro de impedimentos técnicos, judiciais ou restrições de escopo.
 
 **Bloqueio de Emissão:**
-O projetista poderá criar, instruir e editar rascunhos de laudos conforme suas permissões de sistema. Todavia, os botões e operações de emissão formal, assinatura e finalização técnica estarão estritamente bloqueados se o `verificationStatus` do profissional não estiver como `eligible`.
+O projetista poderá criar, instruir e editar rascunhos conforme suas permissões. A emissão formal exige perfil `manually_verified`, capacidade compatível, responsabilidade técnica, permissão explícita `appraisals:issue`, responsabilidade pelo laudo, prontidão integral e estado `ready_to_issue`.
 
 ---
 
@@ -252,7 +248,7 @@ Reconhecendo a rotina pericial e de consultoria agronômica, o sistema permite a
 
 ---
 
-### 6.6 Matriz Futura de Autorização RBAC para Laudos e Solicitações
+### 6.6 Matriz de Autorização RBAC para Laudos e Solicitações
 
 | Operação / Recurso | `capturer` | `project_designer` | `manager` | `company_admin` | `owner` | `finance` | `platform_super_admin` |
 |---|---|---|---|---|---|---|---|
@@ -263,7 +259,7 @@ Reconhecendo a rotina pericial e de consultoria agronômica, o sistema permite a
 | **Iniciar Laudo Direto (`Appraisal`)** | Não | Sim | Sim | Sim | Sim | Não | Não |
 | **Editar Conteúdo Técnico do Laudo** | **NÃO (Bloqueio estrito)** | Sim (Atribuído) | Não | Não | Não | Não | Não |
 | **Agendar Visita Técnica** | Não | Sim | Sim | Sim | Sim | Não | Não |
-| **Emitir / Assinar Versão de Laudo** | **NÃO (Bloqueio estrito)** | Sim (Se `eligible`) | Não | Não | Não | Não | Não |
+| **Emitir Versão de Laudo** | **NÃO (Bloqueio estrito)** | Sim (se `manually_verified` e demais condições) | Não | Não | Não | Não | Não |
 | **Visualizar Valores e Parecer Técnico**| **NÃO (Bloqueio estrito)** | Sim | Sim | Sim | Sim | Apenas Honorários | Não |
 | **Excluir Laudo** | **NÃO** | Não | Conforme política | Sim (Auditor) | Sim | Não | Não |
 
@@ -322,7 +318,7 @@ O sistema adotará uma arquitetura orientada a eventos de domínio com despacho 
 - `appraisal.fieldwork.completed` — Vistoria de campo finalizada e dados de campo salvos.
 - `appraisal.status.updated` — Mudança de fase no fluxo do laudo.
 - `appraisal.ready_for_review` — Laudo finalizado para revisão técnica.
-- `appraisal.version.issued` — Nova versão formal emitida e assinada.
+- `appraisal.version.issued` — Nova versão formal emitida; assinatura digital permanece fora do escopo atual.
 
 **Diretrizes de Governança das Notificações:**
 - O recebimento de uma notificação não concede permissão de acesso ao recurso; a autorização RBAC continuará sendo validada no momento da abertura.
@@ -408,11 +404,11 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 ---
 
 ### MÓDULO 004: LAUDOS DE AVALIAÇÃO DE IMÓVEIS RURAIS E URBANOS (NBR 14653)
-- **Status Geral:** 100% Implementado e Homologado (OE-004.001, OE-004.002 e OE-004.003).
+- **Status Geral:** Implementado e homologado (OE-004.001, OE-004.002 e OE-004.003), com resíduos de segurança fechados nesta revisão.
 - **Entregas Concluídas e Homologadas:**
   - `OE-004.001`: Fundação arquitetural do módulo de laudos periciais. Contratos tipados sem `any` (`Appraisal`, `AppraisalType`, `AppraisalStatus`, `AppraisalGateway`), Gateway Pattern com `PreviewAppraisalGateway` em memória e isolado por tenant, `UnavailableAppraisalGateway` para produção segura, contexto React integrado à autorização e rotas.
   - `OE-004.002`: Governança técnica pericial, controle de elegibilidade de responsáveis técnicos (`TechnicalProfessionalProfile`, verificação de conselhos CREA/CAU/CFT, registro de ART/RRT/TRT), triagem e conversão de solicitações de laudos, vínculo estrito com clientes e imóveis cadastrados.
-  - `OE-004.003`: Dossiê técnico estruturado (identificação, caracterização física e logística, benfeitorias, conclusão), motor de homogeneização de amostras de mercado com fatores de oferta/negociação, motor estatístico puro (média, mediana, desvio padrão, coeficiente de variação, intervalos de confiança a 90%), métodos avaliatórios NBR 14653 (MCDDM, MQC, ME, MCR, MI), avaliador de prontidão técnica (`evaluateAppraisalReadiness`), fotografia canônica imutável com Checksum SHA-256 e `AppraisalIssuanceService` com controle de concorrência por Promise lock, conferência estrita de permissões (`appraisals:issue`), segregação de funções (bloqueio de autoverificação de perfil) e proteção contra replay com `IDEMPOTENCY_CONFLICT`.
+  - `OE-004.003`: Dossiê técnico estruturado (identificação, caracterização física e logística, benfeitorias, conclusão), homogeneização, estatística, métodos avaliatórios, prontidão técnica e fotografia canônica com checksum SHA-256. `AppraisalIssuanceService` exige `appraisals:issue`, responsável designado, perfil verificado, prontidão e estado `ready_to_issue`; versão e status são confirmados por um único `commitIssuedVersion`, sem caminho público de gravação avulsa.
 
 ### MÓDULO 005: PROPOSTAS DE CRÉDITO E PRESTAÇÃO DE SERVIÇOS
 - **Status Geral:** 100% Implementado e Homologado (OE-005.001 e OE-005.002).
@@ -420,13 +416,14 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - `OE-005.001`: Fundação de propostas comerciais e técnicas. Contratos tipados (`Proposal`, `ProposalItem`, `ProposalPaymentTerms`, `ProposalStatus`), gateway em memória multitenant e gateway indisponível para produção.
   - `OE-005.002`: Fechamento final e saneamento de segurança e concorrência:
     - **Governança e Autorização Estrita:** Permissão explícita `proposals:create` e `proposals:edit` requeridas. Ausência de vínculo organizacional ou inatividade nega a operação por padrão (*Deny-by-Default*). O papel de captador não contorna permissões de proposta.
-    - **Controle de Concorrência e Idempotência:** Serialização atômica de operações de criação, atualização, submissão e cancelamento via mapa de locks em memória (`updateLocks`). Armazenamento determinístico de idempotência com conferência de hash SHA-256 do payload normalizado e lançamento de erro `IDEMPOTENCY_CONFLICT` em caso de divergência de payload.
+    - **Controle de Concorrência e Idempotência:** Serialização de criação, atualização, submissão e cancelamento via locks em memória (`updateLocks`). A idempotência compara a representação determinística do payload normalizado e lança `IDEMPOTENCY_CONFLICT` diante de conteúdo divergente; não há alegação de hash SHA-256 nesse serviço.
     - **Integridade Financeira em Centavos:** Cálculos financeiros determinísticos com `BigInt` e inteiros seguros (`Number.isSafeInteger`), validação de limites máximos (R$ 10.000.000.000,00), parser estrito de moeda brasileira (BRL) e divisão com arredondamento bancário *half_even*.
     - **Isolamento de Captadores e Clientes:** Consulta e formulários de propostas filtrados exclusivamente pelos clientes permitidos para o captador ou organização, eliminando acesso irrestrito.
     - **Identidade Visual e Purga de Cores:** Telas e componentes do Módulo 005 em conformidade estrita com a paleta oficial AgroCore (`#0B3D2E` Verde-escuro, `#78C89A` Verde-claro e `#FFFFFF` Branco).
     - **Navegação Segura:** Rotas `/propostas` e sub-rotas integradas à lista de prefixos internos seguros (`SAFE_INTERNAL_PREFIXES`), prevenindo vulnerabilidades de *Open Redirect*.
-    - **Portabilidade de Testes:** Suítes de teste executadas com `process.execPath` e loaders locais (`--import tsx`), garantindo execução idêntica em qualquer ambiente Node.js.
-    - **Automação de CI & Proteção de Branch:** Pipeline GitHub Actions (`.github/workflows/ci.yml`) validando compilação, lint e testes automatizados de todos os módulos (001 a 005) em todas as alterações para a branch `main`.
+    - **Portabilidade de Testes:** Scripts npm e agregadores usam o executável Node local com `--import tsx`, sem depender do IPC do binário `tsx`.
+    - **Automação de CI:** `.github/workflows/ci.yml` executa `npm ci`, lint, build, Módulos 001 a 005 e rebranding em pushes e pull requests para `main`. O lockfile npm é versionado para tornar `npm ci` reproduzível.
+    - **Homologação comportamental:** 39 provas em `scripts/test-proposals-foundation.ts`, incluindo arredondamento meio-par, taxa fracionária, limites de inteiros seguros, idempotência, corrida real com `Promise.allSettled` e rotas seguras; a auditoria visual é executada separadamente por `scripts/test-proposals-theme.js`.
 
 ---
 
@@ -452,29 +449,30 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:module-003` | Homologação consolidada de todas as suítes do Módulo 003 |
 | `npm run test:appraisals-foundation` | Valida a fundação do módulo de laudos de avaliação, contratos, estados, RBAC e gateways (OE-004.001) |
 | `npm run test:appraisal-theme` | Valida a identidade visual oficial AgroCore e purga de cores no Módulo 004 (OE-004.001) |
+| `npm run test:oe-004-002` | Valida vínculo do captador, fila, atribuição, conversão e notificações (19 provas) |
+| `npm run test:oe-004-003` | Valida dossiê, cálculos, prontidão e emissão atômica (37 provas) |
 | `npm run test:module-004` | Homologação consolidada de todas as suítes do Módulo 004 (OE-004.001 a OE-004.003) |
+| `npm run test:proposals-foundation` | Valida domínio, finanças, multitenancy, idempotência, concorrência e rotas de propostas (39 provas) |
+| `npm run test:proposals-theme` | Audita a paleta oficial e bloqueia famílias externas no Módulo 005 |
 | `npm run test:module-005` | Homologação consolidada de todas as suítes do Módulo 005 (OE-005.001 e OE-005.002) |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
+| `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
+| `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
 | `npm run build` | Compilação de produção Vite + geração de SW + verificação de vazamentos |
 | `npm run lint` | Checagem estrita de tipos TypeScript (`tsc --noEmit`) |
 
 ---
 
-## 8. REGRAS DE PROTEÇÃO DA BRANCH PRINCIPAL (`main`)
+## 8. POLÍTICA DESEJADA PARA A BRANCH PRINCIPAL (`main`)
 
-Para garantir a estabilidade e a integridade do código em produção, as seguintes regras de proteção de branch estão formalmente definidas:
+O repositório contém CI para pushes e pull requests. A existência do arquivo de workflow não comprova que regras administrativas de proteção estejam ativas no GitHub; enquanto essa configuração não for verificada pela API administrativa, o Livro‑Raiz não a declara homologada.
 
-1. **Requisito Obrigatório de Pull Request:** Toda alteração na branch `main` deve ser submetida via Pull Request. Pushes diretos são estritamente bloqueados.
-2. **Checagem de Status Obrigatória (Status Checks):** O workflow de CI (`AgroCore CI / Lint, Build & Homologação Integral (Módulos 001 a 005)`) deve obrigatoriamente passar com sucesso antes de qualquer merge.
-3. **Branch Atualizada com a Base:** O branch de origem deve estar atualizado com a `main` antes do merge.
-4. **Histórico Linear Obrigatório:** Rebase e merge ou Squash e merge para manter o histórico de commits limpo e auditável.
-5. **Aplicação Universal:** As regras de proteção aplicam-se a todos os desenvolvedores e administradores do repositório.
+Configuração recomendada: pull request obrigatório, status check do workflow AgroCore CI, branch atualizada com a base, histórico linear e aplicação a administradores.
 
 ---
 
 ## 9. DIRETRIZES PARA AS PRÓXIMAS EXECUÇÕES
 
-1. **Módulo 004 — Laudos de Avaliação:** 100% Concluído e homologado em todas as ordens de execução (OE-004.001, OE-004.002 e OE-004.003).
-2. **Módulo 005 — Propostas de Crédito e Serviços:** 100% Concluído e homologado em todas as ordens de execução (OE-005.001 e OE-005.002).
-3. **Próxima Ordem Autorizada:** Aguardar ordem formal do usuário para início da OE-005.003 ou novos módulos transversais (Visitas Técnicas, Gestão de Frota, Agenda).
-
+1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
+2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.002; OE-005.003 ainda não foi implementada.
+3. **Próxima Ordem:** OE-005.003 pode ser iniciada somente após a validação local, publicação e CI desta revisão permanecerem aprovadas.
