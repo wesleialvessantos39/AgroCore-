@@ -136,6 +136,10 @@ const ProposalHistoryPage = lazy(() =>
   import('../pages/ProposalHistoryPage').then((module) => ({ default: module.ProposalHistoryPage }))
 );
 
+const ProposalDocumentPage = lazy(() =>
+  import('../pages/ProposalDocumentPage').then((module) => ({ default: module.ProposalDocumentPage }))
+);
+
 const MyAccountPage = lazy(() =>
   import('../pages/MyAccountPage').then((module) => ({
     default: module.MyAccountPage,
@@ -464,6 +468,14 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission={['proposals:view', 'proposals:view_related', 'proposals:view_assigned']}>
                   <ProposalHistoryPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path=":proposalId/documento"
+              element={
+                <RequirePermission permission="proposals:view_document">
+                  <ProposalDocumentPage />
                 </RequirePermission>
               }
             />

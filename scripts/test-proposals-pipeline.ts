@@ -386,11 +386,17 @@ async function runPipelineTests(): Promise<void> {
     'Gestor independente aprova proposta após revisão atribuída');
 
   console.log('\n--- Apresentação, decisão e prazo exato ---');
+  const mainDocument = await service.issueProposalDocument({
+    proposalId: proposal.id,
+    expectedVersion: proposal.version,
+    idempotencyKey: 'issue-main-document-001',
+  }, managerContext, clock);
   proposal = await service.markProposalPresented({
     proposalId: proposal.id,
     expectedVersion: proposal.version,
     idempotencyKey: 'present-main-flow-001',
     channel: 'in_person',
+    documentId: mainDocument.id,
     notes: 'Registro operacional fictício.',
   }, capturerContext, clock);
   const validFrom = proposal.validFrom ? new Date(proposal.validFrom).getTime() : Number.NaN;
@@ -435,9 +441,14 @@ async function runPipelineTests(): Promise<void> {
     proposalId: expiring.id, expectedVersion: expiring.version,
     idempotencyKey: 'approve-expiry-001',
   }, managerContext, clock);
+  const expiringDocument = await service.issueProposalDocument({
+    proposalId: expiring.id,
+    expectedVersion: expiring.version,
+    idempotencyKey: 'issue-expiry-document-001',
+  }, managerContext, clock);
   expiring = await service.markProposalPresented({
     proposalId: expiring.id, expectedVersion: expiring.version,
-    idempotencyKey: 'present-expiry-001', channel: 'email',
+    idempotencyKey: 'present-expiry-001', channel: 'email', documentId: expiringDocument.id,
   }, capturerContext, clock);
   clock.setTime(new Date(expiring.expiresAt));
   await expectDomainError(

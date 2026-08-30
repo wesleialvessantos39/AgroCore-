@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Proposal,
+  ProposalCommercialDocument,
   ProposalPresentationChannel,
   ProposalStatus,
   ProposalStatusHistoryEntry,
@@ -24,7 +25,7 @@ import { useProperties } from '../properties/useProperties';
 import { useAuthorization } from '../authorization/useAuthorization';
 import { useAuth } from '../auth/useAuth';
 import { useOrganization } from '../organization/useOrganization';
-import { ROUTES, getProposalEditPath } from '../routes';
+import { ROUTES, getProposalDocumentPath, getProposalEditPath } from '../routes';
 import { getOrganizationMembersGateway } from '../auth/organizationMembersGatewayFactory';
 import { OrganizationMember } from '../auth/organizationMembersGateway';
 
@@ -43,10 +44,12 @@ export const ProposalDetailPage: React.FC = () => {
     approveProposal,
     rejectProposal,
     markProposalPresented,
+    issueProposalDocument,
     recordProposalDecision,
     cancelProposal,
     getProposalHistory,
     getProposalSnapshots,
+    getProposalDocuments,
   } = useProposals();
   const { clients } = useClients();
   const { properties } = useProperties();
@@ -54,6 +57,7 @@ export const ProposalDetailPage: React.FC = () => {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [history, setHistory] = useState<readonly ProposalStatusHistoryEntry[]>([]);
   const [snapshots, setSnapshots] = useState<readonly ProposalVersionSnapshot[]>([]);
+  const [documents, setDocuments] = useState<readonly ProposalCommercialDocument[]>([]);
   const [members, setMembers] = useState<readonly OrganizationMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -95,19 +99,21 @@ export const ProposalDetailPage: React.FC = () => {
       const data = await getProposalById(proposalId);
       if (data) {
         setProposal(data);
-        const [h, s] = await Promise.all([
+        const [h, s, d] = await Promise.all([
           getProposalHistory(proposalId),
           getProposalSnapshots(proposalId),
+          getProposalDocuments(proposalId),
         ]);
         setHistory(h || []);
         setSnapshots(s || []);
+        setDocuments(d || []);
       } else {
         setErrorMessage('Proposta não encontrada.');
       }
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Erro ao carregar proposta.');
     }
-  }, [proposalId, getProposalById, getProposalHistory, getProposalSnapshots]);
+  }, [proposalId, getProposalById, getProposalHistory, getProposalSnapshots, getProposalDocuments]);
 
   useEffect(() => {
     let isMounted = true;
@@ -203,7 +209,13 @@ export const ProposalDetailPage: React.FC = () => {
 
   const canPresent =
     can('proposals:present') &&
-    proposal.status === 'approved';
+    proposal.status === 'approved' &&
+    documents.some((document) => document.sourceVersionNumber === proposal.version);
+
+  const canIssueDocument =
+    can('proposals:issue_document') &&
+    proposal.status === 'approved' &&
+    !documents.some((document) => document.sourceVersionNumber === proposal.version);
 
   const canRecordDecision =
     can('proposals:record_decision') &&
@@ -316,12 +328,19 @@ export const ProposalDetailPage: React.FC = () => {
 
   const handlePresentAction = async () => {
     if (!proposal) return;
+    const currentDocument = documents.find(
+      (document) => document.sourceVersionNumber === proposal.version
+    );
+    if (!currentDocument) {
+      setErrorMessage('Emita o documento comercial da versão aprovada antes da apresentação.');
+      return;
+    }
     setIsProcessing(true);
     setErrorMessage(null);
     const res = await markProposalPresented(proposal.id, {
       channel: presentationChannel,
       notes: actionNotes || undefined,
-      documentReference: operationalRef || undefined,
+      documentId: currentDocument.id,
     });
     setIsProcessing(false);
     if (res.success) {
@@ -332,6 +351,22 @@ export const ProposalDetailPage: React.FC = () => {
       loadDetails();
     } else {
       setErrorMessage(res.error || 'Erro ao registrar apresentação.');
+    }
+  };
+
+  const handleIssueDocument = async () => {
+    if (!proposal) return;
+    setIsProcessing(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    const res = await issueProposalDocument(proposal.id);
+    setIsProcessing(false);
+    if (res.success && res.data) {
+      setSuccessMessage('Documento comercial imutável emitido com sucesso.');
+      await loadDetails();
+      navigate(getProposalDocumentPath(proposal.id));
+    } else {
+      setErrorMessage(res.error || 'Erro ao emitir documento comercial.');
     }
   };
 
@@ -526,6 +561,30 @@ export const ProposalDetailPage: React.FC = () => {
               disabled={isProcessing}
             >
               Apresentar ao Cliente
+            </button>
+          )}
+
+          {canIssueDocument && (
+            <button
+              type="button"
+              onClick={handleIssueDocument}
+              className={PROPOSAL_THEME.btnPrimary}
+              id="detail-issue-document-btn"
+              disabled={isProcessing}
+            >
+              Emitir Documento Comercial
+            </button>
+          )}
+
+          {documents.length > 0 && can('proposals:view_document') && (
+            <button
+              type="button"
+              onClick={() => navigate(getProposalDocumentPath(proposal.id))}
+              className={PROPOSAL_THEME.btnSecondary}
+              id="detail-view-document-btn"
+              disabled={isProcessing}
+            >
+              Visualizar Documento
             </button>
           )}
 
@@ -1138,18 +1197,8 @@ export const ProposalDetailPage: React.FC = () => {
                 <option value="other">Outro canal</option>
               </select>
             </div>
-            <div>
-              <label htmlFor="proposal-presentation-reference" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
-                Referência Operacional / Documental (Opcional)
-              </label>
-              <input
-                id="proposal-presentation-reference"
-                type="text"
-                value={operationalRef}
-                onChange={(e) => setOperationalRef(e.target.value)}
-                placeholder="Ex: Minuta entregue em mãos ou protocolo 2026-X"
-                className={PROPOSAL_THEME.input}
-              />
+            <div className="p-3 rounded-xl border border-[#78C89A]/50 bg-[#78C89A]/15 text-xs text-[#0B3D2E]">
+              A apresentação será vinculada ao documento comercial imutável da versão aprovada atual.
             </div>
             <div>
               <label htmlFor="proposal-presentation-notes" className="text-xs font-semibold text-[#0B3D2E] block mb-1">

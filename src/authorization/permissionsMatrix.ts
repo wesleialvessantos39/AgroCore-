@@ -54,6 +54,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:present',
     'proposals:record_decision',
     'proposals:cancel',
+    'proposals:view_document',
+    'proposals:issue_document',
     // Outros módulos
     'documents:view',
     'documents:upload',
@@ -107,6 +109,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:present',
     'proposals:record_decision',
     'proposals:cancel',
+    'proposals:view_document',
+    'proposals:issue_document',
     // Outros módulos
     'documents:view',
     'documents:upload',
@@ -154,6 +158,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:present',
     'proposals:record_decision',
     'proposals:cancel',
+    'proposals:view_document',
+    'proposals:issue_document',
     // Outros módulos
     'documents:view',
     'documents:upload',
@@ -195,6 +201,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:view_assigned',
     'proposals:view_financials',
     'proposals:review',
+    'proposals:view_document',
     // Outros módulos
     'documents:view',
     'documents:upload',
@@ -215,6 +222,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'properties:view',
     'proposals:view',
     'proposals:view_financials',
+    'proposals:view_document',
     'documents:view',
     'personal_account:view_profile',
     'personal_account:manage_preferences',
@@ -245,6 +253,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:present',
     'proposals:record_decision',
     'proposals:cancel',
+    'proposals:view_document',
+    'proposals:issue_document',
     // Outros módulos
     'documents:view',
     'documents:upload',

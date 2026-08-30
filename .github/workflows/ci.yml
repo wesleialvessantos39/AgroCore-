@@ -50,7 +50,7 @@ jobs:
         run: npm run test:module-004
 
       - name: Bateria de Testes — Módulo 005 (Propostas de Crédito e Serviços)
-        run: npm run test:proposal-pipeline && npm run test:module-005
+        run: npm run test:proposal-pipeline && npm run test:proposal-documents && npm run test:module-005
 
       - name: Auditoria Global de Rebranding
         run: npm run test:rebranding

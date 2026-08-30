@@ -89,6 +89,8 @@ export type Permission =
   | 'proposals:present'
   | 'proposals:record_decision'
   | 'proposals:cancel'
+  | 'proposals:view_document'
+  | 'proposals:issue_document'
 
   // Escopo: Documentos
   | 'documents:view'

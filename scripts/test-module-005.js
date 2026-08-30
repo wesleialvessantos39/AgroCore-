@@ -24,7 +24,10 @@ try {
   console.log('\n2. Executando testes do Pipeline Comercial, pareceres e ciclo de vida (OE-005.003)...');
   runScript('scripts/test-proposals-pipeline.ts');
 
-  console.log('\n3. Executando auditoria de tema e conformidade visual...');
+  console.log('\n3. Executando testes do Documento Comercial Versionado (OE-005.004)...');
+  runScript('scripts/test-proposal-documents.ts');
+
+  console.log('\n4. Executando auditoria de tema e conformidade visual...');
   runScript('scripts/test-proposals-theme.js');
 
   console.log('\n====================================================');
@@ -35,4 +38,3 @@ try {
   console.error('\n❌ Falha na homologação do Módulo 005.');
   process.exit(1);
 }
-

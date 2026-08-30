@@ -485,6 +485,20 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     name: 'Cancelar Propostas',
     description: 'Cancelar propostas em andamento registrando justificativa operacional.',
   },
+  {
+    id: 'proposals:view_document',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Consultar Documento Comercial',
+    description: 'Visualizar a projeção comercial imutável emitida para uma proposta autorizada.',
+  },
+  {
+    id: 'proposals:issue_document',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Emitir Documento Comercial',
+    description: 'Gerar documento comercial versionado exclusivamente a partir de proposta aprovada.',
+  },
 
   // Documentos
   {

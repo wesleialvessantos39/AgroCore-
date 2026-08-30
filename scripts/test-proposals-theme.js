@@ -38,6 +38,7 @@ const TARGET_DIRECTORIES = [
   'src/pages/ProposalEditPage.tsx',
   'src/pages/ProposalDetailPage.tsx',
   'src/pages/ProposalHistoryPage.tsx',
+  'src/pages/ProposalDocumentPage.tsx',
   'src/pages/ProposalQueuePage.tsx',
   'src/pages/ProposalReviewPage.tsx',
   'src/pages/ProposalsPage.tsx',

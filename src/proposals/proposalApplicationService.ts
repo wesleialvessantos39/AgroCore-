@@ -1,6 +1,6 @@
 /**
  * MÓDULO 005 — SERVIÇO DE APLICAÇÃO DE PROPOSTAS
- * Pipeline Comercial, Revisão, Aprovação, Apresentação e Decisão (OE-005.003)
+ * Pipeline Comercial e Documento Comercial Versionado (OE-005.003 / OE-005.004)
  * AgroCore
  */
 
@@ -15,6 +15,7 @@ import {
   ProposalCalculationSummary,
   ProposalCapturerSnapshot,
   ProposalClientSnapshot,
+  ProposalCommercialDocument,
   ProposalDecisionRecord,
   ProposalDomainError,
   ProposalFilterOptions,
@@ -25,6 +26,7 @@ import {
   ProposalStatus,
   ProposalStatusHistoryEntry,
   ProposalVersionSnapshot,
+  IssueProposalDocumentCommand,
   RecordProposalDecisionCommand,
   RejectProposalCommand,
   RequestProposalChangesCommand,
@@ -87,9 +89,13 @@ export class ProposalApplicationService {
   private static historyStore: Map<string, Map<ProposalId, ProposalStatusHistoryEntry[]>> = new Map();
   private static snapshotsStore: Map<string, Map<ProposalId, ProposalVersionSnapshot[]>> = new Map();
   private static assignmentsStore: Map<string, Map<ProposalId, ProposalReviewAssignment[]>> = new Map();
+  private static documentsStore: Map<string, Map<ProposalId, ProposalCommercialDocument[]>> = new Map();
   private static counterStore: Map<string, number> = new Map();
+  private static documentCounterStore: Map<string, number> = new Map();
   private static idempotencyStore: Map<string, { payloadHash: string; proposal: Proposal }> = new Map();
+  private static documentIdempotencyStore: Map<string, { payloadHash: string; document: ProposalCommercialDocument }> = new Map();
   private static inFlightOperations: Map<string, { payloadHash: string; promise: Promise<Proposal> }> = new Map();
+  private static inFlightDocumentOperations: Map<string, { payloadHash: string; promise: Promise<ProposalCommercialDocument> }> = new Map();
   private static updateLocks: Map<string, Promise<void>> = new Map();
 
   private static isCleanupRegistered = false;
@@ -152,6 +158,13 @@ export class ProposalApplicationService {
     return ProposalApplicationService.assignmentsStore.get(orgId)!;
   }
 
+  private static getOrgDocumentsStore(orgId: string): Map<ProposalId, ProposalCommercialDocument[]> {
+    if (!ProposalApplicationService.documentsStore.has(orgId)) {
+      ProposalApplicationService.documentsStore.set(orgId, new Map());
+    }
+    return ProposalApplicationService.documentsStore.get(orgId)!;
+  }
+
   private static getNextNumber(orgId: string, clock: Clock): string {
     const current = ProposalApplicationService.counterStore.get(orgId) || 0;
     const next = current + 1;
@@ -160,14 +173,25 @@ export class ProposalApplicationService {
     return `PROP-${year}-${next.toString().padStart(4, '0')}`;
   }
 
+  private static getNextDocumentNumber(orgId: string, clock: Clock): string {
+    const current = ProposalApplicationService.documentCounterStore.get(orgId) || 0;
+    const next = current + 1;
+    ProposalApplicationService.documentCounterStore.set(orgId, next);
+    return `DOC-PROP-${clock.now().getUTCFullYear()}-${next.toString().padStart(4, '0')}`;
+  }
+
   public static clearAll(): void {
     ProposalApplicationService.proposalsStore.clear();
     ProposalApplicationService.historyStore.clear();
     ProposalApplicationService.snapshotsStore.clear();
     ProposalApplicationService.assignmentsStore.clear();
+    ProposalApplicationService.documentsStore.clear();
     ProposalApplicationService.counterStore.clear();
+    ProposalApplicationService.documentCounterStore.clear();
     ProposalApplicationService.idempotencyStore.clear();
+    ProposalApplicationService.documentIdempotencyStore.clear();
     ProposalApplicationService.inFlightOperations.clear();
+    ProposalApplicationService.inFlightDocumentOperations.clear();
     ProposalApplicationService.updateLocks.clear();
     proposalEventBus.clearAll();
   }
@@ -247,6 +271,47 @@ export class ProposalApplicationService {
       return this.clone(result);
     } finally {
       ProposalApplicationService.inFlightOperations.delete(compositeKey);
+    }
+  }
+
+  private async runIdempotentDocumentMutation(
+    operation: string,
+    proposalId: ProposalId,
+    idempotencyKey: string,
+    payload: unknown,
+    ctx: ProposalAppContext,
+    execute: () => Promise<ProposalCommercialDocument>
+  ): Promise<ProposalCommercialDocument> {
+    if (!idempotencyKey || idempotencyKey.trim().length < 8) {
+      throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave de idempotência inválida.');
+    }
+    const compositeKey = `${ctx.organizationId}:${proposalId}:${operation}:${idempotencyKey.trim()}`;
+    const payloadHash = canonicalJsonStringify(payload);
+    const completed = ProposalApplicationService.documentIdempotencyStore.get(compositeKey);
+    if (completed) {
+      if (completed.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave reutilizada com conteúdo divergente.');
+      }
+      return this.clone(completed.document);
+    }
+    const inFlight = ProposalApplicationService.inFlightDocumentOperations.get(compositeKey);
+    if (inFlight) {
+      if (inFlight.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave concorrente com conteúdo divergente.');
+      }
+      return this.clone(await inFlight.promise);
+    }
+    const promise = execute();
+    ProposalApplicationService.inFlightDocumentOperations.set(compositeKey, { payloadHash, promise });
+    try {
+      const document = await promise;
+      ProposalApplicationService.documentIdempotencyStore.set(compositeKey, {
+        payloadHash,
+        document: this.clone(document),
+      });
+      return this.clone(document);
+    } finally {
+      ProposalApplicationService.inFlightDocumentOperations.delete(compositeKey);
     }
   }
 
@@ -1202,7 +1267,155 @@ export class ProposalApplicationService {
     });
   }
 
-  // --- 9. REGISTRO DE APRESENTAÇÃO AO CLIENTE (approved -> presented) ---
+  // --- 9. EMISSÃO DO DOCUMENTO COMERCIAL IMUTÁVEL (OE-005.004) ---
+  public async issueProposalDocument(
+    command: IssueProposalDocumentCommand,
+    ctx: ProposalAppContext,
+    clock: Clock = SystemClock
+  ): Promise<ProposalCommercialDocument> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:issue_document');
+    return this.runIdempotentDocumentMutation(
+      'issue-document',
+      command.proposalId,
+      command.idempotencyKey,
+      command,
+      ctx,
+      async () => {
+        const release = await ProposalApplicationService.acquireLock(
+          `${ctx.organizationId}:${command.proposalId}`
+        );
+        try {
+          const proposal = ProposalApplicationService
+            .getOrgStore(ctx.organizationId)
+            .get(command.proposalId);
+          if (!proposal) {
+            throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+          }
+          this.validateCommandMetadata(proposal, command);
+          if (ctx.actor.role === 'capturer' && proposal.capturerUserId !== ctx.actor.userId) {
+            throw new ProposalDomainError('PERMISSION_DENIED', 'Captador não relacionado à proposta.');
+          }
+          if (proposal.status !== 'approved') {
+            throw new ProposalDomainError(
+              'DOCUMENT_NOT_ISSUABLE',
+              'O documento comercial somente pode ser emitido para uma proposta aprovada.'
+            );
+          }
+
+          const snapshots = ProposalApplicationService
+            .getOrgSnapshotsStore(ctx.organizationId)
+            .get(proposal.id) ?? [];
+          const sourceSnapshot = snapshots.find(
+            (snapshot) => snapshot.versionNumber === proposal.version && snapshot.status === 'approved'
+          );
+          if (!sourceSnapshot) {
+            throw new ProposalDomainError(
+              'DOCUMENT_VERSION_MISMATCH',
+              'A versão aprovada não possui snapshot canônico disponível.'
+            );
+          }
+
+          const documentsMap = ProposalApplicationService.getOrgDocumentsStore(ctx.organizationId);
+          const documents = documentsMap.get(proposal.id) ?? [];
+          const existingDocument = documents.find(
+            (document) => document.sourceSnapshotId === sourceSnapshot.id
+          );
+          if (existingDocument) return this.clone(existingDocument);
+
+          const nowIso = clock.now().toISOString();
+          const documentNumber = ProposalApplicationService.getNextDocumentNumber(
+            ctx.organizationId,
+            clock
+          );
+          const content = {
+            proposalNumber: proposal.proposalNumber,
+            title: proposal.title,
+            proposalType: proposal.proposalType,
+            category: proposal.category,
+            client: {
+              id: proposal.clientId,
+              name: proposal.clientSnapshot.name,
+            },
+            property: proposal.propertySnapshot
+              ? {
+                  id: proposal.propertySnapshot.id,
+                  name: proposal.propertySnapshot.name,
+                  city: proposal.propertySnapshot.city,
+                  state: proposal.propertySnapshot.state,
+                }
+              : null,
+            estimatedValue: this.clone(proposal.estimatedValue),
+            calculationSummary: this.clone(proposal.calculationSummary),
+            validityDays: proposal.validityDays,
+            disclaimerText:
+              'Documento comercial informativo gerado pelo AgroCore. Não constitui contrato, assinatura digital, aprovação de crédito ou garantia de liberação de recursos.',
+          } as const;
+          const checksumSha256 = await calculateSha256(canonicalJsonStringify({
+            organizationId: ctx.organizationId,
+            proposalId: proposal.id,
+            documentNumber,
+            sourceSnapshotId: sourceSnapshot.id,
+            sourceVersionNumber: sourceSnapshot.versionNumber,
+            sourceChecksumSha256: sourceSnapshot.checksumSha256,
+            content,
+            issuedByUserId: ctx.actor.userId,
+            issuedAt: nowIso,
+          })).catch(() => {
+            throw new ProposalDomainError('HASH_UNAVAILABLE', 'Não foi possível calcular SHA-256 verdadeiro.');
+          });
+
+          const document: ProposalCommercialDocument = {
+            id: this.idGenerator.next('proposal-doc'),
+            organizationId: ctx.organizationId,
+            proposalId: proposal.id,
+            documentNumber,
+            sourceSnapshotId: sourceSnapshot.id,
+            sourceVersionNumber: sourceSnapshot.versionNumber,
+            sourceChecksumSha256: sourceSnapshot.checksumSha256,
+            content,
+            issuedByUserId: ctx.actor.userId,
+            issuedAt: nowIso,
+            checksumSha256,
+          };
+
+          documentsMap.set(proposal.id, [...documents, this.clone(document)]);
+          proposalEventBus.emit({
+            id: this.idGenerator.next('evt'),
+            type: 'proposal.document.issued',
+            organizationId: ctx.organizationId,
+            proposalId: proposal.id,
+            proposalNumber: proposal.proposalNumber,
+            status: proposal.status,
+            versionNumber: proposal.version,
+            actorUserId: ctx.actor.userId,
+            correlationId: this.idGenerator.next('corr'),
+            timestamp: nowIso,
+            payload: {
+              documentNumber,
+              sourceVersionNumber: sourceSnapshot.versionNumber,
+            },
+          });
+          proposalEventBus.addNotification({
+            id: this.idGenerator.next('notif'),
+            organizationId: ctx.organizationId,
+            recipientUserId: proposal.capturerUserId,
+            proposalId: proposal.id,
+            proposalNumber: proposal.proposalNumber,
+            type: 'proposal.document.issued',
+            title: 'Documento comercial disponível',
+            message: 'A proposta possui um documento comercial versionado disponível.',
+            createdAt: nowIso,
+          });
+          return this.clone(document);
+        } finally {
+          release();
+        }
+      }
+    );
+  }
+
+  // --- 10. REGISTRO DE APRESENTAÇÃO AO CLIENTE (approved -> presented) ---
   public async markProposalPresented(
     command: PresentProposalCommand,
     ctx: ProposalAppContext,
@@ -1226,6 +1439,27 @@ export class ProposalApplicationService {
         if (!canTransitionProposalStatus(existing.status, 'presented')) {
           throw new ProposalDomainError('NOT_APPROVED', 'Apenas propostas aprovadas podem ser apresentadas.');
         }
+        const documentId = command.documentId?.trim();
+        const document = documentId
+          ? (ProposalApplicationService.getOrgDocumentsStore(ctx.organizationId).get(existing.id) ?? [])
+              .find((candidate) => candidate.id === documentId)
+          : undefined;
+        if (!document) {
+          throw new ProposalDomainError(
+            'DOCUMENT_NOT_FOUND',
+            'Emita e selecione o documento comercial canônico antes de registrar a apresentação.'
+          );
+        }
+        if (
+          document.organizationId !== ctx.organizationId ||
+          document.proposalId !== existing.id ||
+          document.sourceVersionNumber !== existing.version
+        ) {
+          throw new ProposalDomainError(
+            'DOCUMENT_VERSION_MISMATCH',
+            'O documento informado não corresponde à versão aprovada atual.'
+          );
+        }
         const now = clock.now();
         const validFrom = now.toISOString();
         const expiresAt = new Date(now.getTime() + existing.validityDays * 86_400_000).toISOString();
@@ -1233,7 +1467,7 @@ export class ProposalApplicationService {
           presentedAt: validFrom, presentedByUserId: ctx.actor.userId,
           channel: command.channel, presentedVersionNumber: existing.version + 1,
           notes: command.notes?.trim() || undefined,
-          documentReference: command.documentReference?.trim() || undefined,
+          documentReference: document.id,
         };
         const updatedProposal: Proposal = {
           ...existing, status: 'presented', validFrom, expiresAt, presentationRecord,
@@ -1254,7 +1488,7 @@ export class ProposalApplicationService {
     });
   }
 
-  // --- 10. REGISTRO DE DECISÃO DO CLIENTE (presented -> accepted | declined) ---
+  // --- 11. REGISTRO DE DECISÃO DO CLIENTE (presented -> accepted | declined) ---
   public async recordProposalDecision(
     command: RecordProposalDecisionCommand,
     ctx: ProposalAppContext,
@@ -1466,6 +1700,32 @@ export class ProposalApplicationService {
     const assignmentsMap = ProposalApplicationService.getOrgAssignmentsStore(ctx.organizationId);
     const list = assignmentsMap.get(proposalId) || [];
     return this.clone(list).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public async getProposalDocuments(
+    proposalId: ProposalId,
+    ctx: ProposalAppContext
+  ): Promise<readonly ProposalCommercialDocument[]> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:view_document');
+    await this.getProposalById(proposalId, ctx);
+    const list = ProposalApplicationService.getOrgDocumentsStore(ctx.organizationId).get(proposalId) ?? [];
+    return this.clone(list).sort(
+      (a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime()
+    );
+  }
+
+  public async getProposalDocumentById(
+    proposalId: ProposalId,
+    documentId: string,
+    ctx: ProposalAppContext
+  ): Promise<ProposalCommercialDocument> {
+    const documents = await this.getProposalDocuments(proposalId, ctx);
+    const document = documents.find((candidate) => candidate.id === documentId);
+    if (!document) {
+      throw new ProposalDomainError('DOCUMENT_NOT_FOUND', 'Documento comercial não encontrado.');
+    }
+    return this.clone(document);
   }
 
   // --- LISTAGEM PAGINADA ---

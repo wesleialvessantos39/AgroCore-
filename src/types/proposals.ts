@@ -1,15 +1,10 @@
 /**
  * MÓDULO 005 — PROPOSTAS DE CRÉDITO E PRESTAÇÃO DE SERVIÇOS TÉCNICOS
- * Fundação canônica de entidades, contratos de domínio e tipos estritos.
+ * Contratos canônicos de domínio, pipeline e documento comercial.
  * 
  * Regras:
- * 1. Contrato exclusivo de fundação: id, organizationId, proposalNumber, title,
- *    clientId, clientSnapshot, propertyId, propertySnapshot, capturerUserId,
- *    capturerSnapshot, proposalType, status, validityDays, expiresAt,
- *    estimatedValue, calculationSummary, notes, createdAt, updatedAt, version.
- * 2. Status permitidos na fundação: 'draft' | 'submitted' | 'expired' | 'cancelled'.
- * 3. Operações de pipeline comercial pertencem à OE-005.003.
- * 4. Aritmética determinística com formatação padronizada.
+ * A proposta é a fonte autoritativa; snapshots, histórico e documentos comerciais
+ * são projeções imutáveis e isoladas por organização.
  */
 
 export type ProposalId = string;
@@ -116,7 +111,7 @@ export interface ProposalPresentationRecord {
   readonly channel: ProposalPresentationChannel;
   readonly presentedVersionNumber: number;
   readonly notes?: string;
-  readonly documentReference?: string;
+  readonly documentReference?: string; // ID canônico de ProposalCommercialDocument
 }
 
 export interface ProposalDecisionRecord {
@@ -155,6 +150,45 @@ export interface ProposalVersionSnapshot {
   readonly createdByUserId: string;
   readonly createdAt: string; // ISO
   readonly correlationId: string;
+  readonly checksumSha256: string;
+}
+
+export interface ProposalCommercialDocumentContent {
+  readonly proposalNumber: string;
+  readonly title: string;
+  readonly proposalType: ProposalType;
+  readonly category: ProposalCategory;
+  readonly client: {
+    readonly id: string;
+    readonly name: string;
+  };
+  readonly property: {
+    readonly id: string;
+    readonly name: string;
+    readonly city?: string;
+    readonly state?: string;
+  } | null;
+  readonly estimatedValue: ProposalEstimatedValue;
+  readonly calculationSummary: ProposalCalculationSummary;
+  readonly validityDays: number;
+  readonly disclaimerText: string;
+}
+
+/**
+ * Projeção comercial imutável emitida a partir do snapshot aprovado.
+ * Não representa contrato, assinatura digital ou consentimento autenticado.
+ */
+export interface ProposalCommercialDocument {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly proposalId: ProposalId;
+  readonly documentNumber: string;
+  readonly sourceSnapshotId: string;
+  readonly sourceVersionNumber: number;
+  readonly sourceChecksumSha256: string;
+  readonly content: ProposalCommercialDocumentContent;
+  readonly issuedByUserId: string;
+  readonly issuedAt: string;
   readonly checksumSha256: string;
 }
 
@@ -229,7 +263,7 @@ export interface UpdateProposalInput {
 export interface PresentProposalInput {
   readonly channel: ProposalPresentationChannel;
   readonly notes?: string;
-  readonly documentReference?: string;
+  readonly documentId: string;
   readonly expectedVersion: number;
   readonly idempotencyKey: string;
 }
@@ -273,8 +307,10 @@ export interface RejectProposalCommand extends ProposalCommandMetadata {
 export interface PresentProposalCommand extends ProposalCommandMetadata {
   readonly channel: ProposalPresentationChannel;
   readonly notes?: string;
-  readonly documentReference?: string;
+  readonly documentId: string;
 }
+
+export type IssueProposalDocumentCommand = ProposalCommandMetadata;
 
 export interface RecordProposalDecisionCommand extends ProposalCommandMetadata {
   readonly decision: ProposalClientDecision;
@@ -339,6 +375,9 @@ export type ProposalErrorCode =
   | 'INVALID_CHANNEL'
   | 'INVALID_DECISION'
   | 'HASH_UNAVAILABLE'
+  | 'DOCUMENT_NOT_FOUND'
+  | 'DOCUMENT_NOT_ISSUABLE'
+  | 'DOCUMENT_VERSION_MISMATCH'
   | 'SYSTEM_CONTEXT_REQUIRED'
   | 'OPERATION_NOT_ALLOWED';
 

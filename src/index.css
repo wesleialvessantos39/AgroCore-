@@ -99,3 +99,26 @@ body {
   outline: 2px solid #78C89A;
   outline-offset: 2px;
 }
+
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #page-proposal-document,
+  #page-proposal-document * {
+    visibility: visible;
+  }
+
+  #page-proposal-document {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: #FFFFFF;
+  }
+}

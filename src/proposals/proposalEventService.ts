@@ -19,7 +19,8 @@ export type ProposalEventType =
   | 'proposal.accepted'
   | 'proposal.declined'
   | 'proposal.expired'
-  | 'proposal.cancelled';
+  | 'proposal.cancelled'
+  | 'proposal.document.issued';
 
 export interface ProposalDomainEvent {
   readonly id: string;

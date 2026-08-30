@@ -240,6 +240,15 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Histórico cronológico e snapshots imutáveis da proposta.',
   },
   {
+    path: ROUTES.PROPOSALS_DOCUMENT,
+    category: 'authenticated_protected',
+    name: 'Documento Comercial da Proposta',
+    requiresAuth: true,
+    requiredPermissions: 'proposals:view_document',
+    scope: 'organization',
+    description: 'Prévia A4 e impressão da projeção comercial imutável da proposta aprovada.',
+  },
+  {
     path: ROUTES.PROPOSALS_DETAIL,
     category: 'authenticated_protected',
     name: 'Detalhes da Proposta',
@@ -307,6 +316,10 @@ export function findRouteDefinition(path: string): RouteDefinition | undefined {
 
   if (/^\/propostas\/[^/]+\/historico$/.test(path)) {
     return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_HISTORY);
+  }
+
+  if (/^\/propostas\/[^/]+\/documento$/.test(path)) {
+    return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_DOCUMENT);
   }
 
   if (/^\/propostas\/[^/]+$/.test(path)) {

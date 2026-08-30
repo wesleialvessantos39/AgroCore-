@@ -86,6 +86,10 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Histórico da Proposta | AgroCore',
     announcementTitle: 'Histórico da proposta',
   },
+  [ROUTES.PROPOSALS_DOCUMENT]: {
+    documentTitle: 'Documento Comercial da Proposta | AgroCore',
+    announcementTitle: 'Documento comercial da proposta',
+  },
   [ROUTES.MY_ACCOUNT]: {
     documentTitle: 'Minha Conta | AgroCore',
     announcementTitle: 'Minha conta',
@@ -146,6 +150,10 @@ export function getRouteMetadata(pathname: string): RouteMetadata {
 
   if (/^\/propostas\/[^/]+\/historico$/.test(pathname)) {
     return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_HISTORY];
+  }
+
+  if (/^\/propostas\/[^/]+\/documento$/.test(pathname)) {
+    return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_DOCUMENT];
   }
 
   if (/^\/propostas\/[^/]+$/.test(pathname)) {

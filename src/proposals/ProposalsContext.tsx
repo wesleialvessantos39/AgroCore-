@@ -12,6 +12,7 @@ import {
   PresentProposalCommand,
   Proposal,
   ProposalCategory,
+  ProposalCommercialDocument,
   ProposalFilterOptions,
   ProposalId,
   ProposalReviewAssignment,
@@ -81,8 +82,11 @@ export interface ProposalsContextValue {
   ) => Promise<MutationResult<Proposal>>;
   readonly markProposalPresented: (
     proposalId: ProposalId,
-    input: Pick<PresentProposalCommand, 'channel' | 'notes' | 'documentReference'>
+    input: Pick<PresentProposalCommand, 'channel' | 'notes' | 'documentId'>
   ) => Promise<MutationResult<Proposal>>;
+  readonly issueProposalDocument: (
+    proposalId: ProposalId
+  ) => Promise<MutationResult<ProposalCommercialDocument>>;
   readonly recordProposalDecision: (
     proposalId: ProposalId,
     input: Pick<RecordProposalDecisionCommand, 'decision' | 'channel' | 'operationalReference' | 'notes'>
@@ -91,6 +95,11 @@ export interface ProposalsContextValue {
   readonly getProposalHistory: (proposalId: ProposalId) => Promise<readonly ProposalStatusHistoryEntry[]>;
   readonly getProposalSnapshots: (proposalId: ProposalId) => Promise<readonly ProposalVersionSnapshot[]>;
   readonly getProposalReviewAssignments: (proposalId: ProposalId) => Promise<readonly ProposalReviewAssignment[]>;
+  readonly getProposalDocuments: (proposalId: ProposalId) => Promise<readonly ProposalCommercialDocument[]>;
+  readonly getProposalDocumentById: (
+    proposalId: ProposalId,
+    documentId: string
+  ) => Promise<ProposalCommercialDocument | null>;
 }
 
 const ProposalsContext = createContext<ProposalsContextValue | null>(null);
@@ -427,7 +436,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
   const markProposalPresented = useCallback(
     async (
       proposalId: ProposalId,
-      input: Pick<PresentProposalCommand, 'channel' | 'notes' | 'documentReference'>
+      input: Pick<PresentProposalCommand, 'channel' | 'notes' | 'documentId'>
     ): Promise<MutationResult<Proposal>> => {
       if (!appContext) {
         return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
@@ -450,6 +459,28 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       }
     },
     [appContext, loadProposals, mutationKey, proposalAppService]
+  );
+
+  const issueProposalDocument = useCallback(
+    async (proposalId: ProposalId): Promise<MutationResult<ProposalCommercialDocument>> => {
+      if (!appContext) {
+        return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
+      }
+      try {
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const document = await proposalAppService.issueProposalDocument({
+          proposalId,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('issue-document', proposalId, current.version),
+        }, appContext);
+        return { success: true, data: document };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao emitir documento comercial.';
+        return { success: false, error: msg };
+      }
+    },
+    [appContext, mutationKey, proposalAppService]
   );
 
   const recordProposalDecision = useCallback(
@@ -541,6 +572,30 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
     [appContext, proposalAppService]
   );
 
+  const getProposalDocuments = useCallback(
+    async (proposalId: ProposalId): Promise<readonly ProposalCommercialDocument[]> => {
+      if (!appContext) return [];
+      try {
+        return await proposalAppService.getProposalDocuments(proposalId, appContext);
+      } catch {
+        return [];
+      }
+    },
+    [appContext, proposalAppService]
+  );
+
+  const getProposalDocumentById = useCallback(
+    async (proposalId: ProposalId, documentId: string): Promise<ProposalCommercialDocument | null> => {
+      if (!appContext) return null;
+      try {
+        return await proposalAppService.getProposalDocumentById(proposalId, documentId, appContext);
+      } catch {
+        return null;
+      }
+    },
+    [appContext, proposalAppService]
+  );
+
   const contextValue = useMemo<ProposalsContextValue>(
     () => ({
       status,
@@ -566,11 +621,14 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       approveProposal,
       rejectProposal,
       markProposalPresented,
+      issueProposalDocument,
       recordProposalDecision,
       cancelProposal,
       getProposalHistory,
       getProposalSnapshots,
       getProposalReviewAssignments,
+      getProposalDocuments,
+      getProposalDocumentById,
     }),
     [
       status,
@@ -595,11 +653,14 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       approveProposal,
       rejectProposal,
       markProposalPresented,
+      issueProposalDocument,
       recordProposalDecision,
       cancelProposal,
       getProposalHistory,
       getProposalSnapshots,
       getProposalReviewAssignments,
+      getProposalDocuments,
+      getProposalDocumentById,
     ]
   );
 
