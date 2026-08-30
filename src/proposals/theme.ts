@@ -48,9 +48,9 @@ export const PROPOSAL_THEME = {
   btnSecondary:
     'inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-[#0B3D2E] bg-white border border-[#0B3D2E] hover:bg-[#78C89A]/15 focus:outline-none focus:ring-2 focus:ring-[#78C89A] rounded-xl shadow-2xs transition-colors min-h-[44px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
   btnSecondarySmall:
-    'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0B3D2E] bg-white border border-[#0B3D2E]/40 hover:bg-[#78C89A]/15 focus:outline-none focus:ring-2 focus:ring-[#78C89A] rounded-lg transition-colors min-h-[36px] cursor-pointer disabled:opacity-50',
+    'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0B3D2E] bg-white border border-[#0B3D2E]/40 hover:bg-[#78C89A]/15 focus:outline-none focus:ring-2 focus:ring-[#78C89A] rounded-lg transition-colors min-h-[44px] cursor-pointer disabled:opacity-50',
   btnMutedSmall:
-    'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0B3D2E]/70 bg-transparent hover:bg-[#0B3D2E]/10 focus:outline-none rounded-lg transition-colors min-h-[36px] cursor-pointer',
+    'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0B3D2E]/70 bg-transparent hover:bg-[#0B3D2E]/10 focus:outline-none focus:ring-2 focus:ring-[#78C89A] rounded-lg transition-colors min-h-[44px] cursor-pointer',
 
   // Modais e Overlays
   modalOverlay: 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B3D2E]/60 backdrop-blur-xs',

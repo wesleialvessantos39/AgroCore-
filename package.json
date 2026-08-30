@@ -33,6 +33,7 @@
     "test:appraisal-workflow": "node --import tsx scripts/test-oe-004-002.ts",
     "test:module-004": "node --import tsx scripts/test-module-004.js",
     "test:proposals-foundation": "node --import tsx scripts/test-proposals-foundation.ts",
+    "test:proposal-pipeline": "node --import tsx scripts/test-proposals-pipeline.ts",
     "test:proposals-theme": "node scripts/test-proposals-theme.js",
     "test:module-005": "node --import tsx scripts/test-module-005.js",
     "test:rebranding": "node --import tsx scripts/test-rebranding.js",

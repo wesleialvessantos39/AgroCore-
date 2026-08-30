@@ -219,7 +219,9 @@ async function runTests() {
 
     assert.strictEqual(evaluatePermission('organization:view_overview', context).granted, true);
     assert.strictEqual(evaluatePermission('clients:create', context).granted, true);
-    assert.strictEqual(evaluatePermission('proposals:edit', context).granted, true);
+    assert.strictEqual(evaluatePermission('proposals:edit_draft', context).granted, true);
+    assert.strictEqual(evaluatePermission('proposals:approve', context).granted, true);
+    assert.strictEqual(evaluatePermission('proposals:review', context).granted, false);
     assert.strictEqual(evaluatePermission('surveys_and_visits:execute', context).granted, true);
     assert.strictEqual(evaluatePermission('schedule:manage', context).granted, true);
     assert.strictEqual(evaluatePermission('fleet:manage', context).granted, true);
@@ -256,14 +258,17 @@ async function runTests() {
 
     assert.strictEqual(evaluatePermission('organization:view_overview', context).granted, true);
     assert.strictEqual(evaluatePermission('clients:view', context).granted, true);
-    assert.strictEqual(evaluatePermission('proposals:create', context).granted, true);
-    assert.strictEqual(evaluatePermission('proposals:edit', context).granted, true);
+    assert.strictEqual(evaluatePermission('proposals:view_assigned', context).granted, true);
+    assert.strictEqual(evaluatePermission('proposals:review', context).granted, true);
     assert.strictEqual(evaluatePermission('documents:upload', context).granted, true);
     assert.strictEqual(evaluatePermission('surveys_and_visits:schedule', context).granted, true);
     assert.strictEqual(evaluatePermission('schedule:view', context).granted, true);
 
     // Negadas
     assert.strictEqual(evaluatePermission('clients:create', context).granted, false);
+    assert.strictEqual(evaluatePermission('proposals:create', context).granted, false);
+    assert.strictEqual(evaluatePermission('proposals:edit_draft', context).granted, false);
+    assert.strictEqual(evaluatePermission('proposals:approve', context).granted, false);
     assert.strictEqual(evaluatePermission('fleet:manage', context).granted, false);
     assert.strictEqual(evaluatePermission('finance:view_records', context).granted, false);
     assert.strictEqual(evaluatePermission('users_and_access:view', context).granted, false);
@@ -338,7 +343,9 @@ async function runTests() {
     assert.strictEqual(evaluatePermission('surveys_and_visits:view', context).granted, true);
 
     // Negadas
-    assert.strictEqual(evaluatePermission('proposals:edit', context).granted, false);
+    assert.strictEqual(evaluatePermission('proposals:edit_draft', context).granted, true);
+    assert.strictEqual(evaluatePermission('proposals:review', context).granted, false);
+    assert.strictEqual(evaluatePermission('proposals:approve', context).granted, false);
     assert.strictEqual(evaluatePermission('documents:manage', context).granted, false);
     assert.strictEqual(evaluatePermission('finance:view_records', context).granted, false);
     assert.strictEqual(evaluatePermission('users_and_access:view', context).granted, false);

@@ -18,7 +18,10 @@ export const ROUTES = {
   APPRAISAL_REQUESTS_DETAIL: '/solicitacoes-de-laudo/:requestId',
   PROPOSALS: '/propostas',
   PROPOSALS_NEW: '/propostas/novo',
+  PROPOSALS_QUEUE: '/propostas/fila',
   PROPOSALS_EDIT: '/propostas/:proposalId/editar',
+  PROPOSALS_REVIEW: '/propostas/:proposalId/revisao',
+  PROPOSALS_HISTORY: '/propostas/:proposalId/historico',
   PROPOSALS_DETAIL: '/propostas/:proposalId',
   MY_ACCOUNT: '/minha-conta',
   ACCESS_DENIED: '/acesso-negado',
@@ -49,6 +52,14 @@ export function getProposalEditPath(proposalId: string): string {
 
 export function getProposalDetailPath(proposalId: string): string {
   return `/propostas/${encodeURIComponent(proposalId)}`;
+}
+
+export function getProposalReviewPath(proposalId: string): string {
+  return `/propostas/${encodeURIComponent(proposalId)}/revisao`;
+}
+
+export function getProposalHistoryPath(proposalId: string): string {
+  return `/propostas/${encodeURIComponent(proposalId)}/historico`;
 }
 
 export function getAppraisalDetailPath(appraisalId: string): string {

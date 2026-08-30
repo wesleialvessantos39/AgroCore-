@@ -124,6 +124,18 @@ const ProposalDetailPage = lazy(() =>
   }))
 );
 
+const ProposalQueuePage = lazy(() =>
+  import('../pages/ProposalQueuePage').then((module) => ({ default: module.ProposalQueuePage }))
+);
+
+const ProposalReviewPage = lazy(() =>
+  import('../pages/ProposalReviewPage').then((module) => ({ default: module.ProposalReviewPage }))
+);
+
+const ProposalHistoryPage = lazy(() =>
+  import('../pages/ProposalHistoryPage').then((module) => ({ default: module.ProposalHistoryPage }))
+);
+
 const MyAccountPage = lazy(() =>
   import('../pages/MyAccountPage').then((module) => ({
     default: module.MyAccountPage,
@@ -416,6 +428,14 @@ export function AppRoutes() {
           >
             <Route index element={<ProposalsPage />} />
             <Route
+              path="fila"
+              element={
+                <RequirePermission permission="proposals:assign_review">
+                  <ProposalQueuePage />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="novo"
               element={
                 <RequirePermission permission="proposals:create">
@@ -426,15 +446,31 @@ export function AppRoutes() {
             <Route
               path=":proposalId/editar"
               element={
-                <RequirePermission permission="proposals:edit">
+                <RequirePermission permission="proposals:edit_draft">
                   <ProposalEditPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path=":proposalId/revisao"
+              element={
+                <RequirePermission permission={['proposals:view_assigned', 'proposals:review']} requireAll>
+                  <ProposalReviewPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path=":proposalId/historico"
+              element={
+                <RequirePermission permission={['proposals:view', 'proposals:view_related', 'proposals:view_assigned']}>
+                  <ProposalHistoryPage />
                 </RequirePermission>
               }
             />
             <Route
               path=":proposalId"
               element={
-                <RequirePermission permission="proposals:view">
+                <RequirePermission permission={['proposals:view', 'proposals:view_related', 'proposals:view_assigned']}>
                   <ProposalDetailPage />
                 </RequirePermission>
               }

@@ -6,8 +6,11 @@
 
 import {
   CreateProposalInput,
+  ApproveProposalCommand,
+  AssignProposalReviewerCommand,
+  CancelProposalCommand,
   PaginatedProposalsResult,
-  PresentProposalInput,
+  PresentProposalCommand,
   Proposal,
   ProposalCalculationSummary,
   ProposalCapturerSnapshot,
@@ -22,7 +25,11 @@ import {
   ProposalStatus,
   ProposalStatusHistoryEntry,
   ProposalVersionSnapshot,
-  RecordProposalDecisionInput,
+  RecordProposalDecisionCommand,
+  RejectProposalCommand,
+  RequestProposalChangesCommand,
+  StartProposalReviewCommand,
+  SubmitProposalCommand,
   UpdateProposalInput,
 } from '../types/proposals';
 import { Client } from '../types/client';
@@ -44,12 +51,16 @@ import {
   calculateSha256,
   canonicalJsonStringify,
   Clock,
+  IdGenerator,
+  SecureIdGenerator,
   SystemClock,
 } from './cryptoUtils';
 import {
   proposalEventBus,
   ProposalEventType,
+  ProposalNotification,
 } from './proposalEventService';
+import { ROLE_PERMISSIONS_SET_MAP } from '../authorization/permissionsMatrix';
 
 export interface ProposalAppContext {
   readonly organizationId: string;
@@ -65,6 +76,11 @@ export interface ProposalAppContext {
   readonly memberResolver: (userId: string) => Promise<OrganizationMember | null>;
 }
 
+export interface ProposalSystemContext {
+  readonly organizationId: string;
+  readonly systemActor: 'proposal-expiration-scheduler';
+}
+
 export class ProposalApplicationService {
   // Armazenamento em memória autoritativo por organização
   private static proposalsStore: Map<string, Map<ProposalId, Proposal>> = new Map();
@@ -78,7 +94,7 @@ export class ProposalApplicationService {
 
   private static isCleanupRegistered = false;
 
-  constructor() {
+  constructor(private readonly idGenerator: IdGenerator = SecureIdGenerator) {
     if (!ProposalApplicationService.isCleanupRegistered) {
       registerDomainCleanup(() => {
         ProposalApplicationService.clearAll();
@@ -136,11 +152,11 @@ export class ProposalApplicationService {
     return ProposalApplicationService.assignmentsStore.get(orgId)!;
   }
 
-  private static getNextNumber(orgId: string): string {
+  private static getNextNumber(orgId: string, clock: Clock): string {
     const current = ProposalApplicationService.counterStore.get(orgId) || 0;
     const next = current + 1;
     ProposalApplicationService.counterStore.set(orgId, next);
-    const year = new Date().getFullYear();
+    const year = clock.now().getUTCFullYear();
     return `PROP-${year}-${next.toString().padStart(4, '0')}`;
   }
 
@@ -153,6 +169,85 @@ export class ProposalApplicationService {
     ProposalApplicationService.idempotencyStore.clear();
     ProposalApplicationService.inFlightOperations.clear();
     ProposalApplicationService.updateLocks.clear();
+    proposalEventBus.clearAll();
+  }
+
+  private clone<T>(value: T): T {
+    if (typeof globalThis.structuredClone === 'function') {
+      return globalThis.structuredClone(value);
+    }
+    return JSON.parse(JSON.stringify(value)) as T;
+  }
+
+  private hasPermission(ctx: ProposalAppContext, permission: Permission): boolean {
+    const canonical = ROLE_PERMISSIONS_SET_MAP.get(ctx.actor.role);
+    return Boolean(canonical?.has(permission) && ctx.actor.permissions.includes(permission));
+  }
+
+  private requirePermission(ctx: ProposalAppContext, permission: Permission): void {
+    if (!this.hasPermission(ctx, permission)) {
+      throw new ProposalDomainError(
+        'PERMISSION_DENIED',
+        `Permissão "${permission}" requerida para esta operação.`
+      );
+    }
+  }
+
+  private validateCommandMetadata(
+    proposal: Proposal,
+    metadata: { expectedVersion: number; idempotencyKey: string }
+  ): void {
+    if (!metadata.idempotencyKey || metadata.idempotencyKey.trim().length < 8) {
+      throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave de idempotência inválida.');
+    }
+    if (metadata.expectedVersion !== proposal.version) {
+      throw new ProposalDomainError(
+        'CONCURRENCY_CONFLICT',
+        `Conflito de versão: atual ${proposal.version}, esperada ${metadata.expectedVersion}.`
+      );
+    }
+  }
+
+  private async runIdempotentMutation(
+    operation: string,
+    proposalId: ProposalId,
+    idempotencyKey: string,
+    payload: unknown,
+    ctx: ProposalAppContext,
+    execute: () => Promise<Proposal>
+  ): Promise<Proposal> {
+    if (!idempotencyKey || idempotencyKey.trim().length < 8) {
+      throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave de idempotência inválida.');
+    }
+    const normalizedKey = idempotencyKey.trim();
+    const compositeKey = `${ctx.organizationId}:${proposalId}:${operation}:${normalizedKey}`;
+    const payloadHash = canonicalJsonStringify(payload);
+    const completed = ProposalApplicationService.idempotencyStore.get(compositeKey);
+    if (completed) {
+      if (completed.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave reutilizada com conteúdo divergente.');
+      }
+      return this.clone(completed.proposal);
+    }
+    const inFlight = ProposalApplicationService.inFlightOperations.get(compositeKey);
+    if (inFlight) {
+      if (inFlight.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave concorrente com conteúdo divergente.');
+      }
+      return this.clone(await inFlight.promise);
+    }
+    const promise = execute();
+    ProposalApplicationService.inFlightOperations.set(compositeKey, { payloadHash, promise });
+    try {
+      const result = await promise;
+      ProposalApplicationService.idempotencyStore.set(compositeKey, {
+        payloadHash,
+        proposal: this.clone(result),
+      });
+      return this.clone(result);
+    } finally {
+      ProposalApplicationService.inFlightOperations.delete(compositeKey);
+    }
   }
 
   // --- Normalização Determinística de Payloads para Idempotência ---
@@ -199,32 +294,38 @@ export class ProposalApplicationService {
   }
 
   private checkReadAccess(proposal: Proposal, ctx: ProposalAppContext): void {
-    if (!ctx.actor.permissions.includes('proposals:view')) {
+    const hasOrganizationView = this.hasPermission(ctx, 'proposals:view');
+    const hasRelatedView = this.hasPermission(ctx, 'proposals:view_related');
+    const hasAssignedView = this.hasPermission(ctx, 'proposals:view_assigned');
+    const isRelatedCapturer =
+      ctx.actor.role === 'capturer' &&
+      hasRelatedView &&
+      proposal.capturerUserId === ctx.actor.userId;
+    const isAssignedReviewer =
+      ctx.actor.role === 'project_designer' &&
+      hasAssignedView &&
+      proposal.activeReviewAssignment?.reviewerUserId === ctx.actor.userId;
+
+    const mayUseOrganizationView =
+      hasOrganizationView && ctx.actor.role !== 'capturer' && ctx.actor.role !== 'project_designer';
+
+    if (!mayUseOrganizationView && !isRelatedCapturer && !isAssignedReviewer) {
       throw new ProposalDomainError(
         'PERMISSION_DENIED',
         'Acesso negado: você não tem permissão para visualizar esta proposta.'
       );
     }
 
-    if (ctx.actor.role === 'capturer' && proposal.capturerUserId !== ctx.actor.userId) {
+    if (!this.hasPermission(ctx, 'proposals:view_financials')) {
       throw new ProposalDomainError(
         'PERMISSION_DENIED',
-        'Acesso negado: captadores só podem visualizar propostas de clientes a eles vinculados.'
+        'Acesso negado: as condições financeiras exigem permissão específica.'
       );
     }
   }
 
   private checkEditAccess(proposal: Proposal, ctx: ProposalAppContext): void {
-    const hasEdit =
-      ctx.actor.permissions.includes('proposals:edit_draft') ||
-      ctx.actor.permissions.includes('proposals:edit');
-
-    if (!hasEdit) {
-      throw new ProposalDomainError(
-        'PERMISSION_DENIED',
-        'Acesso negado: você não tem permissão para editar propostas.'
-      );
-    }
+    this.requirePermission(ctx, 'proposals:edit_draft');
 
     if (ctx.actor.role === 'capturer' && proposal.capturerUserId !== ctx.actor.userId) {
       throw new ProposalDomainError(
@@ -232,10 +333,16 @@ export class ProposalApplicationService {
         'Acesso negado: captadores só podem editar propostas de clientes a eles vinculados.'
       );
     }
+    if (ctx.actor.role === 'project_designer' && proposal.createdByUserId !== ctx.actor.userId) {
+      throw new ProposalDomainError(
+        'PERMISSION_DENIED',
+        'Acesso negado: o projetista só pode editar propostas criadas por ele.'
+      );
+    }
   }
 
-  // --- Gravação Imutável de Histórico e Snapshots ---
-  private async recordHistoryAndSnapshot(
+  // --- Preparação atômica de Histórico e Snapshots ---
+  private async buildHistoryAndSnapshot(
     proposal: Proposal,
     fromStatus: ProposalStatus,
     toStatus: ProposalStatus,
@@ -244,65 +351,85 @@ export class ProposalApplicationService {
     reason: string | undefined,
     notes: string | undefined,
     clock: Clock
-  ): Promise<void> {
+  ): Promise<{
+    historyEntry: ProposalStatusHistoryEntry;
+    snapshotEntry: ProposalVersionSnapshot;
+    correlationId: string;
+  }> {
     const orgId = proposal.organizationId;
     const nowIso = clock.now().toISOString();
-    const correlationId = `corr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-    // 1. Histórico
-    const historyMap = ProposalApplicationService.getOrgHistoryStore(orgId);
-    if (!historyMap.has(proposal.id)) {
-      historyMap.set(proposal.id, []);
-    }
+    const correlationId = this.idGenerator.next('corr');
     const historyEntry: ProposalStatusHistoryEntry = {
-      id: `hist_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      id: this.idGenerator.next('hist'),
       organizationId: orgId,
       proposalId: proposal.id,
       versionNumber: proposal.version,
       fromStatus,
       toStatus,
       actorUserId,
-      actorName,
+      actorName: actorName ? 'Usuário autorizado' : undefined,
       reason,
-      notes,
+      notes: notes ? 'Conteúdo protegido registrado no domínio.' : undefined,
       correlationId,
       timestamp: nowIso,
     };
-    historyMap.get(proposal.id)!.push(historyEntry);
-
-    // 2. Snapshot Imutável de Versão com SHA-256
-    const snapshotsMap = ProposalApplicationService.getOrgSnapshotsStore(orgId);
-    if (!snapshotsMap.has(proposal.id)) {
-      snapshotsMap.set(proposal.id, []);
-    }
     const canonicalJson = canonicalJsonStringify(proposal);
-    const checksumSha256 = await calculateSha256(canonicalJson);
+    let checksumSha256: string;
+    try {
+      checksumSha256 = await calculateSha256(canonicalJson);
+    } catch {
+      throw new ProposalDomainError('HASH_UNAVAILABLE', 'Não foi possível calcular SHA-256 verdadeiro.');
+    }
 
     const snapshotEntry: ProposalVersionSnapshot = {
-      id: `snap_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      id: this.idGenerator.next('snap'),
       organizationId: orgId,
       proposalId: proposal.id,
       versionNumber: proposal.version,
-      snapshot: JSON.parse(JSON.stringify(proposal)),
+      snapshot: this.clone(proposal),
       status: toStatus,
       createdByUserId: actorUserId,
       createdAt: nowIso,
       correlationId,
       checksumSha256,
     };
-    snapshotsMap.get(proposal.id)!.push(snapshotEntry);
+    return { historyEntry, snapshotEntry, correlationId };
   }
 
-  private emitDomainEvent(
-    type: ProposalEventType,
+  private commitTransition(
+    previous: Proposal,
     proposal: Proposal,
+    historyEntry: ProposalStatusHistoryEntry,
+    snapshotEntry: ProposalVersionSnapshot,
+    type: ProposalEventType,
     actorUserId: string,
     payload: Record<string, unknown>,
-    clock: Clock
+    clock: Clock,
+    notifications: readonly Omit<ProposalNotification, 'read'>[] = [],
+    assignmentState?: readonly ProposalReviewAssignment[]
   ): void {
-    const correlationId = `corr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const orgStore = ProposalApplicationService.getOrgStore(proposal.organizationId);
+    const historyMap = ProposalApplicationService.getOrgHistoryStore(proposal.organizationId);
+    const snapshotsMap = ProposalApplicationService.getOrgSnapshotsStore(proposal.organizationId);
+    const history = historyMap.get(proposal.id) ?? [];
+    const snapshots = snapshotsMap.get(proposal.id) ?? [];
+    const assignmentsMap = ProposalApplicationService.getOrgAssignmentsStore(proposal.organizationId);
+
+    const safePayload = Object.fromEntries(
+      Object.entries(payload).filter(([key, value]) =>
+        ['isResubmit', 'reviewerUserId', 'channel', 'decision', 'reasonCode'].includes(key) &&
+        (typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number')
+      )
+    );
+
+    orgStore.set(proposal.id, this.clone(proposal));
+    historyMap.set(proposal.id, [...history, this.clone(historyEntry)]);
+    snapshotsMap.set(proposal.id, [...snapshots, this.clone(snapshotEntry)]);
+    if (assignmentState) {
+      assignmentsMap.set(proposal.id, this.clone(Array.from(assignmentState)));
+    }
     proposalEventBus.emit({
-      id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      id: this.idGenerator.next('evt'),
       type,
       organizationId: proposal.organizationId,
       proposalId: proposal.id,
@@ -310,10 +437,20 @@ export class ProposalApplicationService {
       status: proposal.status,
       versionNumber: proposal.version,
       actorUserId,
-      correlationId,
+      correlationId: historyEntry.correlationId,
       timestamp: clock.now().toISOString(),
-      payload,
+      payload: safePayload,
     });
+    for (const notification of notifications) {
+      proposalEventBus.addNotification(this.clone(notification));
+    }
+
+    if (orgStore.get(proposal.id)?.version !== proposal.version) {
+      orgStore.set(previous.id, this.clone(previous));
+      historyMap.set(proposal.id, history);
+      snapshotsMap.set(proposal.id, snapshots);
+      throw new ProposalDomainError('OPERATION_NOT_ALLOWED', 'Falha ao confirmar a transição atômica.');
+    }
   }
 
   // --- 1. CRIAÇÃO DE PROPOSTA ---
@@ -324,11 +461,13 @@ export class ProposalApplicationService {
   ): Promise<Proposal> {
     this.validateContext(ctx);
 
-    if (!ctx.actor.permissions.includes('proposals:create')) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão "proposals:create" requerida para cadastrar propostas.');
+    this.requirePermission(ctx, 'proposals:create');
+
+    if (!input.idempotencyKey || input.idempotencyKey.trim().length < 8) {
+      throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave de idempotência inválida.');
     }
 
-    if (input.idempotencyKey && input.idempotencyKey.trim() !== '') {
+    if (input.idempotencyKey.trim() !== '') {
       const compositeKey = `${ctx.organizationId}:createProposal:${input.idempotencyKey.trim()}`;
       const payloadHash = this.normalizeCreatePayload(input);
 
@@ -481,8 +620,8 @@ export class ProposalApplicationService {
     const now = clock.now();
     const expiresDate = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
     const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-    const id: ProposalId = `prop-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const proposalNumber = ProposalApplicationService.getNextNumber(ctx.organizationId);
+    const id: ProposalId = this.idGenerator.next('prop');
+    const proposalNumber = ProposalApplicationService.getNextNumber(ctx.organizationId, clock);
 
     const calcResult = calculateProposalFinancialSummary({
       principalCents: input.requestedAmountCents,
@@ -515,6 +654,8 @@ export class ProposalApplicationService {
       propertySnapshot,
       capturerUserId,
       capturerSnapshot,
+      createdByUserId: ctx.actor.userId,
+      submittedByUserId: null,
       proposalType: input.proposalType,
       category: input.category || 'custeio',
       status: 'draft',
@@ -532,8 +673,8 @@ export class ProposalApplicationService {
       version: 1,
     };
 
-    orgStore.set(id, newProposal);
-    return newProposal;
+    orgStore.set(id, this.clone(newProposal));
+    return this.clone(newProposal);
   }
 
   // --- 2. ATUALIZAÇÃO DE PROPOSTA ---
@@ -544,14 +685,22 @@ export class ProposalApplicationService {
     clock: Clock = SystemClock
   ): Promise<Proposal> {
     this.validateContext(ctx);
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-    try {
-      return await this.executeUpdateProposal(proposalId, input, ctx, clock);
-    } finally {
-      release();
-    }
+    return this.runIdempotentMutation(
+      'update',
+      proposalId,
+      input.idempotencyKey,
+      this.normalizeUpdatePayload(input),
+      ctx,
+      async () => {
+        const lockKey = `${ctx.organizationId}:${proposalId}`;
+        const release = await ProposalApplicationService.acquireLock(lockKey);
+        try {
+          return await this.executeUpdateProposal(proposalId, input, ctx, clock);
+        } finally {
+          release();
+        }
+      }
+    );
   }
 
   private async executeUpdateProposal(
@@ -581,12 +730,7 @@ export class ProposalApplicationService {
       );
     }
 
-    if (input.expectedVersion !== undefined && input.expectedVersion !== existing.version) {
-      throw new ProposalDomainError(
-        'CONCURRENCY_CONFLICT',
-        `Conflito de versão: a proposta foi modificada por outro usuário (versão atual: ${existing.version}, versão esperada: ${input.expectedVersion}).`
-      );
-    }
+    this.validateCommandMetadata(existing, input);
 
     let propertySnapshot = existing.propertySnapshot;
     let propertyId = existing.propertyId;
@@ -689,762 +833,507 @@ export class ProposalApplicationService {
       version: existing.version + 1,
     };
 
-    orgStore.set(proposalId, updatedProposal);
-    return updatedProposal;
+    orgStore.set(proposalId, this.clone(updatedProposal));
+    return this.clone(updatedProposal);
   }
 
   // --- 3. SUBMISSÃO DE PROPOSTA (draft/changes_requested -> submitted) ---
   public async submitProposal(
-    proposalId: ProposalId,
+    command: SubmitProposalCommand,
     ctx: ProposalAppContext,
     clock: Clock = SystemClock
   ): Promise<Proposal> {
     this.validateContext(ctx);
-
-    const hasPermission =
-      ctx.actor.permissions.includes('proposals:submit') ||
-      ctx.actor.permissions.includes('proposals:edit');
-
-    if (!hasPermission) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão "proposals:submit" requerida para submeter proposta.');
-    }
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-
-    try {
-      const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-      const existing = orgStore.get(proposalId);
-
-      if (!existing) {
-        throw new ProposalDomainError('PROPOSAL_NOT_FOUND', `Proposta com ID "${proposalId}" não encontrada.`);
-      }
-
-      if (existing.organizationId !== ctx.organizationId) {
-        throw new ProposalDomainError('PERMISSION_DENIED', 'A proposta não pertence à organização ativa.');
-      }
-
-      this.checkEditAccess(existing, ctx);
-
-      if (!canTransitionProposalStatus(existing.status, 'submitted')) {
-        throw new ProposalDomainError(
-          'OPERATION_NOT_ALLOWED',
-          `Transição inválida: propostas no status "${existing.status}" não podem ser submetidas.`
+    this.requirePermission(ctx, 'proposals:submit');
+    return this.runIdempotentMutation('submit', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+      const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+      try {
+        const existing = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+        if (!existing) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+        this.validateCommandMetadata(existing, command);
+        this.checkEditAccess(existing, ctx);
+        if (!canTransitionProposalStatus(existing.status, 'submitted')) {
+          throw new ProposalDomainError('OPERATION_NOT_ALLOWED', `Transição inválida a partir de ${existing.status}.`);
+        }
+        const isResubmit = existing.status === 'changes_requested';
+        const nowIso = clock.now().toISOString();
+        const updatedProposal: Proposal = {
+          ...existing,
+          status: 'submitted',
+          submittedAt: nowIso,
+          submittedByUserId: ctx.actor.userId,
+          updatedAt: nowIso,
+          version: existing.version + 1,
+        };
+        const actorMember = await ctx.memberResolver(ctx.actor.userId);
+        const artifacts = await this.buildHistoryAndSnapshot(
+          updatedProposal, existing.status, 'submitted', ctx.actor.userId, actorMember?.name,
+          isResubmit ? 'RESUBMITTED' : 'SUBMITTED', undefined, clock
         );
+        this.commitTransition(
+          existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+          isResubmit ? 'proposal.resubmitted' : 'proposal.submitted', ctx.actor.userId,
+          { isResubmit }, clock
+        );
+        return this.clone(updatedProposal);
+      } finally {
+        release();
       }
-
-      const isResubmit = existing.status === 'changes_requested';
-      const nowIso = clock.now().toISOString();
-
-      const updatedProposal: Proposal = {
-        ...existing,
-        status: 'submitted',
-        submittedAt: nowIso,
-        updatedAt: nowIso,
-        version: existing.version + 1,
-      };
-
-      orgStore.set(proposalId, updatedProposal);
-
-      const actorMember = await ctx.memberResolver(ctx.actor.userId);
-      await this.recordHistoryAndSnapshot(
-        updatedProposal,
-        existing.status,
-        'submitted',
-        ctx.actor.userId,
-        actorMember?.name,
-        isResubmit ? 'Reenvio após adequação de apontamentos' : 'Submissão inicial para revisão técnica',
-        undefined,
-        clock
-      );
-
-      const eventType: ProposalEventType = isResubmit ? 'proposal.resubmitted' : 'proposal.submitted';
-      this.emitDomainEvent(eventType, updatedProposal, ctx.actor.userId, { isResubmit }, clock);
-
-      return updatedProposal;
-    } finally {
-      release();
-    }
+    });
   }
 
   // --- 4. ATRIBUIÇÃO DE REVISOR TÉCNICO ---
   public async assignProposalReviewer(
-    proposalId: ProposalId,
-    reviewerUserId: string,
+    command: AssignProposalReviewerCommand,
     ctx: ProposalAppContext,
-    clock: Clock = SystemClock,
-    reasonIfReassignment?: string
+    clock: Clock = SystemClock
   ): Promise<Proposal> {
     this.validateContext(ctx);
-
-    if (!ctx.actor.permissions.includes('proposals:assign_review')) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão "proposals:assign_review" requerida.');
-    }
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-
-    try {
-      const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-      const existing = orgStore.get(proposalId);
-
-      if (!existing) {
-        throw new ProposalDomainError('PROPOSAL_NOT_FOUND', `Proposta com ID "${proposalId}" não encontrada.`);
-      }
-
-      if (existing.organizationId !== ctx.organizationId) {
-        throw new ProposalDomainError('PERMISSION_DENIED', 'A proposta não pertence à organização ativa.');
-      }
-
-      if (isTerminalProposalStatus(existing.status)) {
-        throw new ProposalDomainError(
-          'OPERATION_NOT_ALLOWED',
-          `Não é permitido atribuir revisor a uma proposta finalizada (${existing.status}).`
-        );
-      }
-
-      const reviewerMember = await ctx.memberResolver(reviewerUserId);
-      if (!reviewerMember || !reviewerMember.isActive) {
-        throw new ProposalDomainError('REVIEWER_MISMATCH', 'O usuário indicado para revisão não é membro ativo da organização.');
-      }
-
-      const allowedReviewerRoles: OrganizationRole[] = ['project_designer', 'manager', 'company_admin', 'owner'];
-      if (!allowedReviewerRoles.includes(reviewerMember.organizationRole)) {
-        throw new ProposalDomainError('REVIEWER_MISMATCH', 'O usuário indicado não possui papel técnico ou gerencial compatível.');
-      }
-
-      const nowIso = clock.now().toISOString();
-      const assignmentsMap = ProposalApplicationService.getOrgAssignmentsStore(ctx.organizationId);
-      if (!assignmentsMap.has(proposalId)) {
-        assignmentsMap.set(proposalId, []);
-      }
-      const proposalAssignments = assignmentsMap.get(proposalId)!;
-
-      const isReassignment = !!existing.activeReviewAssignment;
-
-      // Se já houver atribuição ativa, marca como reassigned
-      for (let i = 0; i < proposalAssignments.length; i++) {
-        if (proposalAssignments[i].status === 'active') {
-          proposalAssignments[i] = {
-            ...proposalAssignments[i],
-            status: 'reassigned',
-            completedAt: nowIso,
-            reassignmentReason: reasonIfReassignment || 'Redistribuição de carga de trabalho',
-            updatedAt: nowIso,
-          };
+    this.requirePermission(ctx, 'proposals:assign_review');
+    return this.runIdempotentMutation('assign-review', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+      const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+      try {
+        const existing = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+        if (!existing) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+        this.validateCommandMetadata(existing, command);
+        if (existing.status !== 'submitted' && existing.status !== 'under_review') {
+          throw new ProposalDomainError('OPERATION_NOT_ALLOWED', 'Atribuição permitida somente na fila ou em revisão.');
         }
+        const reviewerMember = await ctx.memberResolver(command.reviewerUserId);
+        if (!reviewerMember || !reviewerMember.isActive || reviewerMember.organizationRole !== 'project_designer') {
+          throw new ProposalDomainError('REVIEWER_MISMATCH', 'Revisor deve ser projetista ativo da organização.');
+        }
+        const isReassignment = Boolean(existing.activeReviewAssignment);
+        if (isReassignment && (!command.reassignmentReason || command.reassignmentReason.trim().length < 5)) {
+          throw new ProposalDomainError('REASON_REQUIRED', 'Reatribuição exige motivo explícito.');
+        }
+        const nowIso = clock.now().toISOString();
+        const currentAssignments = ProposalApplicationService
+          .getOrgAssignmentsStore(ctx.organizationId).get(command.proposalId) ?? [];
+        const closedAssignments = currentAssignments.map((assignment) =>
+          assignment.status === 'active'
+            ? {
+                ...assignment,
+                status: 'reassigned' as const,
+                completedAt: nowIso,
+                reassignmentReason: command.reassignmentReason?.trim(),
+                updatedAt: nowIso,
+              }
+            : assignment
+        );
+        const newAssignment: ProposalReviewAssignment = {
+          id: this.idGenerator.next('assign'),
+          organizationId: ctx.organizationId,
+          proposalId: command.proposalId,
+          reviewerUserId: command.reviewerUserId,
+          reviewerName: reviewerMember.name,
+          status: 'active',
+          assignedByUserId: ctx.actor.userId,
+          assignedAt: nowIso,
+          reassignmentReason: isReassignment ? command.reassignmentReason?.trim() : undefined,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+        const updatedProposal: Proposal = {
+          ...existing,
+          activeReviewAssignment: newAssignment,
+          updatedAt: nowIso,
+          version: existing.version + 1,
+        };
+        const artifacts = await this.buildHistoryAndSnapshot(
+          updatedProposal, existing.status, existing.status, ctx.actor.userId, undefined,
+          isReassignment ? 'REVIEW_REASSIGNED' : 'REVIEW_ASSIGNED', undefined, clock
+        );
+        const notification: Omit<ProposalNotification, 'read'> = {
+          id: this.idGenerator.next('notif'),
+          organizationId: ctx.organizationId,
+          recipientUserId: command.reviewerUserId,
+          proposalId: command.proposalId,
+          proposalNumber: existing.proposalNumber,
+          type: isReassignment ? 'proposal.review.reassigned' : 'proposal.review.assigned',
+          title: isReassignment ? 'Revisão redistribuída' : 'Nova revisão atribuída',
+          message: 'Uma proposta foi atribuída para sua revisão.',
+          createdAt: nowIso,
+        };
+        this.commitTransition(
+          existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+          isReassignment ? 'proposal.review.reassigned' : 'proposal.review.assigned',
+          ctx.actor.userId, { reviewerUserId: command.reviewerUserId }, clock,
+          [notification], [...closedAssignments, newAssignment]
+        );
+        return this.clone(updatedProposal);
+      } finally {
+        release();
       }
-
-      const newAssignment: ProposalReviewAssignment = {
-        id: `assign_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        organizationId: ctx.organizationId,
-        proposalId,
-        reviewerUserId,
-        reviewerName: reviewerMember.name,
-        reviewerEmail: reviewerMember.email,
-        status: 'active',
-        assignedByUserId: ctx.actor.userId,
-        assignedAt: nowIso,
-        reassignmentReason: isReassignment ? reasonIfReassignment : undefined,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      };
-
-      proposalAssignments.push(newAssignment);
-
-      const updatedProposal: Proposal = {
-        ...existing,
-        activeReviewAssignment: newAssignment,
-        updatedAt: nowIso,
-        version: existing.version + 1,
-      };
-
-      orgStore.set(proposalId, updatedProposal);
-
-      // Notificação ao revisor designado
-      proposalEventBus.addNotification({
-        organizationId: ctx.organizationId,
-        recipientUserId: reviewerUserId,
-        proposalId,
-        proposalNumber: existing.proposalNumber,
-        type: isReassignment ? 'proposal.review.reassigned' : 'proposal.review.assigned',
-        title: isReassignment ? 'Revisão Redistribuída' : 'Nova Proposta para Revisão',
-        message: `Você foi designado como revisor responsável pela proposta ${existing.proposalNumber}.`,
-        createdAt: nowIso,
-      });
-
-      this.emitDomainEvent(
-        isReassignment ? 'proposal.review.reassigned' : 'proposal.review.assigned',
-        updatedProposal,
-        ctx.actor.userId,
-        { reviewerUserId, reviewerName: reviewerMember.name },
-        clock
-      );
-
-      return updatedProposal;
-    } finally {
-      release();
-    }
+    });
   }
 
   // --- 5. INÍCIO DA REVISÃO TÉCNICA (submitted -> under_review) ---
   public async startProposalReview(
-    proposalId: ProposalId,
+    command: StartProposalReviewCommand,
     ctx: ProposalAppContext,
     clock: Clock = SystemClock
   ): Promise<Proposal> {
     this.validateContext(ctx);
-
-    if (!ctx.actor.permissions.includes('proposals:review')) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão "proposals:review" requerida.');
-    }
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-
-    try {
-      const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-      const existing = orgStore.get(proposalId);
-
-      if (!existing) {
-        throw new ProposalDomainError('PROPOSAL_NOT_FOUND', `Proposta com ID "${proposalId}" não encontrada.`);
-      }
-
-      if (existing.organizationId !== ctx.organizationId) {
-        throw new ProposalDomainError('PERMISSION_DENIED', 'A proposta não pertence à organização ativa.');
-      }
-
-      if (!canTransitionProposalStatus(existing.status, 'under_review')) {
-        throw new ProposalDomainError(
-          'OPERATION_NOT_ALLOWED',
-          `Não é permitido iniciar revisão de proposta no status "${existing.status}".`
+    this.requirePermission(ctx, 'proposals:review');
+    return this.runIdempotentMutation('start-review', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+      const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+      try {
+        const existing = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+        if (!existing) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+        this.validateCommandMetadata(existing, command);
+        if (!canTransitionProposalStatus(existing.status, 'under_review')) {
+          throw new ProposalDomainError('OPERATION_NOT_ALLOWED', 'A proposta não está disponível para iniciar revisão.');
+        }
+        if (
+          ctx.actor.role !== 'project_designer' ||
+          existing.activeReviewAssignment?.reviewerUserId !== ctx.actor.userId
+        ) {
+          throw new ProposalDomainError('REVIEWER_MISMATCH', 'Somente o revisor atribuído pode iniciar a revisão.');
+        }
+        const nowIso = clock.now().toISOString();
+        const updatedProposal: Proposal = {
+          ...existing,
+          status: 'under_review',
+          updatedAt: nowIso,
+          version: existing.version + 1,
+        };
+        const artifacts = await this.buildHistoryAndSnapshot(
+          updatedProposal, existing.status, 'under_review', ctx.actor.userId, undefined,
+          'REVIEW_STARTED', undefined, clock
         );
-      }
-
-      // Se o projetista não for o revisor atribuído e não for gestor/admin, bloqueia
-      const isPrivileged = ['manager', 'company_admin', 'owner'].includes(ctx.actor.role);
-      if (!isPrivileged && existing.activeReviewAssignment && existing.activeReviewAssignment.reviewerUserId !== ctx.actor.userId) {
-        throw new ProposalDomainError(
-          'REVIEWER_MISMATCH',
-          'Esta proposta está atribuída para análise técnica de outro profissional.'
+        this.commitTransition(
+          existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+          'proposal.review.started', ctx.actor.userId, {}, clock
         );
+        return this.clone(updatedProposal);
+      } finally {
+        release();
       }
-
-      const nowIso = clock.now().toISOString();
-
-      const updatedProposal: Proposal = {
-        ...existing,
-        status: 'under_review',
-        updatedAt: nowIso,
-        version: existing.version + 1,
-      };
-
-      orgStore.set(proposalId, updatedProposal);
-
-      const actorMember = await ctx.memberResolver(ctx.actor.userId);
-      await this.recordHistoryAndSnapshot(
-        updatedProposal,
-        existing.status,
-        'under_review',
-        ctx.actor.userId,
-        actorMember?.name,
-        'Início formal do processo de parecer técnico',
-        undefined,
-        clock
-      );
-
-      this.emitDomainEvent('proposal.review.started', updatedProposal, ctx.actor.userId, {}, clock);
-
-      return updatedProposal;
-    } finally {
-      release();
-    }
+    });
   }
 
   // --- 6. SOLICITAÇÃO DE AJUSTES (under_review -> changes_requested) ---
   public async requestProposalChanges(
-    proposalId: ProposalId,
-    reasons: string,
+    command: RequestProposalChangesCommand,
     ctx: ProposalAppContext,
     clock: Clock = SystemClock
   ): Promise<Proposal> {
     this.validateContext(ctx);
-
-    if (!ctx.actor.permissions.includes('proposals:review')) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão "proposals:review" requerida.');
-    }
-
-    if (!reasons || reasons.trim().length < 5) {
+    this.requirePermission(ctx, 'proposals:review');
+    if (!command.reasons || command.reasons.trim().length < 5) {
       throw new ProposalDomainError('REASON_REQUIRED', 'É obrigatório descrever detalhadamente os apontamentos e ajustes necessários.');
     }
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-
-    try {
-      const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-      const existing = orgStore.get(proposalId);
-
-      if (!existing) {
-        throw new ProposalDomainError('PROPOSAL_NOT_FOUND', `Proposta com ID "${proposalId}" não encontrada.`);
-      }
-
-      if (existing.organizationId !== ctx.organizationId) {
-        throw new ProposalDomainError('PERMISSION_DENIED', 'A proposta não pertence à organização ativa.');
-      }
-
-      if (!canTransitionProposalStatus(existing.status, 'changes_requested')) {
-        throw new ProposalDomainError(
-          'OPERATION_NOT_ALLOWED',
-          `Não é permitido solicitar alterações em proposta no status "${existing.status}".`
+    return this.runIdempotentMutation('request-changes', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+      const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+      try {
+        const existing = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+        if (!existing) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+        this.validateCommandMetadata(existing, command);
+        if (
+          ctx.actor.role !== 'project_designer' ||
+          existing.activeReviewAssignment?.reviewerUserId !== ctx.actor.userId
+        ) {
+          throw new ProposalDomainError('REVIEWER_MISMATCH', 'Somente o revisor atribuído pode solicitar ajustes.');
+        }
+        if (!canTransitionProposalStatus(existing.status, 'changes_requested')) {
+          throw new ProposalDomainError('OPERATION_NOT_ALLOWED', 'A proposta não está em revisão.');
+        }
+        const nowIso = clock.now().toISOString();
+        const updatedProposal: Proposal = {
+          ...existing,
+          status: 'changes_requested',
+          reviewNotes: [
+            ...(existing.reviewNotes ?? []),
+            {
+              id: this.idGenerator.next('review-note'),
+              authorUserId: ctx.actor.userId,
+              createdAt: nowIso,
+              reasons: command.reasons.trim(),
+            },
+          ],
+          updatedAt: nowIso,
+          version: existing.version + 1,
+        };
+        const artifacts = await this.buildHistoryAndSnapshot(
+          updatedProposal, existing.status, 'changes_requested', ctx.actor.userId, undefined,
+          'CHANGES_REQUESTED', 'protected', clock
         );
+        const notification: Omit<ProposalNotification, 'read'> = {
+          id: this.idGenerator.next('notif'),
+          organizationId: ctx.organizationId,
+          recipientUserId: existing.capturerUserId,
+          proposalId: command.proposalId,
+          proposalNumber: existing.proposalNumber,
+          type: 'proposal.changes_requested',
+          title: 'Atualização na proposta',
+          message: 'A proposta possui uma atualização que requer sua atenção.',
+          createdAt: nowIso,
+        };
+        this.commitTransition(
+          existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+          'proposal.changes_requested', ctx.actor.userId, { reasonCode: 'CHANGES_REQUESTED' },
+          clock, [notification]
+        );
+        return this.clone(updatedProposal);
+      } finally {
+        release();
       }
-
-      const nowIso = clock.now().toISOString();
-      const updatedNotes = `${existing.notes || ''}\n[Apontamentos do Revisor em ${new Date(nowIso).toLocaleDateString('pt-BR')}]: ${reasons.trim()}`.trim();
-
-      const updatedProposal: Proposal = {
-        ...existing,
-        status: 'changes_requested',
-        notes: updatedNotes,
-        updatedAt: nowIso,
-        version: existing.version + 1,
-      };
-
-      orgStore.set(proposalId, updatedProposal);
-
-      const actorMember = await ctx.memberResolver(ctx.actor.userId);
-      await this.recordHistoryAndSnapshot(
-        updatedProposal,
-        existing.status,
-        'changes_requested',
-        ctx.actor.userId,
-        actorMember?.name,
-        'Apontamentos técnicos emitidos para adequação',
-        reasons.trim(),
-        clock
-      );
-
-      // Notifica o captador da proposta
-      proposalEventBus.addNotification({
-        organizationId: ctx.organizationId,
-        recipientUserId: existing.capturerUserId,
-        proposalId,
-        proposalNumber: existing.proposalNumber,
-        type: 'proposal.changes_requested',
-        title: 'Ajustes Solicitados na Proposta',
-        message: `A proposta ${existing.proposalNumber} necessita de complementação: ${reasons.trim().slice(0, 100)}...`,
-        createdAt: nowIso,
-      });
-
-      this.emitDomainEvent('proposal.changes_requested', updatedProposal, ctx.actor.userId, { reasons: reasons.trim() }, clock);
-
-      return updatedProposal;
-    } finally {
-      release();
-    }
+    });
   }
 
   // --- 7. APROVAÇÃO DE PROPOSTA (under_review -> approved) COM ANTI-SELF-APPROVAL ---
   public async approveProposal(
-    proposalId: ProposalId,
+    command: ApproveProposalCommand,
     ctx: ProposalAppContext,
-    clockOrNotes?: Clock | string,
-    maybeNotes?: string
+    clock: Clock = SystemClock
   ): Promise<Proposal> {
-    const clock: Clock =
-      typeof clockOrNotes === 'object' && clockOrNotes && 'now' in clockOrNotes
-        ? clockOrNotes
-        : SystemClock;
-    const notes: string | undefined =
-      typeof clockOrNotes === 'string' ? clockOrNotes : maybeNotes;
-
     this.validateContext(ctx);
-
-    if (!ctx.actor.permissions.includes('proposals:approve')) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão "proposals:approve" requerida para aprovar propostas.');
+    this.requirePermission(ctx, 'proposals:approve');
+    if (!['owner', 'company_admin', 'manager'].includes(ctx.actor.role)) {
+      throw new ProposalDomainError('PERMISSION_DENIED', 'Aprovação exige papel administrativo elegível.');
     }
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-
-    try {
-      const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-      const existing = orgStore.get(proposalId);
-
-      if (!existing) {
-        throw new ProposalDomainError('PROPOSAL_NOT_FOUND', `Proposta com ID "${proposalId}" não encontrada.`);
-      }
-
-      if (existing.organizationId !== ctx.organizationId) {
-        throw new ProposalDomainError('PERMISSION_DENIED', 'A proposta não pertence à organização ativa.');
-      }
-
-      // SEGREGAÇÃO DE FUNÇÕES: O captador da proposta não pode auto-aprovar
-      if (existing.capturerUserId === ctx.actor.userId) {
-        throw new ProposalDomainError(
-          'SELF_APPROVAL_FORBIDDEN',
-          'Segregação de funções estrita: o captador responsável pela proposta não pode aprová-la.'
+    return this.runIdempotentMutation('approve', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+      const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+      try {
+        const existing = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+        if (!existing) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+        this.validateCommandMetadata(existing, command);
+        const incompatibleActors = new Set([
+          existing.createdByUserId,
+          existing.capturerUserId,
+          existing.submittedByUserId ?? '',
+          existing.activeReviewAssignment?.reviewerUserId ?? '',
+        ]);
+        if (incompatibleActors.has(ctx.actor.userId)) {
+          throw new ProposalDomainError('SELF_APPROVAL_FORBIDDEN', 'Segregação de funções impede esta aprovação.');
+        }
+        if (!canTransitionProposalStatus(existing.status, 'approved')) {
+          throw new ProposalDomainError('OPERATION_NOT_ALLOWED', 'A proposta não está apta para aprovação.');
+        }
+        const nowIso = clock.now().toISOString();
+        const updatedProposal: Proposal = {
+          ...existing,
+          status: 'approved',
+          approvedAt: nowIso,
+          approvedByUserId: ctx.actor.userId,
+          approvalNotes: command.notes?.trim() || undefined,
+          updatedAt: nowIso,
+          version: existing.version + 1,
+        };
+        const artifacts = await this.buildHistoryAndSnapshot(
+          updatedProposal, existing.status, 'approved', ctx.actor.userId, undefined,
+          'APPROVED', command.notes ? 'protected' : undefined, clock
         );
-      }
-
-      if (!canTransitionProposalStatus(existing.status, 'approved')) {
-        throw new ProposalDomainError(
-          'OPERATION_NOT_ALLOWED',
-          `Não é permitido aprovar proposta no status "${existing.status}".`
+        const notification: Omit<ProposalNotification, 'read'> = {
+          id: this.idGenerator.next('notif'), organizationId: ctx.organizationId,
+          recipientUserId: existing.capturerUserId, proposalId: command.proposalId,
+          proposalNumber: existing.proposalNumber, type: 'proposal.approved',
+          title: 'Atualização na proposta',
+          message: 'A proposta possui uma atualização que requer sua atenção.', createdAt: nowIso,
+        };
+        this.commitTransition(
+          existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+          'proposal.approved', ctx.actor.userId, { reasonCode: 'APPROVED' }, clock, [notification]
         );
+        return this.clone(updatedProposal);
+      } finally {
+        release();
       }
-
-      const nowIso = clock.now().toISOString();
-      const updatedNotes = notes ? `${existing.notes || ''}\n[Parecer de Aprovação]: ${notes.trim()}`.trim() : existing.notes;
-
-      const updatedProposal: Proposal = {
-        ...existing,
-        status: 'approved',
-        approvedAt: nowIso,
-        approvedByUserId: ctx.actor.userId,
-        notes: updatedNotes,
-        updatedAt: nowIso,
-        version: existing.version + 1,
-      };
-
-      orgStore.set(proposalId, updatedProposal);
-
-      const actorMember = await ctx.memberResolver(ctx.actor.userId);
-      await this.recordHistoryAndSnapshot(
-        updatedProposal,
-        existing.status,
-        'approved',
-        ctx.actor.userId,
-        actorMember?.name,
-        'Parecer técnico e comercial favorável homologado',
-        notes,
-        clock
-      );
-
-      // Notifica o captador da aprovação
-      proposalEventBus.addNotification({
-        organizationId: ctx.organizationId,
-        recipientUserId: existing.capturerUserId,
-        proposalId,
-        proposalNumber: existing.proposalNumber,
-        type: 'proposal.approved',
-        title: 'Proposta Homologada e Aprovada',
-        message: `A proposta ${existing.proposalNumber} foi aprovada e está liberada para apresentação formal ao produtor.`,
-        createdAt: nowIso,
-      });
-
-      this.emitDomainEvent('proposal.approved', updatedProposal, ctx.actor.userId, { notes }, clock);
-
-      return updatedProposal;
-    } finally {
-      release();
-    }
+    });
   }
 
   // --- 8. REJEIÇÃO NA ANÁLISE TÉCNICA (under_review -> rejected) ---
   public async rejectProposal(
-    proposalId: ProposalId,
-    reason: string,
+    command: RejectProposalCommand,
     ctx: ProposalAppContext,
     clock: Clock = SystemClock
   ): Promise<Proposal> {
     this.validateContext(ctx);
-
-    const hasPermission =
-      ctx.actor.permissions.includes('proposals:review') ||
-      ctx.actor.permissions.includes('proposals:approve');
-
-    if (!hasPermission) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão requerida para rejeitar proposta.');
-    }
-
-    if (!reason || reason.trim().length < 5) {
+    this.requirePermission(ctx, 'proposals:review');
+    if (!command.reason || command.reason.trim().length < 5) {
       throw new ProposalDomainError('REASON_REQUIRED', 'É obrigatório informar a justificativa técnica/comercial de indeferimento.');
     }
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-
-    try {
-      const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-      const existing = orgStore.get(proposalId);
-
-      if (!existing) {
-        throw new ProposalDomainError('PROPOSAL_NOT_FOUND', `Proposta com ID "${proposalId}" não encontrada.`);
-      }
-
-      if (existing.organizationId !== ctx.organizationId) {
-        throw new ProposalDomainError('PERMISSION_DENIED', 'A proposta não pertence à organização ativa.');
-      }
-
-      if (!canTransitionProposalStatus(existing.status, 'rejected')) {
-        throw new ProposalDomainError(
-          'OPERATION_NOT_ALLOWED',
-          `Não é permitido rejeitar proposta no status "${existing.status}".`
+    return this.runIdempotentMutation('reject', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+      const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+      try {
+        const existing = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+        if (!existing) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+        this.validateCommandMetadata(existing, command);
+        if (
+          ctx.actor.role !== 'project_designer' ||
+          existing.activeReviewAssignment?.reviewerUserId !== ctx.actor.userId
+        ) {
+          throw new ProposalDomainError('REVIEWER_MISMATCH', 'Somente o revisor atribuído pode rejeitar tecnicamente.');
+        }
+        if (!canTransitionProposalStatus(existing.status, 'rejected')) {
+          throw new ProposalDomainError('OPERATION_NOT_ALLOWED', 'A proposta não está em revisão.');
+        }
+        const nowIso = clock.now().toISOString();
+        const updatedProposal: Proposal = {
+          ...existing,
+          status: 'rejected', rejectedAt: nowIso, rejectedByUserId: ctx.actor.userId,
+          reviewNotes: [
+            ...(existing.reviewNotes ?? []),
+            { id: this.idGenerator.next('review-note'), authorUserId: ctx.actor.userId,
+              createdAt: nowIso, reasons: command.reason.trim() },
+          ],
+          updatedAt: nowIso, version: existing.version + 1,
+        };
+        const artifacts = await this.buildHistoryAndSnapshot(
+          updatedProposal, existing.status, 'rejected', ctx.actor.userId, undefined,
+          'REJECTED', 'protected', clock
         );
+        const notification: Omit<ProposalNotification, 'read'> = {
+          id: this.idGenerator.next('notif'), organizationId: ctx.organizationId,
+          recipientUserId: existing.capturerUserId, proposalId: command.proposalId,
+          proposalNumber: existing.proposalNumber, type: 'proposal.rejected',
+          title: 'Atualização na proposta', message: 'A proposta possui uma atualização que requer sua atenção.',
+          createdAt: nowIso,
+        };
+        this.commitTransition(
+          existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+          'proposal.rejected', ctx.actor.userId, { reasonCode: 'REJECTED' }, clock, [notification]
+        );
+        return this.clone(updatedProposal);
+      } finally {
+        release();
       }
-
-      const nowIso = clock.now().toISOString();
-      const updatedNotes = `${existing.notes || ''}\n[Indeferimento]: ${reason.trim()}`.trim();
-
-      const updatedProposal: Proposal = {
-        ...existing,
-        status: 'rejected',
-        rejectedAt: nowIso,
-        rejectedByUserId: ctx.actor.userId,
-        notes: updatedNotes,
-        updatedAt: nowIso,
-        version: existing.version + 1,
-      };
-
-      orgStore.set(proposalId, updatedProposal);
-
-      const actorMember = await ctx.memberResolver(ctx.actor.userId);
-      await this.recordHistoryAndSnapshot(
-        updatedProposal,
-        existing.status,
-        'rejected',
-        ctx.actor.userId,
-        actorMember?.name,
-        'Proposta indeferida na análise',
-        reason.trim(),
-        clock
-      );
-
-      // Notifica o captador da rejeição
-      proposalEventBus.addNotification({
-        organizationId: ctx.organizationId,
-        recipientUserId: existing.capturerUserId,
-        proposalId,
-        proposalNumber: existing.proposalNumber,
-        type: 'proposal.rejected',
-        title: 'Proposta Indeferida',
-        message: `A proposta ${existing.proposalNumber} foi indeferida na análise técnica/comercial: ${reason.trim().slice(0, 100)}...`,
-        createdAt: nowIso,
-      });
-
-      this.emitDomainEvent('proposal.rejected', updatedProposal, ctx.actor.userId, { reason: reason.trim() }, clock);
-
-      return updatedProposal;
-    } finally {
-      release();
-    }
+    });
   }
 
   // --- 9. REGISTRO DE APRESENTAÇÃO AO CLIENTE (approved -> presented) ---
   public async markProposalPresented(
-    proposalId: ProposalId,
-    input: PresentProposalInput,
+    command: PresentProposalCommand,
     ctx: ProposalAppContext,
     clock: Clock = SystemClock
   ): Promise<Proposal> {
     this.validateContext(ctx);
-
-    if (!ctx.actor.permissions.includes('proposals:present')) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão "proposals:present" requerida.');
-    }
-
+    this.requirePermission(ctx, 'proposals:present');
     const validChannels = ['email', 'phone', 'in_person', 'messaging', 'other'];
-    if (!input.channel || !validChannels.includes(input.channel)) {
+    if (!command.channel || !validChannels.includes(command.channel)) {
       throw new ProposalDomainError('INVALID_CHANNEL', 'Canal de apresentação inválido ou não informado.');
     }
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-
-    try {
-      const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-      const existing = orgStore.get(proposalId);
-
-      if (!existing) {
-        throw new ProposalDomainError('PROPOSAL_NOT_FOUND', `Proposta com ID "${proposalId}" não encontrada.`);
-      }
-
-      if (existing.organizationId !== ctx.organizationId) {
-        throw new ProposalDomainError('PERMISSION_DENIED', 'A proposta não pertence à organização ativa.');
-      }
-
-      this.checkEditAccess(existing, ctx);
-
-      if (!canTransitionProposalStatus(existing.status, 'presented')) {
-        throw new ProposalDomainError(
-          'NOT_APPROVED',
-          `Apenas propostas aprovadas podem ser apresentadas (status atual: "${existing.status}").`
+    return this.runIdempotentMutation('present', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+      const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+      try {
+        const existing = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+        if (!existing) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+        this.validateCommandMetadata(existing, command);
+        if (ctx.actor.role === 'capturer' && existing.capturerUserId !== ctx.actor.userId) {
+          throw new ProposalDomainError('PERMISSION_DENIED', 'Captador não relacionado à proposta.');
+        }
+        if (!canTransitionProposalStatus(existing.status, 'presented')) {
+          throw new ProposalDomainError('NOT_APPROVED', 'Apenas propostas aprovadas podem ser apresentadas.');
+        }
+        const now = clock.now();
+        const validFrom = now.toISOString();
+        const expiresAt = new Date(now.getTime() + existing.validityDays * 86_400_000).toISOString();
+        const presentationRecord: ProposalPresentationRecord = {
+          presentedAt: validFrom, presentedByUserId: ctx.actor.userId,
+          channel: command.channel, presentedVersionNumber: existing.version + 1,
+          notes: command.notes?.trim() || undefined,
+          documentReference: command.documentReference?.trim() || undefined,
+        };
+        const updatedProposal: Proposal = {
+          ...existing, status: 'presented', validFrom, expiresAt, presentationRecord,
+          updatedAt: validFrom, version: existing.version + 1,
+        };
+        const artifacts = await this.buildHistoryAndSnapshot(
+          updatedProposal, existing.status, 'presented', ctx.actor.userId, undefined,
+          'PRESENTED', command.notes ? 'protected' : undefined, clock
         );
+        this.commitTransition(
+          existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+          'proposal.presented', ctx.actor.userId, { channel: command.channel }, clock
+        );
+        return this.clone(updatedProposal);
+      } finally {
+        release();
       }
-
-      const now = clock.now();
-      const validFrom = now.toISOString();
-      const expiresAt = new Date(now.getTime() + existing.validityDays * 24 * 60 * 60 * 1000).toISOString();
-
-      const presentationRecord: ProposalPresentationRecord = {
-        presentedAt: validFrom,
-        presentedByUserId: ctx.actor.userId,
-        channel: input.channel,
-        presentedVersionNumber: existing.version + 1,
-        notes: input.notes?.trim() || undefined,
-        documentReference: input.documentReference?.trim() || undefined,
-      };
-
-      const updatedProposal: Proposal = {
-        ...existing,
-        status: 'presented',
-        validFrom,
-        expiresAt,
-        presentationRecord,
-        updatedAt: validFrom,
-        version: existing.version + 1,
-      };
-
-      orgStore.set(proposalId, updatedProposal);
-
-      const actorMember = await ctx.memberResolver(ctx.actor.userId);
-      await this.recordHistoryAndSnapshot(
-        updatedProposal,
-        existing.status,
-        'presented',
-        ctx.actor.userId,
-        actorMember?.name,
-        `Apresentada via ${input.channel}. Vigência iniciada até ${new Date(expiresAt).toLocaleDateString('pt-BR')}`,
-        input.notes,
-        clock
-      );
-
-      this.emitDomainEvent('proposal.presented', updatedProposal, ctx.actor.userId, { channel: input.channel }, clock);
-
-      return updatedProposal;
-    } finally {
-      release();
-    }
+    });
   }
 
   // --- 10. REGISTRO DE DECISÃO DO CLIENTE (presented -> accepted | declined) ---
   public async recordProposalDecision(
-    proposalId: ProposalId,
-    input: RecordProposalDecisionInput,
+    command: RecordProposalDecisionCommand,
     ctx: ProposalAppContext,
     clock: Clock = SystemClock
   ): Promise<Proposal> {
     this.validateContext(ctx);
-
-    if (!ctx.actor.permissions.includes('proposals:record_decision')) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão "proposals:record_decision" requerida.');
+    this.requirePermission(ctx, 'proposals:record_decision');
+    if (command.decision !== 'accepted' && command.decision !== 'declined') {
+      throw new ProposalDomainError('INVALID_DECISION', 'Decisão operacional inválida.');
     }
-
-    if (input.decision !== 'accepted' && input.decision !== 'declined') {
-      throw new ProposalDomainError('INVALID_DECISION', 'Decisão deve ser formalmente "accepted" ou "declined".');
-    }
-
     const validChannels = ['email', 'phone', 'in_person', 'messaging', 'other'];
-    if (!input.channel || !validChannels.includes(input.channel)) {
+    if (!command.channel || !validChannels.includes(command.channel)) {
       throw new ProposalDomainError('INVALID_CHANNEL', 'Canal de manifestação de decisão inválido.');
     }
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-
-    try {
-      const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-      const existing = orgStore.get(proposalId);
-
-      if (!existing) {
-        throw new ProposalDomainError('PROPOSAL_NOT_FOUND', `Proposta com ID "${proposalId}" não encontrada.`);
-      }
-
-      if (existing.organizationId !== ctx.organizationId) {
-        throw new ProposalDomainError('PERMISSION_DENIED', 'A proposta não pertence à organização ativa.');
-      }
-
-      this.checkEditAccess(existing, ctx);
-
-      if (existing.status !== 'presented') {
-        throw new ProposalDomainError(
-          'NOT_PRESENTED',
-          `Decisão só pode ser registrada para propostas no status "presented" (status atual: "${existing.status}").`
-        );
-      }
-
-      // Verificação determinística de validade temporal
-      const now = clock.now();
-      const expiresTime = new Date(existing.expiresAt).getTime();
-      if (now.getTime() > expiresTime) {
-        // Marca como expirada automaticamente
-        const expiredProposal: Proposal = {
-          ...existing,
-          status: 'expired',
-          updatedAt: now.toISOString(),
+    return this.runIdempotentMutation('decision', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+      const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+      try {
+        const existing = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+        if (!existing) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+        this.validateCommandMetadata(existing, command);
+        if (ctx.actor.role === 'capturer' && existing.capturerUserId !== ctx.actor.userId) {
+          throw new ProposalDomainError('PERMISSION_DENIED', 'Captador não relacionado à proposta.');
+        }
+        if (existing.status !== 'presented') {
+          throw new ProposalDomainError('NOT_PRESENTED', 'A proposta não está apresentada ou já possui decisão.');
+        }
+        const now = clock.now();
+        if (now.getTime() >= new Date(existing.expiresAt).getTime()) {
+          const expiredProposal: Proposal = {
+            ...existing, status: 'expired', updatedAt: now.toISOString(), version: existing.version + 1,
+          };
+          const artifacts = await this.buildHistoryAndSnapshot(
+            expiredProposal, 'presented', 'expired', 'system', undefined,
+            'EXPIRED_AT_DECISION_BOUNDARY', undefined, clock
+          );
+          this.commitTransition(
+            existing, expiredProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+            'proposal.expired', 'system', { reasonCode: 'EXPIRED' }, clock
+          );
+          throw new ProposalDomainError('PROPOSAL_EXPIRED', 'O prazo operacional da proposta expirou.');
+        }
+        const targetStatus: ProposalStatus = command.decision;
+        const nowIso = now.toISOString();
+        const decisionRecord: ProposalDecisionRecord = {
+          decision: command.decision, decidedAt: nowIso, recordedByUserId: ctx.actor.userId,
+          channel: command.channel, versionNumber: existing.version + 1,
+          operationalReference: command.operationalReference?.trim() || undefined,
+          notes: command.notes?.trim() || undefined,
+          disclaimerText: 'Registro operacional interno informado pelo usuário responsável. Não constitui assinatura eletrônica, aceite contratual autenticado ou prova externa de manifestação do cliente.',
+        };
+        const updatedProposal: Proposal = {
+          ...existing, status: targetStatus, decisionRecord, updatedAt: nowIso,
           version: existing.version + 1,
         };
-        orgStore.set(proposalId, expiredProposal);
-        await this.recordHistoryAndSnapshot(
-          expiredProposal,
-          'presented',
-          'expired',
-          ctx.actor.userId,
-          'Sistema Temporal AgroCore',
-          'Prazo de validade da proposta esgotado antes do registro de decisão',
-          undefined,
-          clock
+        const artifacts = await this.buildHistoryAndSnapshot(
+          updatedProposal, existing.status, targetStatus, ctx.actor.userId, undefined,
+          targetStatus === 'accepted' ? 'DECISION_ACCEPTED_RECORDED' : 'DECISION_DECLINED_RECORDED',
+          command.notes ? 'protected' : undefined, clock
         );
-        this.emitDomainEvent('proposal.expired', expiredProposal, 'system', {}, clock);
-
-        throw new ProposalDomainError(
-          'PROPOSAL_EXPIRED',
-          `A proposta expirou em ${new Date(existing.expiresAt).toLocaleDateString('pt-BR')} e não pode mais receber decisão.`
+        const eventType: ProposalEventType = targetStatus === 'accepted' ? 'proposal.accepted' : 'proposal.declined';
+        this.commitTransition(
+          existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+          eventType, ctx.actor.userId, { decision: command.decision, channel: command.channel }, clock
         );
+        return this.clone(updatedProposal);
+      } finally {
+        release();
       }
-
-      const targetStatus: ProposalStatus = input.decision;
-      const nowIso = now.toISOString();
-
-      const decisionRecord: ProposalDecisionRecord = {
-        decision: input.decision,
-        decidedAt: nowIso,
-        recordedByUserId: ctx.actor.userId,
-        channel: input.channel,
-        versionNumber: existing.version + 1,
-        operationalReference: input.operationalReference?.trim() || undefined,
-        notes: input.notes?.trim() || undefined,
-        disclaimerText: 'Registro declaratório formal de decisão do produtor rural/cliente.',
-      };
-
-      const updatedProposal: Proposal = {
-        ...existing,
-        status: targetStatus,
-        decisionRecord,
-        updatedAt: nowIso,
-        version: existing.version + 1,
-      };
-
-      orgStore.set(proposalId, updatedProposal);
-
-      const actorMember = await ctx.memberResolver(ctx.actor.userId);
-      await this.recordHistoryAndSnapshot(
-        updatedProposal,
-        existing.status,
-        targetStatus,
-        ctx.actor.userId,
-        actorMember?.name,
-        targetStatus === 'accepted' ? 'Proposta aceita formalmente pelo cliente' : 'Proposta declinada pelo cliente',
-        input.notes,
-        clock
-      );
-
-      const eventType: ProposalEventType = targetStatus === 'accepted' ? 'proposal.accepted' : 'proposal.declined';
-      this.emitDomainEvent(eventType, updatedProposal, ctx.actor.userId, { decision: input.decision, channel: input.channel }, clock);
-
-      return updatedProposal;
-    } finally {
-      release();
-    }
+    });
   }
 
   // --- 11. VARREDURA DETERMINÍSTICA DE EXPIRAÇÃO DE PROPOSTAS APRESENTADAS ---
   public async expireDueProposals(
-    ctx: { organizationId: string },
+    ctx: ProposalSystemContext,
     clock: Clock = SystemClock
   ): Promise<number> {
+    if (!ctx.organizationId || ctx.systemActor !== 'proposal-expiration-scheduler') {
+      throw new ProposalDomainError('SYSTEM_CONTEXT_REQUIRED', 'Expiração exige contexto interno autenticado.');
+    }
     const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
     const nowTime = clock.now().getTime();
     let expiredCount = 0;
@@ -1453,25 +1342,27 @@ export class ProposalApplicationService {
       if (proposal.organizationId === ctx.organizationId && proposal.status === 'presented') {
         const expiresTime = new Date(proposal.expiresAt).getTime();
         if (nowTime >= expiresTime) {
-          const expiredProposal: Proposal = {
-            ...proposal,
-            status: 'expired',
-            updatedAt: clock.now().toISOString(),
-            version: proposal.version + 1,
-          };
-          orgStore.set(proposal.id, expiredProposal);
-          await this.recordHistoryAndSnapshot(
-            expiredProposal,
-            'presented',
-            'expired',
-            'system',
-            'Sistema Temporal AgroCore',
-            'Prazo de validade decorrido sem manifestação de decisão',
-            undefined,
-            clock
-          );
-          this.emitDomainEvent('proposal.expired', expiredProposal, 'system', {}, clock);
-          expiredCount++;
+          const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${proposal.id}`);
+          try {
+            const current = orgStore.get(proposal.id);
+            if (!current || current.status !== 'presented' || nowTime < new Date(current.expiresAt).getTime()) {
+              continue;
+            }
+            const expiredProposal: Proposal = {
+              ...current, status: 'expired', updatedAt: clock.now().toISOString(), version: current.version + 1,
+            };
+            const artifacts = await this.buildHistoryAndSnapshot(
+              expiredProposal, 'presented', 'expired', 'system', undefined,
+              'EXPIRED_BY_SCHEDULER', undefined, clock
+            );
+            this.commitTransition(
+              current, expiredProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+              'proposal.expired', 'system', { reasonCode: 'EXPIRED' }, clock
+            );
+            expiredCount++;
+          } finally {
+            release();
+          }
         }
       }
     }
@@ -1481,87 +1372,48 @@ export class ProposalApplicationService {
 
   // --- 12. CANCELAMENTO DE PROPOSTA ---
   public async cancelProposal(
-    proposalId: ProposalId,
+    command: CancelProposalCommand,
     ctx: ProposalAppContext,
-    clockOrReason?: Clock | string,
-    maybeReason?: string
+    clock: Clock = SystemClock
   ): Promise<Proposal> {
-    const clock: Clock =
-      typeof clockOrReason === 'object' && clockOrReason && 'now' in clockOrReason
-        ? clockOrReason
-        : SystemClock;
-    const reason: string | undefined =
-      typeof clockOrReason === 'string' ? clockOrReason : maybeReason;
-
     this.validateContext(ctx);
-
-    const hasPermission =
-      ctx.actor.permissions.includes('proposals:cancel') ||
-      ctx.actor.permissions.includes('proposals:edit');
-
-    if (!hasPermission) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão requerida para cancelar proposta.');
-    }
-
-    const lockKey = `${ctx.organizationId}:${proposalId}`;
-    const release = await ProposalApplicationService.acquireLock(lockKey);
-
-    try {
-      const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
-      const existing = orgStore.get(proposalId);
-
-      if (!existing) {
-        throw new ProposalDomainError('PROPOSAL_NOT_FOUND', `Proposta com ID "${proposalId}" não encontrada.`);
-      }
-
-      if (existing.organizationId !== ctx.organizationId) {
-        throw new ProposalDomainError('PERMISSION_DENIED', 'A proposta não pertence à organização ativa.');
-      }
-
-      this.checkEditAccess(existing, ctx);
-
-      if (isTerminalProposalStatus(existing.status)) {
-        throw new ProposalDomainError(
-          'CANNOT_CANCEL_TERMINAL',
-          `Não é permitido cancelar uma proposta no status terminal "${existing.status}".`
+    this.requirePermission(ctx, 'proposals:cancel');
+    return this.runIdempotentMutation('cancel', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+      const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+      try {
+        const existing = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+        if (!existing) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+        this.validateCommandMetadata(existing, command);
+        if (ctx.actor.role === 'capturer' && existing.capturerUserId !== ctx.actor.userId) {
+          throw new ProposalDomainError('PERMISSION_DENIED', 'Captador não relacionado à proposta.');
+        }
+        if (ctx.actor.role === 'project_designer' && existing.createdByUserId !== ctx.actor.userId) {
+          throw new ProposalDomainError('PERMISSION_DENIED', 'Projetista não é autor desta proposta.');
+        }
+        if (isTerminalProposalStatus(existing.status)) {
+          throw new ProposalDomainError('CANNOT_CANCEL_TERMINAL', 'Estado terminal não pode ser cancelado.');
+        }
+        if (existing.status !== 'draft' && (!command.reason || command.reason.trim().length < 3)) {
+          throw new ProposalDomainError('REASON_REQUIRED', 'Cancelamento fora de rascunho exige motivo.');
+        }
+        const nowIso = clock.now().toISOString();
+        const updatedProposal: Proposal = {
+          ...existing, status: 'cancelled', cancellationReason: command.reason?.trim() || undefined,
+          updatedAt: nowIso, version: existing.version + 1,
+        };
+        const artifacts = await this.buildHistoryAndSnapshot(
+          updatedProposal, existing.status, 'cancelled', ctx.actor.userId, undefined,
+          'CANCELLED', command.reason ? 'protected' : undefined, clock
         );
+        this.commitTransition(
+          existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
+          'proposal.cancelled', ctx.actor.userId, { reasonCode: 'CANCELLED' }, clock
+        );
+        return this.clone(updatedProposal);
+      } finally {
+        release();
       }
-
-      if (existing.status !== 'draft' && (!reason || reason.trim().length < 3)) {
-        throw new ProposalDomainError('REASON_REQUIRED', 'É obrigatório informar o motivo do cancelamento para propostas fora de rascunho.');
-      }
-
-      const nowIso = clock.now().toISOString();
-      const updatedNotes = reason ? `${existing.notes || ''}\n[Cancelamento]: ${reason.trim()}`.trim() : existing.notes;
-
-      const updatedProposal: Proposal = {
-        ...existing,
-        status: 'cancelled',
-        notes: updatedNotes,
-        updatedAt: nowIso,
-        version: existing.version + 1,
-      };
-
-      orgStore.set(proposalId, updatedProposal);
-
-      const actorMember = await ctx.memberResolver(ctx.actor.userId);
-      await this.recordHistoryAndSnapshot(
-        updatedProposal,
-        existing.status,
-        'cancelled',
-        ctx.actor.userId,
-        actorMember?.name,
-        reason || 'Cancelamento operacional',
-        undefined,
-        clock
-      );
-
-      this.emitDomainEvent('proposal.cancelled', updatedProposal, ctx.actor.userId, { reason }, clock);
-
-      return updatedProposal;
-    } finally {
-      release();
-    }
+    });
   }
 
   // --- CONSULTAS ---
@@ -1574,7 +1426,7 @@ export class ProposalApplicationService {
     }
 
     this.checkReadAccess(proposal, ctx);
-    return proposal;
+    return this.clone(proposal);
   }
 
   public async getProposalHistory(
@@ -1587,7 +1439,7 @@ export class ProposalApplicationService {
 
     const historyMap = ProposalApplicationService.getOrgHistoryStore(ctx.organizationId);
     const list = historyMap.get(proposalId) || [];
-    return list.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return this.clone(list).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }
 
   public async getProposalSnapshots(
@@ -1600,7 +1452,7 @@ export class ProposalApplicationService {
 
     const snapshotsMap = ProposalApplicationService.getOrgSnapshotsStore(ctx.organizationId);
     const list = snapshotsMap.get(proposalId) || [];
-    return list.slice().sort((a, b) => a.versionNumber - b.versionNumber);
+    return this.clone(list).sort((a, b) => a.versionNumber - b.versionNumber);
   }
 
   public async getProposalReviewAssignments(
@@ -1613,7 +1465,7 @@ export class ProposalApplicationService {
 
     const assignmentsMap = ProposalApplicationService.getOrgAssignmentsStore(ctx.organizationId);
     const list = assignmentsMap.get(proposalId) || [];
-    return list.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return this.clone(list).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   // --- LISTAGEM PAGINADA ---
@@ -1627,15 +1479,21 @@ export class ProposalApplicationService {
     }
     this.validateContext(ctx);
 
-    if (!ctx.actor.permissions.includes('proposals:view')) {
-      throw new ProposalDomainError('PERMISSION_DENIED', 'Permissão "proposals:view" requerida.');
+    if (!this.hasPermission(ctx, 'proposals:view_financials')) {
+      throw new ProposalDomainError('PERMISSION_DENIED', 'Visualização financeira não autorizada.');
     }
 
     const orgStore = ProposalApplicationService.getOrgStore(ctx.organizationId);
     let items = Array.from(orgStore.values()).filter((p) => p.organizationId === ctx.organizationId);
 
     if (ctx.actor.role === 'capturer') {
+      this.requirePermission(ctx, 'proposals:view_related');
       items = items.filter((p) => p.capturerUserId === ctx.actor.userId);
+    } else if (ctx.actor.role === 'project_designer') {
+      this.requirePermission(ctx, 'proposals:view_assigned');
+      items = items.filter((p) => p.activeReviewAssignment?.reviewerUserId === ctx.actor.userId);
+    } else {
+      this.requirePermission(ctx, 'proposals:view');
     }
 
     if (filters.search && filters.search.trim() !== '') {
@@ -1703,7 +1561,7 @@ export class ProposalApplicationService {
     const paginatedItems = items.slice(startIndex, startIndex + pageSize);
 
     return {
-      items: paginatedItems,
+      items: this.clone(paginatedItems),
       total,
       page,
       pageSize,

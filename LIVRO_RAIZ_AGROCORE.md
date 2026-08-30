@@ -411,11 +411,11 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - `OE-004.003`: Dossiê técnico estruturado (identificação, caracterização física e logística, benfeitorias, conclusão), homogeneização, estatística, métodos avaliatórios, prontidão técnica e fotografia canônica com checksum SHA-256. `AppraisalIssuanceService` exige `appraisals:issue`, responsável designado, perfil verificado, prontidão e estado `ready_to_issue`; versão e status são confirmados por um único `commitIssuedVersion`, sem caminho público de gravação avulsa.
 
 ### MÓDULO 005: PROPOSTAS DE CRÉDITO E PRESTAÇÃO DE SERVIÇOS
-- **Status Geral:** 100% Implementado e Homologado (OE-005.001 e OE-005.002).
+- **Status Geral:** Implementado e homologado localmente até a OE-005.003.
 - **Entregas Concluídas e Homologadas:**
-  - `OE-005.001`: Fundação de propostas comerciais e técnicas. Contratos tipados (`Proposal`, `ProposalItem`, `ProposalPaymentTerms`, `ProposalStatus`), gateway em memória multitenant e gateway indisponível para produção.
+  - `OE-005.001`: Fundação de propostas comerciais e técnicas, com contratos tipados (`Proposal`, snapshots canônicos, valores em centavos, cálculo financeiro e `ProposalStatus`) e armazenamento volátil isolado por organização.
   - `OE-005.002`: Fechamento final e saneamento de segurança e concorrência:
-    - **Governança e Autorização Estrita:** Permissão explícita `proposals:create` e `proposals:edit` requeridas. Ausência de vínculo organizacional ou inatividade nega a operação por padrão (*Deny-by-Default*). O papel de captador não contorna permissões de proposta.
+    - **Governança e Autorização Estrita:** Permissões granulares `proposals:view`, `proposals:view_related`, `proposals:view_assigned`, `proposals:view_financials`, `proposals:create`, `proposals:edit_draft`, `proposals:submit`, `proposals:assign_review`, `proposals:review`, `proposals:approve`, `proposals:present`, `proposals:record_decision` e `proposals:cancel`. Ausência de vínculo organizacional, papel canônico ou permissão explícita nega a operação por padrão (*Deny-by-Default*). A permissão legada `proposals:edit` foi removida.
     - **Controle de Concorrência e Idempotência:** Serialização de criação, atualização, submissão e cancelamento via locks em memória (`updateLocks`). A idempotência compara a representação determinística do payload normalizado e lança `IDEMPOTENCY_CONFLICT` diante de conteúdo divergente; não há alegação de hash SHA-256 nesse serviço.
     - **Integridade Financeira em Centavos:** Cálculos financeiros determinísticos com `BigInt` e inteiros seguros (`Number.isSafeInteger`), validação de limites máximos (R$ 10.000.000.000,00), parser estrito de moeda brasileira (BRL) e divisão com arredondamento bancário *half_even*.
     - **Isolamento de Captadores e Clientes:** Consulta e formulários de propostas filtrados exclusivamente pelos clientes permitidos para o captador ou organização, eliminando acesso irrestrito.
@@ -423,7 +423,17 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
     - **Navegação Segura:** Rotas `/propostas` e sub-rotas integradas à lista de prefixos internos seguros (`SAFE_INTERNAL_PREFIXES`), prevenindo vulnerabilidades de *Open Redirect*.
     - **Portabilidade de Testes:** Scripts npm e agregadores usam o executável Node local com `--import tsx`, sem depender do IPC do binário `tsx`.
     - **Automação de CI:** `.github/workflows/ci.yml` executa `npm ci`, lint, build, Módulos 001 a 005 e rebranding em pushes e pull requests para `main`. O lockfile npm é versionado para tornar `npm ci` reproduzível.
-    - **Homologação comportamental:** 39 provas em `scripts/test-proposals-foundation.ts`, incluindo arredondamento meio-par, taxa fracionária, limites de inteiros seguros, idempotência, corrida real com `Promise.allSettled` e rotas seguras; a auditoria visual é executada separadamente por `scripts/test-proposals-theme.js`.
+    - **Homologação comportamental da fundação:** 39 provas em `scripts/test-proposals-foundation.ts`, incluindo arredondamento meio-par, taxa fracionária, limites de inteiros seguros, idempotência, corrida real com `Promise.allSettled`, UUID seguro e rotas seguras.
+  - `OE-005.003`: Pipeline comercial operacional e governado:
+    - **Máquina de Estados:** `draft` → `submitted` → `under_review`, com ajustes e reenvio, aprovação administrativa independente, apresentação, decisão declaratória e estados terminais. Não existe mutador público genérico de status.
+    - **Segregação de Funções:** somente o projetista ativo atualmente atribuído inicia revisão, solicita ajustes ou rejeita tecnicamente; somente `owner`, `company_admin` ou `manager`, sem participação incompatível na proposta, pode aprovar. A aprovação é bloqueada para criador, captador, remetente e revisor.
+    - **Fila e Atribuição:** `/propostas/fila` exige `proposals:assign_review`; `/propostas/:proposalId/revisao` exige simultaneamente `proposals:view_assigned` e `proposals:review`; `/propostas/:proposalId/historico` respeita a visibilidade por organização, vínculo ou atribuição. IDs de rota são codificados por `encodeURIComponent`.
+    - **Concorrência e Idempotência Integral:** todos os comandos de mutação exigem `expectedVersion` e `idempotencyKey`; reexecuções equivalentes retornam o mesmo resultado e comandos simultâneos com versão obsoleta recebem `CONCURRENCY_CONFLICT`.
+    - **Auditoria e Integridade:** cada transição prepara histórico e snapshot antes do commit em memória, usa correlação e checksum SHA-256 real via Web Crypto, e retorna cópias para preservar imutabilidade externa. Ambientes sem SHA-256 falham de forma fechada.
+    - **Privacidade Operacional:** pareceres, justificativas e observações protegidas permanecem no agregado autorizado; eventos e notificações usam payloads e mensagens sanitizados. Decisões do cliente são registros internos declaratórios e não simulam assinatura ou aceite formal autenticado.
+    - **Prazo Determinístico:** a vigência começa na apresentação; no instante `agora >= expiresAt` a decisão é recusada e a proposta expira. A varredura automática exige o contexto interno `proposal-expiration-scheduler`.
+    - **Ciclo de Sessão:** propostas, históricos, snapshots, atribuições, idempotência, locks, eventos e notificações voláteis participam da limpeza central de logout.
+    - **Homologação comportamental do pipeline:** 31 provas em `scripts/test-proposals-pipeline.ts`, além das 39 provas da fundação e da auditoria visual em `scripts/test-proposals-theme.js`.
 
 ---
 
@@ -453,8 +463,9 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:oe-004-003` | Valida dossiê, cálculos, prontidão e emissão atômica (37 provas) |
 | `npm run test:module-004` | Homologação consolidada de todas as suítes do Módulo 004 (OE-004.001 a OE-004.003) |
 | `npm run test:proposals-foundation` | Valida domínio, finanças, multitenancy, idempotência, concorrência e rotas de propostas (39 provas) |
+| `npm run test:proposal-pipeline` | Valida comportamentalmente RBAC, atribuição, revisão, segregação, concorrência, prazos, SHA-256, privacidade, imutabilidade e limpeza do pipeline (31 provas) |
 | `npm run test:proposals-theme` | Audita a paleta oficial e bloqueia famílias externas no Módulo 005 |
-| `npm run test:module-005` | Homologação consolidada de todas as suítes do Módulo 005 (OE-005.001 e OE-005.002) |
+| `npm run test:module-005` | Homologação consolidada da fundação, pipeline e tema do Módulo 005 (OE-005.001 a OE-005.003) |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -474,5 +485,5 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 ## 9. DIRETRIZES PARA AS PRÓXIMAS EXECUÇÕES
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
-2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.002; OE-005.003 ainda não foi implementada.
-3. **Próxima Ordem:** OE-005.003 pode ser iniciada somente após a validação local, publicação e CI desta revisão permanecerem aprovadas.
+2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.003 no escopo volátil atual; persistência real, assinatura, documentos definitivos e integrações externas permanecem fora do escopo.
+3. **Próxima Ordem:** ainda não iniciada; sua execução deve partir do HEAD publicado e de CI aprovado, sem reabrir os contratos homologados desta ordem.

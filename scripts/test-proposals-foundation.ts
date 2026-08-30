@@ -6,8 +6,8 @@
  * 3. Idempotência com chave composta (orgId:operation:key)
  * 4. Controle de concorrência determinístico (expectedVersion)
  * 5. Deny-by-default em autorizações de criação e edição
- * 6. Descomissionamento de esteira/status da OE-005.003 (OPERATION_NOT_IMPLEMENTED)
- * 7. Filtros e buscas na camada de aplicação
+ * 6. Identificadores criptograficamente seguros
+ * 7. Rotas e navegação segura da fundação
  */
 
 import {
@@ -129,6 +129,7 @@ async function runTests() {
     gracePeriodMonths: 6,
     interestRateAnnualPercentage: 10.5,
     notes: 'Aquisição de insumos agrícolas e adubação para safra de soja.',
+    idempotencyKey: 'validation-payload-001',
   };
 
   const v1 = validateProposalInput(validPayload, true);
@@ -260,9 +261,16 @@ async function runTests() {
     organizationId: orgA,
     actor: {
       userId: userProjetista,
-      role: 'project_designer',
+      role: 'manager',
       isActive: true,
-      permissions: ['proposals:create', 'proposals:view', 'proposals:edit'],
+      permissions: [
+        'proposals:create',
+        'proposals:view',
+        'proposals:view_financials',
+        'proposals:edit_draft',
+        'proposals:submit',
+        'proposals:cancel',
+      ],
     },
     clientResolver: async (id) => clientsStore[id] || null,
     propertyResolver: async (id) => propertiesStore[id] || null,
@@ -289,7 +297,7 @@ async function runTests() {
     ctxOrgA
   );
 
-  assert(createdProposal.id.startsWith('prop-'), 'Cria proposta com ID válido');
+  assert(/^prop_[0-9a-f-]{36}$/i.test(createdProposal.id), 'Cria proposta com UUID criptograficamente seguro');
   assert(createdProposal.proposalNumber.startsWith('PROP-'), 'Gera número PROP-');
   assert(createdProposal.status === 'draft', 'Status inicial é draft');
   assert(createdProposal.clientSnapshot.name === 'João Produtor Rural', 'Cria snapshot do cliente');
@@ -342,6 +350,7 @@ async function runTests() {
       title: 'Proposta Custeio Agrícola 2026 - Revisada',
       requestedAmountCents: 40000000,
       expectedVersion: createdProposal.version,
+      idempotencyKey: 'update-foundation-001',
     },
     ctxOrgA
   );
@@ -356,6 +365,7 @@ async function runTests() {
       {
         title: 'Tentativa Conflito',
         expectedVersion: 1, // Stale version
+        idempotencyKey: 'update-stale-001',
       },
       ctxOrgA
     );
@@ -470,6 +480,7 @@ async function runTests() {
         proposalType: 'credit',
         category: 'custeio',
         requestedAmountCents: 10000000,
+        idempotencyKey: 'denied-create-001',
       },
       ctxNoPerm
     );
@@ -490,8 +501,8 @@ async function runTests() {
     'Builders de rotas de propostas codificam identificadores não confiáveis'
   );
   assert(
-    findRouteDefinition('/propostas/prop-123')?.requiredPermissions === 'proposals:view' &&
-      findRouteDefinition('/propostas/prop-123/editar')?.requiredPermissions === 'proposals:edit' &&
+    Array.isArray(findRouteDefinition('/propostas/prop-123')?.requiredPermissions) &&
+      findRouteDefinition('/propostas/prop-123/editar')?.requiredPermissions === 'proposals:edit_draft' &&
       getSafeRedirectUrl('/propostas/prop-123') === '/propostas/prop-123' &&
       getSafeRedirectUrl('//example.invalid/propostas') === '/sistema',
     'Matriz e navegação reconhecem propostas internas e bloqueiam open redirect'
@@ -500,7 +511,11 @@ async function runTests() {
   // 7. Submissão e Cancelamento Canônicos
   console.log('\n--- GRUPO 4: Submissão e Cancelamento Canônicos com Trava ---');
 
-  const submittedProposal = await appService.submitProposal(createdProposal.id, ctxOrgA);
+  const submittedProposal = await appService.submitProposal({
+    proposalId: createdProposal.id,
+    expectedVersion: updatedProposal.version,
+    idempotencyKey: 'submit-foundation-001',
+  }, ctxOrgA);
   assert(submittedProposal.status === 'submitted', 'Submissão atualiza status para submitted');
   assert(submittedProposal.version === updatedProposal.version + 1, 'Submissão incrementa versão');
 
@@ -511,6 +526,7 @@ async function runTests() {
       {
         title: 'Tentativa Edição Proposta Submetida',
         expectedVersion: submittedProposal.version,
+        idempotencyKey: 'locked-update-001',
       },
       ctxOrgA
     );
@@ -521,9 +537,14 @@ async function runTests() {
   }
   assert(lockedEditBlocked, 'Bloqueia edição de proposta já submetida (PROPOSAL_LOCKED)');
 
-  const cancelledProposal = await appService.cancelProposal(createdProposal.id, ctxOrgA, 'Cliente optou por outra linha');
+  const cancelledProposal = await appService.cancelProposal({
+    proposalId: createdProposal.id,
+    expectedVersion: submittedProposal.version,
+    idempotencyKey: 'cancel-foundation-001',
+    reason: 'Solicitação interna encerrada',
+  }, ctxOrgA);
   assert(cancelledProposal.status === 'cancelled', 'Cancelamento atualiza status para cancelled');
-  assert(cancelledProposal.notes?.includes('Cliente optou por outra linha'), 'Registra justificativa no cancelamento');
+  assert(cancelledProposal.cancellationReason === 'Solicitação interna encerrada', 'Registra justificativa protegida no cancelamento');
 
   console.log(`\n========================================`);
   console.log(`Resultado da Fundação Módulo 005: ${passedCount} aprovados, ${failedCount} falhas`);

@@ -78,9 +78,9 @@ export type Permission =
   // Escopo: Propostas de Crédito e Serviços Técnicos (Módulo 005)
   | 'proposals:view'
   | 'proposals:view_related'
+  | 'proposals:view_assigned'
   | 'proposals:view_financials'
   | 'proposals:create'
-  | 'proposals:edit'
   | 'proposals:edit_draft'
   | 'proposals:submit'
   | 'proposals:assign_review'

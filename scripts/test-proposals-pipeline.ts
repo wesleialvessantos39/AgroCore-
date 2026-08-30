@@ -1,471 +1,545 @@
 /**
- * SUÍTE DE TESTES DO PIPELINE COMERCIAL — OE-005.003
- * Testes de transição de estados, auditoria, segregação de funções (anti-self-approval),
- * prazos determinísticos, expiração, snapshots com SHA-256 e notificações.
+ * SUÍTE COMPORTAMENTAL DO PIPELINE COMERCIAL — OE-005.003
+ * Exercita os serviços públicos, sem inspeção textual como prova principal.
  */
 
+import { executeDomainSessionCleanup } from '../src/auth/domainCleanupRegistry';
+import { OrganizationMember } from '../src/auth/organizationMembersGateway';
+import { getRolePermissions } from '../src/authorization/permissionsMatrix';
+import { Clock, IdGenerator, MockClock, calculateSha256 } from '../src/proposals/cryptoUtils';
 import {
-  ProposalApplicationService,
   ProposalAppContext,
+  ProposalApplicationService,
 } from '../src/proposals/proposalApplicationService';
+import { proposalEventBus } from '../src/proposals/proposalEventService';
+import { getProposalHistoryPath, getProposalReviewPath } from '../src/routes/paths';
+import { findRouteDefinition } from '../src/routes/routeMatrix';
+import { OrganizationRole } from '../src/types/auth';
+import { Permission } from '../src/types/authorization';
+import { Client } from '../src/types/client';
+import { ClientCapturerAssignmentGateway } from '../src/types/clientCapturerAssignment';
 import {
   CreateProposalInput,
+  Proposal,
   ProposalDomainError,
+  ProposalErrorCode,
 } from '../src/types/proposals';
-import { Client } from '../src/types/client';
-import { Property } from '../src/types/property';
-import { OrganizationMember } from '../src/auth/organizationMembersGateway';
-import { ClientCapturerAssignmentGateway } from '../src/types/clientCapturerAssignment';
-import { proposalEventBus } from '../src/proposals/proposalEventService';
-import { MockClock } from '../src/proposals/cryptoUtils';
 
 let passed = 0;
 let failed = 0;
 
-function assert(condition: boolean, name: string, detail?: string) {
+function assert(condition: boolean, name: string, detail?: string): void {
   if (condition) {
-    passed++;
+    passed += 1;
     console.log(`  [PASS] ${name}`);
-  } else {
-    failed++;
-    console.error(`  [FAIL] ${name}${detail ? ` — ${detail}` : ''}`);
+    return;
+  }
+  failed += 1;
+  console.error(`  [FAIL] ${name}${detail ? ` — ${detail}` : ''}`);
+}
+
+async function expectDomainError(
+  operation: () => Promise<unknown>,
+  code: ProposalErrorCode,
+  name: string
+): Promise<void> {
+  try {
+    await operation();
+    assert(false, name, `esperado ${code}, mas a operação foi autorizada`);
+  } catch (error: unknown) {
+    assert(
+      error instanceof ProposalDomainError && error.code === code,
+      name,
+      error instanceof Error ? error.message : 'erro não tipado'
+    );
   }
 }
 
-async function runPipelineTests() {
-  console.log('================================================================');
-  console.log('Iniciando Suíte de Testes OE-005.003: Pipeline Comercial');
-  console.log('================================================================\n');
+class DeterministicIdGenerator implements IdGenerator {
+  private sequence = 0;
 
-  ProposalApplicationService.clearAll();
-  proposalEventBus.clearAll();
+  next(prefix: string): string {
+    this.sequence += 1;
+    return `${prefix}_test_${this.sequence.toString().padStart(4, '0')}`;
+  }
+}
 
-  const orgA = 'org-agro-sul';
-  const capturerId = 'usr-captador-1';
-  const designerId = 'usr-projetista-1';
-  const designer2Id = 'usr-projetista-2';
-  const managerId = 'usr-gestor-1';
-  const outsiderId = 'usr-outsider';
+const organizationId = 'org-pipeline-test';
+const otherOrganizationId = 'org-isolated-test';
+const capturerId = 'user-capturer-test';
+const designerId = 'user-designer-test';
+const secondDesignerId = 'user-designer-2-test';
+const managerId = 'user-manager-test';
+const ownerId = 'user-owner-test';
 
-  const mockClients = new Map<string, Client>([
-    [
-      'cli-10',
-      {
-        id: 'cli-10',
-        organizationId: orgA,
-        personType: 'individual',
-        name: 'Carlos Fazendeiro',
-        cpf: '123.456.789-00',
-        status: 'active',
-        contact: { email: 'carlos@fazenda.com.br', primaryPhone: '(55) 99999-1111' },
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      } as any,
-    ],
-  ]);
+const client: Client = {
+  id: 'client-test-001',
+  organizationId,
+  personType: 'individual',
+  name: 'Cliente Fictício de Teste',
+  cpf: '00000000000',
+  isStateRegistrationExempt: true,
+  contact: {
+    primaryPhone: '00000000000',
+    hasWhatsapp: false,
+    email: 'cliente@example.invalid',
+  },
+  address: {
+    addressType: 'rural',
+    locality: 'Localidade de Teste',
+    accessDescription: 'Acesso exclusivamente fictício',
+    city: 'Município de Teste',
+    state: 'TT',
+  },
+  status: 'active',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
 
-  const mockMembers = new Map<string, OrganizationMember>([
-    [
-      capturerId,
-      {
-        id: 'mem-1',
-        userId: capturerId,
-        name: 'João Captador',
-        email: 'joao@agrosul.com.br',
-        organizationRole: 'capturer',
-        isActive: true,
-      },
-    ],
-    [
-      designerId,
-      {
-        id: 'mem-2',
-        userId: designerId,
-        name: 'Maria Projetista',
-        email: 'maria@agrosul.com.br',
-        organizationRole: 'project_designer',
-        isActive: true,
-      },
-    ],
-    [
-      designer2Id,
-      {
-        id: 'mem-3',
-        userId: designer2Id,
-        name: 'Pedro Segundo Projetista',
-        email: 'pedro@agrosul.com.br',
-        organizationRole: 'project_designer',
-        isActive: true,
-      },
-    ],
-    [
-      managerId,
-      {
-        id: 'mem-4',
-        userId: managerId,
-        name: 'Ana Gestora',
-        email: 'ana@agrosul.com.br',
-        organizationRole: 'manager',
-        isActive: true,
-      },
-    ],
-  ]);
+const members = new Map<string, OrganizationMember>([
+  [capturerId, {
+    id: 'member-capturer-test', userId: capturerId, name: 'Captador de Teste',
+    email: 'capturer@example.invalid', organizationRole: 'capturer', isActive: true,
+  }],
+  [designerId, {
+    id: 'member-designer-test', userId: designerId, name: 'Projetista de Teste',
+    email: 'designer@example.invalid', organizationRole: 'project_designer', isActive: true,
+  }],
+  [secondDesignerId, {
+    id: 'member-designer-2-test', userId: secondDesignerId, name: 'Segundo Projetista de Teste',
+    email: 'designer2@example.invalid', organizationRole: 'project_designer', isActive: true,
+  }],
+  [managerId, {
+    id: 'member-manager-test', userId: managerId, name: 'Gestor de Teste',
+    email: 'manager@example.invalid', organizationRole: 'manager', isActive: true,
+  }],
+  [ownerId, {
+    id: 'member-owner-test', userId: ownerId, name: 'Responsável de Teste',
+    email: 'owner@example.invalid', organizationRole: 'owner', isActive: true,
+  }],
+]);
 
-  const mockAssignmentGateway: ClientCapturerAssignmentGateway = {
-    async getActiveAssignment(orgId: string, clientId: string) {
-      if (orgId === orgA && clientId === 'cli-10') {
-        return {
-          id: 'assign-1',
-          organizationId: orgA,
-          clientId: 'cli-10',
-          capturerUserId: capturerId,
-          status: 'active',
-          isPrimary: true,
-          startedAt: '2026-01-01T00:00:00.000Z',
-          assignedAt: '2026-01-01T00:00:00.000Z',
-          assignedByUserId: 'usr-admin',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        };
-      }
-      return null;
-    },
-    async listAssignmentsByClient() {
-      return [];
-    },
-    async listClientsByCapturer() {
-      return ['cli-10'];
-    },
-    async assignCapturer() {
-      throw new Error('Not needed in test');
-    },
-    async transferCapturer() {
-      throw new Error('Not needed in test');
-    },
-    async terminateAssignment() {
-      throw new Error('Not needed in test');
-    },
-  };
+const assignmentGateway: ClientCapturerAssignmentGateway = {
+  async getActiveAssignment(requestOrganizationId, clientId) {
+    if (requestOrganizationId !== organizationId || clientId !== client.id) return null;
+    return {
+      id: 'assignment-test-001',
+      organizationId,
+      clientId: client.id,
+      capturerUserId: capturerId,
+      status: 'active',
+      isPrimary: true,
+      startedAt: '2026-01-01T00:00:00.000Z',
+      assignedByUserId: ownerId,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+  },
+  async listAssignmentsByClient() {
+    return [];
+  },
+  async listClientsByCapturer(requestOrganizationId, userId) {
+    return requestOrganizationId === organizationId && userId === capturerId ? [client.id] : [];
+  },
+  async assignCapturer() {
+    throw new Error('Operação fora do escopo desta suíte.');
+  },
+  async transferCapturer() {
+    throw new Error('Operação fora do escopo desta suíte.');
+  },
+  async terminateAssignment() {
+    throw new Error('Operação fora do escopo desta suíte.');
+  },
+};
 
-  const createCtx = (userId: string, role: any, permissions: string[]): ProposalAppContext => ({
-    organizationId: orgA,
+function createContext(
+  userId: string,
+  role: OrganizationRole,
+  options: { organization?: string; injectedPermission?: Permission } = {}
+): ProposalAppContext {
+  const canonicalPermissions = getRolePermissions(role);
+  return {
+    organizationId: options.organization ?? organizationId,
     actor: {
       userId,
       role,
       isActive: true,
-      permissions: permissions as any,
+      permissions: options.injectedPermission
+        ? [...canonicalPermissions, options.injectedPermission]
+        : canonicalPermissions,
     },
-    clientResolver: async (id: string) => mockClients.get(id) || null,
-    assignmentGateway: mockAssignmentGateway,
-    memberResolver: async (id: string) => mockMembers.get(id) || null,
-  });
-
-  const ctxCapturer = createCtx(capturerId, 'capturer', [
-    'proposals:view',
-    'proposals:create',
-    'proposals:edit_draft',
-    'proposals:submit',
-    'proposals:present',
-    'proposals:record_decision',
-    'proposals:cancel',
-  ]);
-
-  const ctxDesigner = createCtx(designerId, 'project_designer', [
-    'proposals:view',
-    'proposals:review',
-    'proposals:approve',
-  ]);
-
-  const ctxDesigner2 = createCtx(designer2Id, 'project_designer', [
-    'proposals:view',
-    'proposals:review',
-    'proposals:approve',
-  ]);
-
-  const ctxManager = createCtx(managerId, 'manager', [
-    'proposals:view',
-    'proposals:create',
-    'proposals:edit_draft',
-    'proposals:submit',
-    'proposals:assign_review',
-    'proposals:review',
-    'proposals:approve',
-    'proposals:present',
-    'proposals:record_decision',
-    'proposals:cancel',
-  ]);
-
-  const appService = new ProposalApplicationService();
-  const baseTime = new Date('2026-03-01T10:00:00.000Z');
-  const clock = new MockClock(baseTime);
-
-  // --- ETAPA 1: Criação e Submissão ---
-  console.log('--- ETAPA 1: Criação e Submissão Inicial ---');
-  const proposal = await appService.createProposal(
-    {
-      clientId: 'cli-10',
-      title: 'Financiamento Maquinário Trator Safra',
-      proposalType: 'credit',
-      category: 'investimento',
-      requestedAmountCents: 45000000, // R$ 450.000,00
-      validityDays: 15,
-      financingTermMonths: 36,
-      gracePeriodMonths: 6,
-      interestRateAnnualPercentage: 11.5,
-      notes: 'Aquisição de colheitadeira',
-    },
-    ctxCapturer,
-    clock
-  );
-
-  assert(proposal.status === 'draft', 'Proposta nasce como draft');
-  assert(proposal.capturerUserId === capturerId, 'Captador atribuído corretamente');
-  assert(proposal.version === 1, 'Versão inicial = 1');
-
-  // Submissão
-  clock.advanceMinutes(30);
-  const submitted = await appService.submitProposal(proposal.id, ctxCapturer, clock);
-  assert(submitted.status === 'submitted', 'Transição para submitted com sucesso');
-  assert(submitted.version === 2, 'Versão incrementada para 2');
-
-  const historyAfterSubmit = await appService.getProposalHistory(proposal.id, ctxCapturer);
-  assert(historyAfterSubmit.length === 1, 'Histórico contém 1 registro de transição');
-  assert(historyAfterSubmit[0].fromStatus === 'draft' && historyAfterSubmit[0].toStatus === 'submitted', 'Histórico registra draft -> submitted');
-
-  const snapshotsAfterSubmit = await appService.getProposalSnapshots(proposal.id, ctxCapturer);
-  assert(snapshotsAfterSubmit.length === 1, 'Snapshot criado na submissão');
-  assert(snapshotsAfterSubmit[0].versionNumber === 2, 'Snapshot gravou versão 2');
-  assert(snapshotsAfterSubmit[0].checksumSha256.length === 64, 'Snapshot contém SHA-256 válido');
-
-  // --- ETAPA 2: Atribuição de Revisor e Início de Parecer ---
-  console.log('\n--- ETAPA 2: Atribuição de Revisor Técnico ---');
-
-  // Tentativa de atribuir usuário de fora da organização
-  let outsiderBlocked = false;
-  try {
-    await appService.assignProposalReviewer(proposal.id, outsiderId, ctxManager, clock);
-  } catch (err) {
-    if (err instanceof ProposalDomainError && err.code === 'REVIEWER_MISMATCH') {
-      outsiderBlocked = true;
-    }
-  }
-  assert(outsiderBlocked, 'Bloqueia atribuição de revisor que não pertence à organização ativa');
-
-  // Atribuição válida pela gestora
-  clock.advanceMinutes(15);
-  const assigned = await appService.assignProposalReviewer(proposal.id, designerId, ctxManager, clock);
-  assert(assigned.activeReviewAssignment?.reviewerUserId === designerId, 'Revisor Maria Projetista atribuída');
-  assert(assigned.version === 3, 'Versão incrementada para 3');
-
-  // Início de revisão pelo outro projetista não designado (deve ser bloqueado)
-  let unauthorizedReviewBlocked = false;
-  try {
-    await appService.startProposalReview(proposal.id, ctxDesigner2, clock);
-  } catch (err) {
-    if (err instanceof ProposalDomainError && err.code === 'REVIEWER_MISMATCH') {
-      unauthorizedReviewBlocked = true;
-    }
-  }
-  assert(unauthorizedReviewBlocked, 'Bloqueia início de revisão por projetista não designado');
-
-  // Início de revisão pela Maria Projetista (atribuída)
-  clock.advanceMinutes(10);
-  const underReview = await appService.startProposalReview(proposal.id, ctxDesigner, clock);
-  assert(underReview.status === 'under_review', 'Status alterado para under_review');
-
-  // --- ETAPA 3: Solicitação de Ajustes e Reenvio ---
-  console.log('\n--- ETAPA 3: Solicitação de Ajustes (changes_requested) e Reenvio ---');
-
-  clock.advanceMinutes(20);
-  const changesReq = await appService.requestProposalChanges(
-    proposal.id,
-    'Necessário incluir certidão negativa de débitos ambientais do imóvel.',
-    ctxDesigner,
-    clock
-  );
-  assert(changesReq.status === 'changes_requested', 'Transição para changes_requested');
-  assert(changesReq.notes?.includes('ambientais'), 'Apontamentos registrados nas notas');
-
-  // Captador atualiza proposta em changes_requested
-  clock.advanceHours(2);
-  const updatedAfterNotes = await appService.updateProposal(
-    proposal.id,
-    {
-      notes: 'Certidão negativa de débitos ambientais anexada.',
-      expectedVersion: changesReq.version,
-    },
-    ctxCapturer,
-    clock
-  );
-  assert(updatedAfterNotes.status === 'changes_requested', 'Permite edição em changes_requested');
-
-  // Re-submissão
-  const resubmitted = await appService.submitProposal(proposal.id, ctxCapturer, clock);
-  assert(resubmitted.status === 'submitted', 'Re-submissão bem-sucedida para submitted');
-
-  // Maria Projetista reabre a revisão
-  await appService.startProposalReview(proposal.id, ctxDesigner, clock);
-
-  // --- ETAPA 4: Segregação de Funções (Anti-Self-Approval) e Aprovação ---
-  console.log('\n--- ETAPA 4: Segregação de Funções (Anti-Self-Approval) e Aprovação ---');
-
-  // O captador João tenta aprovar a própria proposta
-  let selfApprovalBlocked = false;
-  try {
-    await appService.approveProposal(proposal.id, ctxCapturer, clock, 'Auto-aprovação');
-  } catch (err) {
-    if (err instanceof ProposalDomainError && (err.code === 'SELF_APPROVAL_FORBIDDEN' || err.code === 'PERMISSION_DENIED')) {
-      selfApprovalBlocked = true;
-    }
-  }
-  assert(selfApprovalBlocked, 'Anti-Self-Approval: Captador não pode aprovar a própria proposta');
-
-  // Revisor Maria aprova formalmente
-  clock.advanceMinutes(30);
-  const approved = await appService.approveProposal(
-    proposal.id,
-    ctxDesigner,
-    clock,
-    'Parecer técnico e econômico favorável. Documentação conforme.'
-  );
-  assert(approved.status === 'approved', 'Status alterado para approved');
-  assert(approved.approvedByUserId === designerId, 'Aprovador registrado');
-  assert(Boolean(approved.approvedAt), 'Data de aprovação registrada');
-
-  // --- ETAPA 5: Apresentação ao Cliente e Prazos ---
-  console.log('\n--- ETAPA 5: Apresentação ao Cliente e Vigência Temporal ---');
-
-  clock.advanceDays(1); // 1 dia depois
-  const presented = await appService.markProposalPresented(
-    proposal.id,
-    {
-      channel: 'in_person',
-      notes: 'Apresentado na sede da fazenda com o produtor Carlos.',
-    },
-    ctxCapturer,
-    clock
-  );
-
-  assert(presented.status === 'presented', 'Status alterado para presented');
-  assert(presented.presentationRecord?.channel === 'in_person', 'Canal in_person registrado');
-  assert(Boolean(presented.validFrom), 'Vigência validFrom calculada');
-  assert(Boolean(presented.expiresAt), 'Data de expiração expiresAt calculada');
-
-  // Vigência calculada: validFrom + 15 dias
-  const validFromMs = new Date(presented.validFrom!).getTime();
-  const expiresAtMs = new Date(presented.expiresAt).getTime();
-  assert(expiresAtMs - validFromMs === 15 * 24 * 60 * 60 * 1000, 'Prazo de validade = exatamente 15 dias a partir da apresentação');
-
-  // --- ETAPA 6: Aceite Formal do Cliente ---
-  console.log('\n--- ETAPA 6: Registro de Decisão do Cliente (Aceite) ---');
-
-  clock.advanceDays(5); // 5 dias depois (dentro do prazo de 15)
-  const accepted = await appService.recordProposalDecision(
-    proposal.id,
-    {
-      decision: 'accepted',
-      channel: 'messaging',
-      notes: 'Produtor confirmou aceite via WhatsApp oficial.',
-    },
-    ctxCapturer,
-    clock
-  );
-
-  assert(accepted.status === 'accepted', 'Status alterado para accepted');
-  assert(accepted.decisionRecord?.decision === 'accepted', 'Decisão accepted gravada');
-  assert(accepted.decisionRecord?.disclaimerText.includes('formal'), 'Disclaimer declaratório gravado');
-
-  // Tentativa de alterar proposta aceita (status terminal)
-  let terminalEditBlocked = false;
-  try {
-    await appService.updateProposal(
-      proposal.id,
-      { title: 'Modificação Pós-Aceite', expectedVersion: accepted.version },
-      ctxCapturer,
-      clock
-    );
-  } catch (err) {
-    if (err instanceof ProposalDomainError && err.code === 'PROPOSAL_LOCKED') {
-      terminalEditBlocked = true;
-    }
-  }
-  assert(terminalEditBlocked, 'Bloqueia edição de proposta em status terminal (accepted)');
-
-  // --- ETAPA 7: Teste de Expiração Temporal Determinística ---
-  console.log('\n--- ETAPA 7: Expiração Temporal Determinística ---');
-
-  // Criar uma segunda proposta e deixá-la expirar
-  const prop2 = await appService.createProposal(
-    {
-      clientId: 'cli-10',
-      title: 'Proposta para Teste de Expiração',
-      proposalType: 'credit',
-      category: 'custeio',
-      requestedAmountCents: 10000000,
-      validityDays: 5,
-    },
-    ctxCapturer,
-    clock
-  );
-
-  await appService.submitProposal(prop2.id, ctxCapturer, clock);
-  await appService.assignProposalReviewer(prop2.id, designerId, ctxManager, clock);
-  await appService.startProposalReview(prop2.id, ctxDesigner, clock);
-  await appService.approveProposal(prop2.id, ctxDesigner, clock);
-  const presented2 = await appService.markProposalPresented(prop2.id, { channel: 'email' }, ctxCapturer, clock);
-
-  // Avança o tempo 6 dias (ultrapassa os 5 dias de validade)
-  clock.advanceDays(6);
-
-  // Tentativa de registrar decisão em proposta expirada
-  let expiredCaught = false;
-  try {
-    await appService.recordProposalDecision(
-      prop2.id,
-      { decision: 'accepted', channel: 'email' },
-      ctxCapturer,
-      clock
-    );
-  } catch (err) {
-    if (err instanceof ProposalDomainError && err.code === 'PROPOSAL_EXPIRED') {
-      expiredCaught = true;
-    }
-  }
-  assert(expiredCaught, 'Rejeita registro de decisão para proposta que ultrapassou o prazo de vigência');
-
-  // Executa varredura de expiração
-  const expiredCount = await appService.expireDueProposals({ organizationId: orgA }, clock);
-  assert(expiredCount >= 0, 'Varredura de expiração executada sem erros');
-
-  const reloadedProp2 = await appService.getProposalById(prop2.id, ctxCapturer);
-  assert(reloadedProp2?.status === 'expired', 'Proposta marcada como expired');
-
-  // --- ETAPA 8: Auditoria, Integridade SHA-256 e Histórico Completo ---
-  console.log('\n--- ETAPA 8: Integridade de Snapshots e Auditoria ---');
-
-  const finalHistory = await appService.getProposalHistory(proposal.id, ctxCapturer);
-  const finalSnapshots = await appService.getProposalSnapshots(proposal.id, ctxCapturer);
-
-  assert(finalHistory.length >= 6, `Histórico completo gravado (${finalHistory.length} transições)`);
-  assert(finalSnapshots.length >= 6, `Snapshots imutáveis gravados (${finalSnapshots.length} versões)`);
-
-  const hasAllSha256 = finalSnapshots.every((s) => s.checksumSha256 && s.checksumSha256.length === 64);
-  assert(hasAllSha256, 'Todos os snapshots possuem checksum SHA-256 de 64 caracteres');
-
-  // Notificações
-  const notifications = proposalEventBus.getNotifications(orgA, capturerId);
-  assert(notifications.length > 0, `Captador recebeu ${notifications.length} notificações de eventos de ciclo de vida`);
-
-  console.log(`\n================================================================`);
-  console.log(`Resultado dos Testes do Pipeline OE-005.003: ${passed} passaram, ${failed} falhas`);
-  console.log(`================================================================\n`);
-
-  if (failed > 0) {
-    process.exit(1);
-  }
+    clientResolver: async (clientId) => clientId === client.id ? client : null,
+    assignmentGateway,
+    memberResolver: async (memberUserId) => members.get(memberUserId) ?? null,
+  };
 }
 
-runPipelineTests().catch((err) => {
-  console.error('Erro na suíte do pipeline:', err);
+const capturerContext = createContext(capturerId, 'capturer');
+const designerContext = createContext(designerId, 'project_designer');
+const secondDesignerContext = createContext(secondDesignerId, 'project_designer');
+const managerContext = createContext(managerId, 'manager');
+const ownerContext = createContext(ownerId, 'owner');
+const isolatedContext = createContext(managerId, 'manager', { organization: otherOrganizationId });
+const designerWithInjectedApproval = createContext(designerId, 'project_designer', {
+  injectedPermission: 'proposals:approve',
+});
+
+function createInput(idempotencyKey: string, title: string): CreateProposalInput {
+  return {
+    clientId: client.id,
+    title,
+    proposalType: 'credit',
+    category: 'investimento',
+    requestedAmountCents: 45_000_000,
+    validityDays: 15,
+    financingTermMonths: 36,
+    gracePeriodMonths: 6,
+    interestRateAnnualPercentage: 11.5,
+    notes: 'Conteúdo operacional fictício.',
+    idempotencyKey,
+  };
+}
+
+async function submit(
+  service: ProposalApplicationService,
+  proposal: Proposal,
+  context: ProposalAppContext,
+  clock: Clock,
+  key: string
+): Promise<Proposal> {
+  return service.submitProposal({
+    proposalId: proposal.id,
+    expectedVersion: proposal.version,
+    idempotencyKey: key,
+  }, context, clock);
+}
+
+async function runPipelineTests(): Promise<void> {
+  console.log('================================================================');
+  console.log('Suíte comportamental OE-005.003 — Pipeline Comercial');
+  console.log('================================================================\n');
+
+  await executeDomainSessionCleanup();
+  const service = new ProposalApplicationService(new DeterministicIdGenerator());
+  const clock = new MockClock(new Date('2026-03-01T10:00:00.000Z'));
+
+  console.log('--- Idempotência, isolamento e concorrência ---');
+  const idempotentInput = createInput('create-idempotent-001', 'Proposta Idempotente de Teste');
+  const idempotentA = await service.createProposal(idempotentInput, capturerContext, clock);
+  const idempotentB = await service.createProposal(idempotentInput, capturerContext, clock);
+  assert(idempotentA.id === idempotentB.id, 'Criação repetida com mesma chave retorna a mesma proposta');
+  Reflect.set(idempotentA, 'title', 'adulterado externamente');
+  const immutableCreate = await service.getProposalById(idempotentB.id, capturerContext);
+  assert(immutableCreate?.title === 'Proposta Idempotente de Teste',
+    'Objeto retornado na criação não permite adulterar o armazenamento interno');
+
+  await expectDomainError(
+    () => service.createProposal({ ...idempotentInput, title: 'Payload Divergente' }, capturerContext, clock),
+    'IDEMPOTENCY_CONFLICT',
+    'Chave reutilizada com payload divergente é recusada'
+  );
+  await expectDomainError(
+    () => service.getProposalById(idempotentA.id, isolatedContext),
+    'PROPOSAL_NOT_FOUND',
+    'Consulta IDOR entre organizações é bloqueada'
+  );
+
+  const concurrentDraft = await service.createProposal(
+    createInput('create-concurrency-001', 'Proposta Concorrente de Teste'), capturerContext, clock
+  );
+  const concurrentResults = await Promise.allSettled([
+    service.updateProposal(concurrentDraft.id, {
+      title: 'Atualização Concorrente A', expectedVersion: concurrentDraft.version,
+      idempotencyKey: 'update-concurrency-a',
+    }, capturerContext, clock),
+    service.updateProposal(concurrentDraft.id, {
+      title: 'Atualização Concorrente B', expectedVersion: concurrentDraft.version,
+      idempotencyKey: 'update-concurrency-b',
+    }, capturerContext, clock),
+  ]);
+  const successfulUpdates = concurrentResults.filter((result) => result.status === 'fulfilled');
+  const conflictUpdates = concurrentResults.filter(
+    (result) => result.status === 'rejected'
+      && result.reason instanceof ProposalDomainError
+      && result.reason.code === 'CONCURRENCY_CONFLICT'
+  );
+  assert(successfulUpdates.length === 1 && conflictUpdates.length === 1,
+    'Duas atualizações simultâneas produzem um sucesso e um conflito tipado');
+
+  console.log('\n--- Fila, atribuição, revisão e segregação de funções ---');
+  let proposal = await service.createProposal(
+    createInput('create-main-flow-001', 'Fluxo Comercial Completo de Teste'), capturerContext, clock
+  );
+  proposal = await submit(service, proposal, capturerContext, clock, 'submit-main-flow-001');
+  const repeatedSubmission = await service.submitProposal({
+    proposalId: proposal.id,
+    expectedVersion: proposal.version - 1,
+    idempotencyKey: 'submit-main-flow-001',
+  }, capturerContext, clock);
+  assert(repeatedSubmission.version === proposal.version,
+    'Repetição idempotente do comando retorna o resultado anterior');
+
+  await expectDomainError(
+    () => service.assignProposalReviewer({
+      proposalId: proposal.id, reviewerUserId: 'user-outsider-test',
+      expectedVersion: proposal.version, idempotencyKey: 'assign-outsider-001',
+    }, managerContext, clock),
+    'REVIEWER_MISMATCH',
+    'Atribuição a usuário externo ou inexistente é bloqueada'
+  );
+
+  proposal = await service.assignProposalReviewer({
+    proposalId: proposal.id,
+    reviewerUserId: designerId,
+    expectedVersion: proposal.version,
+    idempotencyKey: 'assign-designer-001',
+  }, managerContext, clock);
+
+  await expectDomainError(
+    () => service.startProposalReview({
+      proposalId: proposal.id, expectedVersion: proposal.version,
+      idempotencyKey: 'manager-review-001',
+    }, managerContext, clock),
+    'PERMISSION_DENIED',
+    'Gestor não recebe permissão implícita de revisão técnica'
+  );
+  await expectDomainError(
+    () => service.startProposalReview({
+      proposalId: proposal.id, expectedVersion: proposal.version,
+      idempotencyKey: 'wrong-reviewer-001',
+    }, secondDesignerContext, clock),
+    'REVIEWER_MISMATCH',
+    'Projetista não atribuído não inicia a revisão'
+  );
+
+  proposal = await service.startProposalReview({
+    proposalId: proposal.id,
+    expectedVersion: proposal.version,
+    idempotencyKey: 'start-review-001',
+  }, designerContext, clock);
+
+  const protectedReviewReason = 'MARCADOR-SENSIVEL-DE-REVISAO-NAO-LOGAR';
+  proposal = await service.requestProposalChanges({
+    proposalId: proposal.id,
+    expectedVersion: proposal.version,
+    idempotencyKey: 'request-changes-001',
+    reasons: protectedReviewReason,
+  }, designerContext, clock);
+  assert(proposal.reviewNotes?.[0]?.reasons === protectedReviewReason,
+    'Apontamento protegido permanece no agregado autorizado');
+
+  proposal = await service.updateProposal(proposal.id, {
+    notes: 'Ajuste fictício realizado.',
+    expectedVersion: proposal.version,
+    idempotencyKey: 'update-after-review-001',
+  }, capturerContext, clock);
+  proposal = await submit(service, proposal, capturerContext, clock, 'resubmit-main-flow-001');
+
+  await expectDomainError(
+    () => service.assignProposalReviewer({
+      proposalId: proposal.id, reviewerUserId: secondDesignerId,
+      expectedVersion: proposal.version, idempotencyKey: 'reassign-without-reason-001',
+    }, managerContext, clock),
+    'REASON_REQUIRED',
+    'Reatribuição sem motivo é bloqueada'
+  );
+  proposal = await service.assignProposalReviewer({
+    proposalId: proposal.id,
+    reviewerUserId: secondDesignerId,
+    reassignmentReason: 'Redistribuição operacional fictícia.',
+    expectedVersion: proposal.version,
+    idempotencyKey: 'reassign-designer-002',
+  }, managerContext, clock);
+
+  const assignments = await service.getProposalReviewAssignments(proposal.id, managerContext);
+  assert(assignments.length === 2 && assignments.filter((item) => item.status === 'active').length === 1,
+    'Histórico preserva reatribuição e mantém somente um revisor ativo');
+
+  const firstDesignerQueue = await service.listProposals({}, designerContext);
+  const secondDesignerQueue = await service.listProposals({}, secondDesignerContext);
+  assert(firstDesignerQueue.total === 0 && secondDesignerQueue.items.some((item) => item.id === proposal.id),
+    'Fila do projetista contém somente propostas atualmente atribuídas');
+
+  proposal = await service.startProposalReview({
+    proposalId: proposal.id,
+    expectedVersion: proposal.version,
+    idempotencyKey: 'start-review-002',
+  }, secondDesignerContext, clock);
+
+  await expectDomainError(
+    () => service.approveProposal({
+      proposalId: proposal.id, expectedVersion: proposal.version,
+      idempotencyKey: 'designer-approve-001',
+    }, designerWithInjectedApproval, clock),
+    'PERMISSION_DENIED',
+    'Permissão injetada não permite que projetista aprove proposta'
+  );
+
+  const protectedApprovalNote = 'MARCADOR-SENSIVEL-DE-APROVACAO-NAO-LOGAR';
+  proposal = await service.approveProposal({
+    proposalId: proposal.id,
+    expectedVersion: proposal.version,
+    idempotencyKey: 'manager-approve-001',
+    notes: protectedApprovalNote,
+  }, managerContext, clock);
+  assert(proposal.status === 'approved' && proposal.approvedByUserId === managerId,
+    'Gestor independente aprova proposta após revisão atribuída');
+
+  console.log('\n--- Apresentação, decisão e prazo exato ---');
+  proposal = await service.markProposalPresented({
+    proposalId: proposal.id,
+    expectedVersion: proposal.version,
+    idempotencyKey: 'present-main-flow-001',
+    channel: 'in_person',
+    notes: 'Registro operacional fictício.',
+  }, capturerContext, clock);
+  const validFrom = proposal.validFrom ? new Date(proposal.validFrom).getTime() : Number.NaN;
+  assert(new Date(proposal.expiresAt).getTime() - validFrom === 15 * 86_400_000,
+    'Vigência começa na apresentação e possui duração determinística');
+
+  proposal = await service.recordProposalDecision({
+    proposalId: proposal.id,
+    expectedVersion: proposal.version,
+    idempotencyKey: 'decision-main-flow-001',
+    decision: 'accepted',
+    channel: 'messaging',
+    notes: 'Manifestação declarada apenas para operação interna.',
+  }, capturerContext, clock);
+  assert(proposal.status === 'accepted'
+      && proposal.decisionRecord?.disclaimerText.includes('Não constitui assinatura eletrônica'),
+    'Decisão é registrada como declaração operacional, sem simular validade formal');
+
+  await expectDomainError(
+    () => service.updateProposal(proposal.id, {
+      title: 'Alteração Terminal', expectedVersion: proposal.version,
+      idempotencyKey: 'terminal-update-001',
+    }, capturerContext, clock),
+    'PROPOSAL_LOCKED',
+    'Estado terminal não pode ser editado'
+  );
+
+  let expiring = await service.createProposal(
+    { ...createInput('create-expiry-001', 'Proposta de Expiração Exata'), validityDays: 5 },
+    capturerContext, clock
+  );
+  expiring = await submit(service, expiring, capturerContext, clock, 'submit-expiry-001');
+  expiring = await service.assignProposalReviewer({
+    proposalId: expiring.id, reviewerUserId: designerId,
+    expectedVersion: expiring.version, idempotencyKey: 'assign-expiry-001',
+  }, managerContext, clock);
+  expiring = await service.startProposalReview({
+    proposalId: expiring.id, expectedVersion: expiring.version,
+    idempotencyKey: 'review-expiry-001',
+  }, designerContext, clock);
+  expiring = await service.approveProposal({
+    proposalId: expiring.id, expectedVersion: expiring.version,
+    idempotencyKey: 'approve-expiry-001',
+  }, managerContext, clock);
+  expiring = await service.markProposalPresented({
+    proposalId: expiring.id, expectedVersion: expiring.version,
+    idempotencyKey: 'present-expiry-001', channel: 'email',
+  }, capturerContext, clock);
+  clock.setTime(new Date(expiring.expiresAt));
+  await expectDomainError(
+    () => service.recordProposalDecision({
+      proposalId: expiring.id, expectedVersion: expiring.version,
+      idempotencyKey: 'decision-expiry-boundary-001', decision: 'accepted', channel: 'email',
+    }, capturerContext, clock),
+    'PROPOSAL_EXPIRED',
+    'Decisão no instante exato do vencimento é recusada'
+  );
+  const expired = await service.getProposalById(expiring.id, managerContext);
+  assert(expired?.status === 'expired', 'Estado expirado é persistido atomicamente no limite temporal');
+  await expectDomainError(
+    () => service.expireDueProposals({ organizationId: '', systemActor: 'proposal-expiration-scheduler' }, clock),
+    'SYSTEM_CONTEXT_REQUIRED',
+    'Varredura de expiração exige contexto interno autenticado'
+  );
+
+  console.log('\n--- Autoaprovação, auditoria, hash e limpeza ---');
+  let selfApproval = await service.createProposal(
+    createInput('create-self-approval-001', 'Proposta de Segregação de Funções'), managerContext, clock
+  );
+  selfApproval = await submit(service, selfApproval, managerContext, clock, 'submit-self-approval-001');
+  selfApproval = await service.assignProposalReviewer({
+    proposalId: selfApproval.id, reviewerUserId: designerId,
+    expectedVersion: selfApproval.version, idempotencyKey: 'assign-self-approval-001',
+  }, ownerContext, clock);
+  selfApproval = await service.startProposalReview({
+    proposalId: selfApproval.id, expectedVersion: selfApproval.version,
+    idempotencyKey: 'review-self-approval-001',
+  }, designerContext, clock);
+  await expectDomainError(
+    () => service.approveProposal({
+      proposalId: selfApproval.id, expectedVersion: selfApproval.version,
+      idempotencyKey: 'self-approval-manager-001',
+    }, managerContext, clock),
+    'SELF_APPROVAL_FORBIDDEN',
+    'Criador ou remetente não pode aprovar a própria proposta'
+  );
+
+  const history = await service.getProposalHistory(proposal.id, managerContext);
+  const snapshots = await service.getProposalSnapshots(proposal.id, managerContext);
+  assert(history.length >= 8 && snapshots.length === history.length,
+    'Cada transição possui histórico e snapshot correspondente');
+  assert(snapshots.every((snapshot) => /^[a-f0-9]{64}$/.test(snapshot.checksumSha256)),
+    'Todos os snapshots usam SHA-256 real de 64 caracteres hexadecimais');
+  assert(await calculateSha256('abc') === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+    'Implementação SHA-256 confere com vetor conhecido');
+
+  const events = proposalEventBus.getEventsForProposal(organizationId, proposal.id);
+  const notifications = proposalEventBus.getNotifications(organizationId, capturerId);
+  const serializedEvents = JSON.stringify(events);
+  const serializedNotifications = JSON.stringify(notifications);
+  assert(!serializedEvents.includes(protectedReviewReason)
+      && !serializedEvents.includes(protectedApprovalNote)
+      && !serializedNotifications.includes(protectedReviewReason)
+      && !serializedNotifications.includes(protectedApprovalNote),
+    'Eventos e notificações não vazam justificativas ou pareceres protegidos');
+  const capturerNotification = notifications[0];
+  assert(Boolean(capturerNotification)
+      && !proposalEventBus.markNotificationAsRead(
+        organizationId, secondDesignerId, capturerNotification.id
+      )
+      && proposalEventBus.markNotificationAsRead(
+        organizationId, capturerId, capturerNotification.id
+      ),
+    'Marcação de notificação como lida exige o destinatário correto');
+
+  if (events[0]) Reflect.set(events[0].payload, 'tampered', true);
+  if (snapshots[0]) Reflect.set(snapshots[0].snapshot, 'title', 'adulterado');
+  const eventsAgain = proposalEventBus.getEventsForProposal(organizationId, proposal.id);
+  const snapshotsAgain = await service.getProposalSnapshots(proposal.id, managerContext);
+  assert(!eventsAgain.some((event) => event.payload.tampered === true)
+      && !snapshotsAgain.some((snapshot) => snapshot.snapshot.title === 'adulterado'),
+    'Consultas retornam cópias e preservam a imutabilidade dos registros');
+
+  assert(getProposalReviewPath('proposal / id') === '/propostas/proposal%20%2F%20id/revisao'
+      && getProposalHistoryPath('proposal / id') === '/propostas/proposal%20%2F%20id/historico',
+    'Construtores das rotas dedicadas codificam identificadores com segurança');
+  const queueRoute = findRouteDefinition('/propostas/fila');
+  const reviewRoute = findRouteDefinition('/propostas/proposal-test/revisao');
+  assert(queueRoute?.requiredPermissions === 'proposals:assign_review'
+      && Array.isArray(reviewRoute?.requiredPermissions)
+      && reviewRoute.requiredPermissions.includes('proposals:view_assigned')
+      && reviewRoute.requiredPermissions.includes('proposals:review'),
+    'Matriz protege fila administrativa e revisão atribuída com permissões granulares');
+
+  await executeDomainSessionCleanup();
+  const afterCleanup = await service.listProposals({}, managerContext);
+  assert(afterCleanup.total === 0
+      && proposalEventBus.getEventsForProposal(organizationId, proposal.id).length === 0
+      && proposalEventBus.getNotifications(organizationId, capturerId).length === 0,
+    'Logout limpa propostas, histórico, snapshots, eventos e notificações');
+
+  console.log('\n================================================================');
+  console.log(`Resultado OE-005.003: ${passed} passaram, ${failed} falharam`);
+  console.log('================================================================\n');
+
+  if (failed > 0) process.exit(1);
+}
+
+runPipelineTests().catch((error: unknown) => {
+  console.error('Falha não tratada na suíte comportamental:', error instanceof Error ? error.message : error);
   process.exit(1);
 });

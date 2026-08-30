@@ -66,6 +66,10 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Cadastrar Proposta | AgroCore',
     announcementTitle: 'Cadastrar proposta',
   },
+  [ROUTES.PROPOSALS_QUEUE]: {
+    documentTitle: 'Fila Comercial | AgroCore',
+    announcementTitle: 'Fila comercial de propostas',
+  },
   [ROUTES.PROPOSALS_EDIT]: {
     documentTitle: 'Editar Proposta | AgroCore',
     announcementTitle: 'Editar proposta',
@@ -73,6 +77,14 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
   [ROUTES.PROPOSALS_DETAIL]: {
     documentTitle: 'Detalhes da Proposta | AgroCore',
     announcementTitle: 'Detalhes da proposta',
+  },
+  [ROUTES.PROPOSALS_REVIEW]: {
+    documentTitle: 'Revisão da Proposta | AgroCore',
+    announcementTitle: 'Revisão técnica da proposta',
+  },
+  [ROUTES.PROPOSALS_HISTORY]: {
+    documentTitle: 'Histórico da Proposta | AgroCore',
+    announcementTitle: 'Histórico da proposta',
   },
   [ROUTES.MY_ACCOUNT]: {
     documentTitle: 'Minha Conta | AgroCore',
@@ -126,6 +138,14 @@ export function getRouteMetadata(pathname: string): RouteMetadata {
 
   if (/^\/propostas\/[^/]+\/editar$/.test(pathname)) {
     return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_EDIT];
+  }
+
+  if (/^\/propostas\/[^/]+\/revisao$/.test(pathname)) {
+    return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_REVIEW];
+  }
+
+  if (/^\/propostas\/[^/]+\/historico$/.test(pathname)) {
+    return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_HISTORY];
   }
 
   if (/^\/propostas\/[^/]+$/.test(pathname)) {

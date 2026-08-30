@@ -94,12 +94,12 @@ export const ProposalEditPage: React.FC = () => {
     );
   }
 
-  if (proposal.status !== 'draft') {
+  if (proposal.status !== 'draft' && proposal.status !== 'changes_requested') {
     return (
       <div className="p-8 bg-white border border-[#0B3D2E]/15 rounded-2xl space-y-3">
         <h2 className="text-lg font-bold text-[#0B3D2E]">Edição Bloqueada</h2>
         <p className="text-xs text-[#0B3D2E]/70">
-          Apenas propostas em rascunho (&quot;draft&quot;) podem ser editadas diretamente. Status atual: &quot;{proposal.status}&quot;.
+          Apenas propostas em rascunho ou com ajustes solicitados podem ser editadas. Status atual: &quot;{proposal.status}&quot;.
         </p>
         <button
           type="button"
@@ -116,13 +116,6 @@ export const ProposalEditPage: React.FC = () => {
     <div className="space-y-6 text-[#0B3D2E]" id="page-proposal-edit">
       <div className="flex items-center justify-between border-b border-[#0B3D2E]/15 pb-4">
         <div>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="text-xs font-semibold text-[#0B3D2E] hover:underline mb-1 flex items-center gap-1"
-          >
-            ← Voltar para listagem de propostas
-          </button>
           <h2 className="text-xl font-bold text-[#0B3D2E]">
             Editar Proposta: {proposal.proposalNumber}
           </h2>
@@ -134,6 +127,8 @@ export const ProposalEditPage: React.FC = () => {
 
       {errorMessage && (
         <div
+          role="alert"
+          aria-live="assertive"
           className="p-4 bg-[#0B3D2E]/10 border border-[#0B3D2E]/30 rounded-xl text-[#0B3D2E] text-sm"
           id="proposal-edit-error-banner"
         >

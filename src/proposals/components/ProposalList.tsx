@@ -1,11 +1,14 @@
 import React from 'react';
-import { Proposal, ProposalCategory, ProposalStatus, ProposalType } from '../../types/proposals';
+import { Proposal } from '../../types/proposals';
 import {
   PROPOSAL_CATEGORY_LABELS,
   PROPOSAL_STATUS_LABELS,
   PROPOSAL_TYPE_LABELS,
   formatCentsToBRL,
   getClientDisplayName,
+  isProposalCategory,
+  isProposalStatus,
+  isProposalType,
 } from '../validators';
 import { PROPOSAL_THEME } from '../theme';
 import { ProposalStatusBadge } from './ProposalStatusBadge';
@@ -43,7 +46,7 @@ export const ProposalList: React.FC<ProposalListProps> = ({
   const { can } = useAuthorization();
 
   const canCreate = can('proposals:create');
-  const canEdit = can('proposals:edit');
+  const canEdit = can('proposals:edit_draft');
 
   // Mapeamento rápido de IDs para nomes
   const clientMap = new Map(clients.map((c) => [c.id, getClientDisplayName(c)]));
@@ -73,6 +76,8 @@ export const ProposalList: React.FC<ProposalListProps> = ({
 
       {errorMessage && (
         <div
+          role="alert"
+          aria-live="assertive"
           className="p-4 bg-[#0B3D2E]/10 border border-[#0B3D2E]/30 rounded-xl text-[#0B3D2E] text-sm"
           id="proposal-list-error-banner"
         >
@@ -121,9 +126,9 @@ export const ProposalList: React.FC<ProposalListProps> = ({
             <select
               id="proposal-status-filter"
               value={filters.status || ''}
-              onChange={(e) =>
-                setStatusFilter((e.target.value as ProposalStatus) || undefined)
-              }
+              onChange={(e) => setStatusFilter(
+                isProposalStatus(e.target.value) ? e.target.value : undefined
+              )}
               className={PROPOSAL_THEME.select}
             >
               <option value="">Todos os status</option>
@@ -145,9 +150,9 @@ export const ProposalList: React.FC<ProposalListProps> = ({
             <select
               id="proposal-type-filter"
               value={filters.type || ''}
-              onChange={(e) =>
-                setTypeFilter((e.target.value as ProposalType) || undefined)
-              }
+              onChange={(e) => setTypeFilter(
+                isProposalType(e.target.value) ? e.target.value : undefined
+              )}
               className={PROPOSAL_THEME.select}
             >
               <option value="">Todos os tipos</option>
@@ -169,9 +174,9 @@ export const ProposalList: React.FC<ProposalListProps> = ({
             <select
               id="proposal-category-filter"
               value={filters.category || ''}
-              onChange={(e) =>
-                setCategoryFilter((e.target.value as ProposalCategory) || undefined)
-              }
+              onChange={(e) => setCategoryFilter(
+                isProposalCategory(e.target.value) ? e.target.value : undefined
+              )}
               className={PROPOSAL_THEME.select}
             >
               <option value="">Todas as finalidades</option>
@@ -233,13 +238,13 @@ export const ProposalList: React.FC<ProposalListProps> = ({
           {proposals.map((proposal) => {
             const clientName = clientMap.get(proposal.clientId) || proposal.clientSnapshot.name || 'Produtor não identificado';
             const propertyName = proposal.propertySnapshot?.name || (proposal.propertyId ? propertyMap.get(proposal.propertyId) : null) || 'Sem imóvel vinculado';
-            const canEditThis = canEdit && proposal.status === 'draft';
+            const canEditThis = canEdit
+              && (proposal.status === 'draft' || proposal.status === 'changes_requested');
 
             return (
-              <div
+              <article
                 key={proposal.id}
-                onClick={() => onViewProposal(proposal.id)}
-                className={`${PROPOSAL_THEME.surfaceCard} border ${PROPOSAL_THEME.border} ${PROPOSAL_THEME.surfaceHover} rounded-2xl p-5 shadow-2xs transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4`}
+                className={`${PROPOSAL_THEME.surfaceCard} border ${PROPOSAL_THEME.border} ${PROPOSAL_THEME.surfaceHover} rounded-2xl p-5 shadow-2xs transition-all flex flex-col md:flex-row md:items-center justify-between gap-4`}
                 id={`proposal-card-${proposal.id}`}
               >
                 <div className="space-y-2 flex-1">
@@ -301,7 +306,6 @@ export const ProposalList: React.FC<ProposalListProps> = ({
                 {/* Botões de Ação */}
                 <div
                   className="flex flex-wrap items-center gap-2 md:self-center pt-2 md:pt-0 border-t md:border-t-0 border-[#0B3D2E]/10"
-                  onClick={(e) => e.stopPropagation()}
                 >
                   <button
                     type="button"
@@ -323,7 +327,7 @@ export const ProposalList: React.FC<ProposalListProps> = ({
                     </button>
                   )}
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>

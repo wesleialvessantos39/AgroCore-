@@ -9,12 +9,17 @@ import React, {
 } from 'react';
 import {
   CreateProposalInput,
+  PresentProposalCommand,
   Proposal,
   ProposalCategory,
   ProposalFilterOptions,
   ProposalId,
+  ProposalReviewAssignment,
+  ProposalStatusHistoryEntry,
   ProposalStatus,
   ProposalType,
+  ProposalVersionSnapshot,
+  RecordProposalDecisionCommand,
   UpdateProposalInput,
 } from '../types/proposals';
 import {
@@ -76,16 +81,16 @@ export interface ProposalsContextValue {
   ) => Promise<MutationResult<Proposal>>;
   readonly markProposalPresented: (
     proposalId: ProposalId,
-    input: any
+    input: Pick<PresentProposalCommand, 'channel' | 'notes' | 'documentReference'>
   ) => Promise<MutationResult<Proposal>>;
   readonly recordProposalDecision: (
     proposalId: ProposalId,
-    input: any
+    input: Pick<RecordProposalDecisionCommand, 'decision' | 'channel' | 'operationalReference' | 'notes'>
   ) => Promise<MutationResult<Proposal>>;
   readonly cancelProposal: (proposalId: ProposalId, reason?: string) => Promise<MutationResult<Proposal>>;
-  readonly getProposalHistory: (proposalId: ProposalId) => Promise<readonly any[]>;
-  readonly getProposalSnapshots: (proposalId: ProposalId) => Promise<readonly any[]>;
-  readonly getProposalReviewAssignments: (proposalId: ProposalId) => Promise<readonly any[]>;
+  readonly getProposalHistory: (proposalId: ProposalId) => Promise<readonly ProposalStatusHistoryEntry[]>;
+  readonly getProposalSnapshots: (proposalId: ProposalId) => Promise<readonly ProposalVersionSnapshot[]>;
+  readonly getProposalReviewAssignments: (proposalId: ProposalId) => Promise<readonly ProposalReviewAssignment[]>;
 }
 
 const ProposalsContext = createContext<ProposalsContextValue | null>(null);
@@ -105,14 +110,21 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [filters, setFilters] = useState<ProposalFilterOptions>({});
 
-  const canView = can('proposals:view');
+  const canView = can('proposals:view') || can('proposals:view_related') || can('proposals:view_assigned');
   const canCreate = can('proposals:create');
-  const canEdit = can('proposals:edit');
+  const canEditDraft = can('proposals:edit_draft');
 
   const orgId = activeOrganization?.id;
   const userId = session?.user?.id;
 
   const proposalAppService = useMemo(() => new ProposalApplicationService(), []);
+
+  const mutationKey = useCallback((operation: string, proposalId: string, version: number): string => {
+    if (!globalThis.crypto?.randomUUID) {
+      throw new Error('Gerador seguro de operação indisponível.');
+    }
+    return `${operation}:${proposalId}:${version}:${globalThis.crypto.randomUUID()}`;
+  }, []);
 
   const appContext = useMemo<ProposalAppContext | null>(() => {
     // Negação estrita se não houver organização, usuário ou vínculo ativo canônico
@@ -240,7 +252,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       if (!appContext) {
         return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
       }
-      if (!canEdit) {
+      if (!canEditDraft) {
         return { success: false, error: 'Acesso negado: sem permissão para editar propostas.' };
       }
 
@@ -253,7 +265,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, canEdit, loadProposals, proposalAppService]
+    [appContext, canEditDraft, loadProposals, proposalAppService]
   );
 
   const submitProposal = useCallback(
@@ -261,12 +273,18 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       if (!appContext) {
         return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
       }
-      if (!canEdit) {
+      if (!can('proposals:submit')) {
         return { success: false, error: 'Acesso negado: sem permissão para submeter propostas.' };
       }
 
       try {
-        const submitted = await proposalAppService.submitProposal(proposalId, appContext);
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const submitted = await proposalAppService.submitProposal({
+          proposalId,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('submit', proposalId, current.version),
+        }, appContext);
         await loadProposals();
         return { success: true, data: submitted };
       } catch (err: unknown) {
@@ -274,7 +292,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, canEdit, loadProposals, proposalAppService]
+    [appContext, can, loadProposals, mutationKey, proposalAppService]
   );
 
   const assignProposalReviewer = useCallback(
@@ -288,13 +306,15 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       }
 
       try {
-        const assigned = await proposalAppService.assignProposalReviewer(
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const assigned = await proposalAppService.assignProposalReviewer({
           proposalId,
           reviewerUserId,
-          appContext,
-          undefined,
-          reasonIfReassignment
-        );
+          reassignmentReason: reasonIfReassignment,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('assign-review', proposalId, current.version),
+        }, appContext);
         await loadProposals();
         return { success: true, data: assigned };
       } catch (err: unknown) {
@@ -302,7 +322,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, loadProposals, proposalAppService]
+    [appContext, loadProposals, mutationKey, proposalAppService]
   );
 
   const startProposalReview = useCallback(
@@ -312,7 +332,13 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       }
 
       try {
-        const started = await proposalAppService.startProposalReview(proposalId, appContext);
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const started = await proposalAppService.startProposalReview({
+          proposalId,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('start-review', proposalId, current.version),
+        }, appContext);
         await loadProposals();
         return { success: true, data: started };
       } catch (err: unknown) {
@@ -320,7 +346,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, loadProposals, proposalAppService]
+    [appContext, loadProposals, mutationKey, proposalAppService]
   );
 
   const requestProposalChanges = useCallback(
@@ -330,7 +356,14 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       }
 
       try {
-        const req = await proposalAppService.requestProposalChanges(proposalId, reasons, appContext);
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const req = await proposalAppService.requestProposalChanges({
+          proposalId,
+          reasons,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('request-changes', proposalId, current.version),
+        }, appContext);
         await loadProposals();
         return { success: true, data: req };
       } catch (err: unknown) {
@@ -338,7 +371,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, loadProposals, proposalAppService]
+    [appContext, loadProposals, mutationKey, proposalAppService]
   );
 
   const approveProposal = useCallback(
@@ -348,7 +381,14 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       }
 
       try {
-        const approved = await proposalAppService.approveProposal(proposalId, appContext, undefined, notes);
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const approved = await proposalAppService.approveProposal({
+          proposalId,
+          notes,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('approve', proposalId, current.version),
+        }, appContext);
         await loadProposals();
         return { success: true, data: approved };
       } catch (err: unknown) {
@@ -356,7 +396,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, loadProposals, proposalAppService]
+    [appContext, loadProposals, mutationKey, proposalAppService]
   );
 
   const rejectProposal = useCallback(
@@ -366,7 +406,14 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       }
 
       try {
-        const rejected = await proposalAppService.rejectProposal(proposalId, reason, appContext);
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const rejected = await proposalAppService.rejectProposal({
+          proposalId,
+          reason,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('reject', proposalId, current.version),
+        }, appContext);
         await loadProposals();
         return { success: true, data: rejected };
       } catch (err: unknown) {
@@ -374,17 +421,27 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, loadProposals, proposalAppService]
+    [appContext, loadProposals, mutationKey, proposalAppService]
   );
 
   const markProposalPresented = useCallback(
-    async (proposalId: ProposalId, input: any): Promise<MutationResult<Proposal>> => {
+    async (
+      proposalId: ProposalId,
+      input: Pick<PresentProposalCommand, 'channel' | 'notes' | 'documentReference'>
+    ): Promise<MutationResult<Proposal>> => {
       if (!appContext) {
         return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
       }
 
       try {
-        const presented = await proposalAppService.markProposalPresented(proposalId, input, appContext);
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const presented = await proposalAppService.markProposalPresented({
+          proposalId,
+          ...input,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('present', proposalId, current.version),
+        }, appContext);
         await loadProposals();
         return { success: true, data: presented };
       } catch (err: unknown) {
@@ -392,17 +449,27 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, loadProposals, proposalAppService]
+    [appContext, loadProposals, mutationKey, proposalAppService]
   );
 
   const recordProposalDecision = useCallback(
-    async (proposalId: ProposalId, input: any): Promise<MutationResult<Proposal>> => {
+    async (
+      proposalId: ProposalId,
+      input: Pick<RecordProposalDecisionCommand, 'decision' | 'channel' | 'operationalReference' | 'notes'>
+    ): Promise<MutationResult<Proposal>> => {
       if (!appContext) {
         return { success: false, error: 'Vínculo inativo ou ausente na organização ativa.' };
       }
 
       try {
-        const decided = await proposalAppService.recordProposalDecision(proposalId, input, appContext);
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const decided = await proposalAppService.recordProposalDecision({
+          proposalId,
+          ...input,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('decision', proposalId, current.version),
+        }, appContext);
         await loadProposals();
         return { success: true, data: decided };
       } catch (err: unknown) {
@@ -410,7 +477,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, loadProposals, proposalAppService]
+    [appContext, loadProposals, mutationKey, proposalAppService]
   );
 
   const cancelProposal = useCallback(
@@ -420,7 +487,14 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       }
 
       try {
-        const cancelled = await proposalAppService.cancelProposal(proposalId, appContext, undefined, reason);
+        const current = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!current) return { success: false, error: 'Proposta não encontrada.' };
+        const cancelled = await proposalAppService.cancelProposal({
+          proposalId,
+          reason,
+          expectedVersion: current.version,
+          idempotencyKey: mutationKey('cancel', proposalId, current.version),
+        }, appContext);
         await loadProposals();
         return { success: true, data: cancelled };
       } catch (err: unknown) {
@@ -428,11 +502,11 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
         return { success: false, error: msg };
       }
     },
-    [appContext, loadProposals, proposalAppService]
+    [appContext, loadProposals, mutationKey, proposalAppService]
   );
 
   const getProposalHistory = useCallback(
-    async (proposalId: ProposalId): Promise<readonly any[]> => {
+    async (proposalId: ProposalId): Promise<readonly ProposalStatusHistoryEntry[]> => {
       if (!appContext) return [];
       try {
         return await proposalAppService.getProposalHistory(proposalId, appContext);
@@ -444,7 +518,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
   );
 
   const getProposalSnapshots = useCallback(
-    async (proposalId: ProposalId): Promise<readonly any[]> => {
+    async (proposalId: ProposalId): Promise<readonly ProposalVersionSnapshot[]> => {
       if (!appContext) return [];
       try {
         return await proposalAppService.getProposalSnapshots(proposalId, appContext);
@@ -456,7 +530,7 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
   );
 
   const getProposalReviewAssignments = useCallback(
-    async (proposalId: ProposalId): Promise<readonly any[]> => {
+    async (proposalId: ProposalId): Promise<readonly ProposalReviewAssignment[]> => {
       if (!appContext) return [];
       try {
         return await proposalAppService.getProposalReviewAssignments(proposalId, appContext);

@@ -13,9 +13,11 @@ import {
   formatCentsToBRL,
   getClientDisplayName,
   getClientDocument,
+  isProposalPresentationChannel,
 } from '../proposals/validators';
 import { PROPOSAL_THEME } from '../proposals/theme';
 import { ProposalStatusBadge } from '../proposals/components/ProposalStatusBadge';
+import { ProposalActionDialog } from '../proposals/components/ProposalActionDialog';
 import { useProposals } from '../proposals/useProposals';
 import { useClients } from '../clients/useClients';
 import { useProperties } from '../properties/useProperties';
@@ -27,7 +29,7 @@ import { getOrganizationMembersGateway } from '../auth/organizationMembersGatewa
 import { OrganizationMember } from '../auth/organizationMembersGateway';
 
 export const ProposalDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { proposalId } = useParams<{ proposalId: string }>();
   const navigate = useNavigate();
   const { session } = useAuth();
   const { activeOrganization, activeMembership } = useOrganization();
@@ -77,19 +79,25 @@ export const ProposalDetailPage: React.FC = () => {
   const [presentationChannel, setPresentationChannel] = useState<ProposalPresentationChannel>('in_person');
   const [decisionType, setDecisionType] = useState<'accepted' | 'declined'>('accepted');
   const [operationalRef, setOperationalRef] = useState('');
+  const closeActionModal = useCallback(() => {
+    setActionModal(null);
+    setActionReason('');
+    setActionNotes('');
+    setOperationalRef('');
+  }, []);
 
   const currentUserId = session?.user?.id;
   const userRole = activeMembership?.organizationRole;
 
   const loadDetails = useCallback(async () => {
-    if (!id) return;
+    if (!proposalId) return;
     try {
-      const data = await getProposalById(id);
+      const data = await getProposalById(proposalId);
       if (data) {
         setProposal(data);
         const [h, s] = await Promise.all([
-          getProposalHistory(id),
-          getProposalSnapshots(id),
+          getProposalHistory(proposalId),
+          getProposalSnapshots(proposalId),
         ]);
         setHistory(h || []);
         setSnapshots(s || []);
@@ -99,7 +107,7 @@ export const ProposalDetailPage: React.FC = () => {
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Erro ao carregar proposta.');
     }
-  }, [id, getProposalById, getProposalHistory, getProposalSnapshots]);
+  }, [proposalId, getProposalById, getProposalHistory, getProposalSnapshots]);
 
   useEffect(() => {
     let isMounted = true;
@@ -157,11 +165,11 @@ export const ProposalDetailPage: React.FC = () => {
 
   // Permissões e Regras de Negócio do Pipeline
   const canEditDraft =
-    (can('proposals:edit_draft') || can('proposals:edit')) &&
+    can('proposals:edit_draft') &&
     (proposal.status === 'draft' || proposal.status === 'changes_requested');
 
   const canSubmit =
-    (can('proposals:submit') || can('proposals:edit')) &&
+    can('proposals:submit') &&
     (proposal.status === 'draft' || proposal.status === 'changes_requested');
 
   const canAssign =
@@ -170,21 +178,28 @@ export const ProposalDetailPage: React.FC = () => {
 
   const isAssignedReviewer =
     proposal.activeReviewAssignment?.reviewerUserId === currentUserId;
-  const isManagerOrAdmin = ['manager', 'company_admin', 'owner'].includes(userRole || '');
-
   const canStartReview =
     can('proposals:review') &&
     proposal.status === 'submitted' &&
-    (isAssignedReviewer || isManagerOrAdmin);
+    isAssignedReviewer;
 
   const canReview =
     can('proposals:review') &&
     proposal.status === 'under_review' &&
-    (isAssignedReviewer || isManagerOrAdmin);
+    isAssignedReviewer;
 
   // Anti-Self-Approval: Captador/autor não pode aprovar
-  const isAuthor = proposal.capturerUserId === currentUserId;
-  const canApprove = can('proposals:approve') && proposal.status === 'under_review' && !isAuthor;
+  const isIncompatibleApprover = [
+    proposal.createdByUserId,
+    proposal.capturerUserId,
+    proposal.submittedByUserId,
+    proposal.activeReviewAssignment?.reviewerUserId,
+  ].includes(currentUserId);
+  const canApprove =
+    can('proposals:approve') &&
+    ['owner', 'company_admin', 'manager'].includes(userRole || '') &&
+    proposal.status === 'under_review' &&
+    !isIncompatibleApprover;
 
   const canPresent =
     can('proposals:present') &&
@@ -203,7 +218,7 @@ export const ProposalDetailPage: React.FC = () => {
   ].includes(proposal.status);
 
   const canCancel =
-    (can('proposals:cancel') || can('proposals:edit')) &&
+    can('proposals:cancel') &&
     !isTerminal;
 
   // Executores de Ação
@@ -276,7 +291,7 @@ export const ProposalDetailPage: React.FC = () => {
     if (res.success) {
       setActionModal(null);
       setActionNotes('');
-      setSuccessMessage('Proposta aprovada e homologada com sucesso.');
+      setSuccessMessage('Proposta aprovada para apresentação comercial.');
       loadDetails();
     } else {
       setErrorMessage(res.error || 'Erro ao aprovar proposta.');
@@ -388,7 +403,7 @@ export const ProposalDetailPage: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate(ROUTES.PROPOSALS)}
-            className="text-xs font-semibold text-[#0B3D2E] hover:underline mb-1 flex items-center gap-1 cursor-pointer"
+            className={`${PROPOSAL_THEME.btnMutedSmall} mb-1`}
           >
             ← Voltar para listagem de propostas
           </button>
@@ -400,7 +415,7 @@ export const ProposalDetailPage: React.FC = () => {
           </div>
           <p className="text-xs text-[#0B3D2E]/70 mt-0.5">
             {PROPOSAL_TYPE_LABELS[proposal.proposalType]} • {PROPOSAL_CATEGORY_LABELS[proposal.category]} •
-            Criada em {new Date(proposal.createdAt).toLocaleDateString('pt-BR')} (Versão Oficial: {proposal.version})
+            Criada em {new Date(proposal.createdAt).toLocaleDateString('pt-BR')} (Versão registrada: {proposal.version})
           </p>
         </div>
 
@@ -462,7 +477,7 @@ export const ProposalDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActionModal('changes')}
-                className="inline-flex items-center justify-center px-3 py-1.5 bg-[#78C89A]/20 text-[#0B3D2E] border border-[#78C89A]/50 hover:bg-[#78C89A]/30 rounded-xl text-xs font-semibold transition cursor-pointer min-h-[36px]"
+                className="inline-flex items-center justify-center px-3 py-1.5 bg-[#78C89A]/20 text-[#0B3D2E] border border-[#78C89A]/50 hover:bg-[#78C89A]/30 rounded-xl text-xs font-semibold transition cursor-pointer min-h-[44px] focus:outline-none focus:ring-2 focus:ring-[#78C89A]"
                 id="detail-request-changes-btn"
                 disabled={isProcessing}
               >
@@ -472,7 +487,7 @@ export const ProposalDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActionModal('reject')}
-                className="inline-flex items-center justify-center px-3 py-1.5 bg-[#0B3D2E]/10 text-[#0B3D2E] border border-[#0B3D2E]/30 hover:bg-[#0B3D2E]/20 rounded-xl text-xs font-semibold transition cursor-pointer min-h-[36px]"
+                className="inline-flex items-center justify-center px-3 py-1.5 bg-[#0B3D2E]/10 text-[#0B3D2E] border border-[#0B3D2E]/30 hover:bg-[#0B3D2E]/20 rounded-xl text-xs font-semibold transition cursor-pointer min-h-[44px] focus:outline-none focus:ring-2 focus:ring-[#78C89A]"
                 id="detail-reject-btn"
                 disabled={isProcessing}
               >
@@ -493,7 +508,7 @@ export const ProposalDetailPage: React.FC = () => {
             </button>
           )}
 
-          {proposal.status === 'under_review' && isAuthor && (
+          {proposal.status === 'under_review' && isIncompatibleApprover && (
             <span
               className="text-[11px] text-[#0B3D2E] bg-[#78C89A]/20 px-2.5 py-1 rounded-xl border border-[#78C89A]/40 font-medium"
               title="Segregação de Funções: o autor não pode aprovar a própria proposta."
@@ -530,7 +545,7 @@ export const ProposalDetailPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setActionModal('cancel')}
-              className="inline-flex items-center justify-center px-3 py-1.5 text-[#0B3D2E]/70 hover:bg-[#0B3D2E]/10 rounded-xl text-xs font-semibold transition cursor-pointer min-h-[36px]"
+              className="inline-flex items-center justify-center px-3 py-1.5 text-[#0B3D2E]/70 hover:bg-[#0B3D2E]/10 rounded-xl text-xs font-semibold transition cursor-pointer min-h-[44px] focus:outline-none focus:ring-2 focus:ring-[#78C89A]"
               id="detail-cancel-btn"
               disabled={isProcessing}
             >
@@ -543,6 +558,8 @@ export const ProposalDetailPage: React.FC = () => {
       {/* Alertas de Sucesso / Erro */}
       {errorMessage && (
         <div
+          role="alert"
+          aria-live="assertive"
           className="p-4 bg-[#0B3D2E]/10 border border-[#0B3D2E]/30 rounded-xl text-[#0B3D2E] text-xs font-medium"
           id="proposal-detail-error-banner"
         >
@@ -552,6 +569,8 @@ export const ProposalDetailPage: React.FC = () => {
 
       {successMessage && (
         <div
+          role="status"
+          aria-live="polite"
           className="p-4 bg-[#78C89A]/20 border border-[#78C89A]/50 rounded-xl text-[#0B3D2E] text-xs font-medium"
           id="proposal-detail-success-banner"
         >
@@ -706,10 +725,10 @@ export const ProposalDetailPage: React.FC = () => {
             <div className="p-4 bg-[#0B3D2E]/5 border border-[#0B3D2E]/20 rounded-xl space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-[#0B3D2E] uppercase tracking-wide">
-                  Registro Formal de Decisão do Cliente
+                  Registro Operacional de Decisão do Cliente
                 </span>
                 <span className="text-xs font-bold uppercase text-[#0B3D2E]">
-                  {proposal.decisionRecord.decision === 'accepted' ? 'Aceite Homologado' : 'Proposta Declinada'}
+                  {proposal.decisionRecord.decision === 'accepted' ? 'Manifestação de aceite registrada' : 'Manifestação de declínio registrada'}
                 </span>
               </div>
               <p className="text-xs text-[#0B3D2E]/90">
@@ -911,28 +930,24 @@ export const ProposalDetailPage: React.FC = () => {
 
       {/* Modais de Ação */}
       {actionModal === 'assign' && (
-        <div className="fixed inset-0 bg-[#0B3D2E]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 border border-[#0B3D2E]/20 text-[#0B3D2E]">
+        <ProposalActionDialog label="Designar revisor técnico" onClose={closeActionModal}>
             <h3 className="text-base font-bold text-[#0B3D2E]">Designar Revisor Técnico</h3>
             <p className="text-xs text-[#0B3D2E]/70">
               Selecione o profissional habilitado para emissão de parecer técnico e econômico da proposta.
             </p>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-reviewer-select" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Revisor Técnico Responsável
               </label>
               <select
+                id="proposal-reviewer-select"
                 value={selectedReviewerId}
                 onChange={(e) => setSelectedReviewerId(e.target.value)}
                 className={PROPOSAL_THEME.select}
               >
                 <option value="">Selecione um profissional...</option>
                 {members
-                  .filter((m) =>
-                    ['project_designer', 'manager', 'company_admin', 'owner'].includes(
-                      m.organizationRole
-                    )
-                  )
+                  .filter((m) => m.organizationRole === 'project_designer' && m.isActive)
                   .map((m) => (
                     <option key={m.userId} value={m.userId}>
                       {m.name} ({m.organizationRole})
@@ -942,10 +957,11 @@ export const ProposalDetailPage: React.FC = () => {
             </div>
             {proposal.activeReviewAssignment && (
               <div>
-                <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+                <label htmlFor="proposal-reassignment-reason" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                   Justificativa de Redistribuição
                 </label>
                 <input
+                  id="proposal-reassignment-reason"
                   type="text"
                   value={actionReason}
                   onChange={(e) => setActionReason(e.target.value)}
@@ -957,7 +973,7 @@ export const ProposalDetailPage: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setActionModal(null)}
+                onClick={closeActionModal}
                 className={PROPOSAL_THEME.btnSecondary}
                 disabled={isProcessing}
               >
@@ -972,22 +988,21 @@ export const ProposalDetailPage: React.FC = () => {
                 Confirmar Designação
               </button>
             </div>
-          </div>
-        </div>
+        </ProposalActionDialog>
       )}
 
       {actionModal === 'changes' && (
-        <div className="fixed inset-0 bg-[#0B3D2E]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 border border-[#0B3D2E]/20 text-[#0B3D2E]">
+        <ProposalActionDialog label="Solicitar ajustes na proposta" onClose={closeActionModal}>
             <h3 className="text-base font-bold text-[#0B3D2E]">Solicitar Ajustes na Proposta</h3>
             <p className="text-xs text-[#0B3D2E]/70">
               Descreva detalhadamente os apontamentos e documentos complementares exigidos do captador.
             </p>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-change-reasons" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Apontamentos Técnicos (Obrigatório)
               </label>
               <textarea
+                id="proposal-change-reasons"
                 rows={4}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
@@ -998,7 +1013,7 @@ export const ProposalDetailPage: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setActionModal(null)}
+                onClick={closeActionModal}
                 className={PROPOSAL_THEME.btnSecondary}
                 disabled={isProcessing}
               >
@@ -1013,22 +1028,21 @@ export const ProposalDetailPage: React.FC = () => {
                 Emitir Apontamentos
               </button>
             </div>
-          </div>
-        </div>
+        </ProposalActionDialog>
       )}
 
       {actionModal === 'approve' && (
-        <div className="fixed inset-0 bg-[#0B3D2E]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 border border-[#0B3D2E]/20 text-[#0B3D2E]">
-            <h3 className="text-base font-bold text-[#0B3D2E]">Aprovar e Homologar Proposta</h3>
+        <ProposalActionDialog label="Aprovar proposta" onClose={closeActionModal}>
+            <h3 className="text-base font-bold text-[#0B3D2E]">Aprovar Proposta</h3>
             <p className="text-xs text-[#0B3D2E]/70">
-              Confirme a homologação técnica e comercial favorável para liberação de apresentação ao cliente.
+              Confirme a aprovação administrativa independente para liberar a apresentação ao cliente.
             </p>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-approval-notes" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Parecer / Observações do Parecer (Opcional)
               </label>
               <textarea
+                id="proposal-approval-notes"
                 rows={3}
                 value={actionNotes}
                 onChange={(e) => setActionNotes(e.target.value)}
@@ -1039,7 +1053,7 @@ export const ProposalDetailPage: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setActionModal(null)}
+                onClick={closeActionModal}
                 className={PROPOSAL_THEME.btnSecondary}
                 disabled={isProcessing}
               >
@@ -1054,22 +1068,21 @@ export const ProposalDetailPage: React.FC = () => {
                 Confirmar Aprovação
               </button>
             </div>
-          </div>
-        </div>
+        </ProposalActionDialog>
       )}
 
       {actionModal === 'reject' && (
-        <div className="fixed inset-0 bg-[#0B3D2E]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 border border-[#0B3D2E]/20 text-[#0B3D2E]">
+        <ProposalActionDialog label="Indeferir proposta" onClose={closeActionModal}>
             <h3 className="text-base font-bold text-[#0B3D2E]">Indeferir Proposta</h3>
             <p className="text-xs text-[#0B3D2E]/70">
               Esta ação encerra a proposta em status terminal. Informe o motivo de indeferimento.
             </p>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-rejection-reason" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Motivo do Indeferimento (Obrigatório)
               </label>
               <textarea
+                id="proposal-rejection-reason"
                 rows={3}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
@@ -1080,7 +1093,7 @@ export const ProposalDetailPage: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setActionModal(null)}
+                onClick={closeActionModal}
                 className={PROPOSAL_THEME.btnSecondary}
                 disabled={isProcessing}
               >
@@ -1095,38 +1108,42 @@ export const ProposalDetailPage: React.FC = () => {
                 Confirmar Indeferimento
               </button>
             </div>
-          </div>
-        </div>
+        </ProposalActionDialog>
       )}
 
       {actionModal === 'present' && (
-        <div className="fixed inset-0 bg-[#0B3D2E]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 border border-[#0B3D2E]/20 text-[#0B3D2E]">
+        <ProposalActionDialog label="Registrar apresentação comercial" onClose={closeActionModal}>
             <h3 className="text-base font-bold text-[#0B3D2E]">Registrar Apresentação Comercial</h3>
             <p className="text-xs text-[#0B3D2E]/70">
-              Inicia formalmente o prazo de validade ({proposal.validityDays} dias) a partir desta data.
+              Inicia o prazo operacional de validade ({proposal.validityDays} dias) a partir deste registro.
             </p>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-presentation-channel" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Canal de Apresentação
               </label>
               <select
+                id="proposal-presentation-channel"
                 value={presentationChannel}
-                onChange={(e) => setPresentationChannel(e.target.value as ProposalPresentationChannel)}
+                onChange={(e) => {
+                  if (isProposalPresentationChannel(e.target.value)) {
+                    setPresentationChannel(e.target.value);
+                  }
+                }}
                 className={PROPOSAL_THEME.select}
               >
                 <option value="in_person">Presencial (Sede da Fazenda/Escritório)</option>
-                <option value="messaging">Aplicativo de Mensagens (WhatsApp Oficial)</option>
+                <option value="messaging">Aplicativo de mensagens</option>
                 <option value="email">Correio Eletrônico (E-mail)</option>
                 <option value="phone">Telefônico</option>
-                <option value="other">Outro Canal Formal</option>
+                <option value="other">Outro canal</option>
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-presentation-reference" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Referência Operacional / Documental (Opcional)
               </label>
               <input
+                id="proposal-presentation-reference"
                 type="text"
                 value={operationalRef}
                 onChange={(e) => setOperationalRef(e.target.value)}
@@ -1135,10 +1152,11 @@ export const ProposalDetailPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-presentation-notes" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Observações (Opcional)
               </label>
               <textarea
+                id="proposal-presentation-notes"
                 rows={2}
                 value={actionNotes}
                 onChange={(e) => setActionNotes(e.target.value)}
@@ -1149,7 +1167,7 @@ export const ProposalDetailPage: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setActionModal(null)}
+                onClick={closeActionModal}
                 className={PROPOSAL_THEME.btnSecondary}
                 disabled={isProcessing}
               >
@@ -1164,21 +1182,19 @@ export const ProposalDetailPage: React.FC = () => {
                 Registrar Apresentação
               </button>
             </div>
-          </div>
-        </div>
+        </ProposalActionDialog>
       )}
 
       {actionModal === 'decision' && (
-        <div className="fixed inset-0 bg-[#0B3D2E]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 border border-[#0B3D2E]/20 text-[#0B3D2E]">
+        <ProposalActionDialog label="Registrar decisão do cliente" onClose={closeActionModal}>
             <h3 className="text-base font-bold text-[#0B3D2E]">Registrar Decisão do Cliente</h3>
             <p className="text-xs text-[#0B3D2E]/70">
               Registro declaratório da manifestação de vontade expressa pelo produtor rural/cliente.
             </p>
-            <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+            <fieldset>
+              <legend className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Decisão Manifestada
-              </label>
+              </legend>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -1189,7 +1205,7 @@ export const ProposalDetailPage: React.FC = () => {
                       : 'bg-[#78C89A]/15 text-[#0B3D2E] border-[#78C89A]/40'
                   }`}
                 >
-                  ✓ Aceite (Aprovada)
+                  Manifestação de aceite
                 </button>
                 <button
                   type="button"
@@ -1200,17 +1216,22 @@ export const ProposalDetailPage: React.FC = () => {
                       : 'bg-[#0B3D2E]/5 text-[#0B3D2E] border-[#0B3D2E]/20'
                   }`}
                 >
-                  ✕ Declínio (Recusada)
+                  Manifestação de declínio
                 </button>
               </div>
-            </div>
+            </fieldset>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-decision-channel" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Canal da Manifestação
               </label>
               <select
+                id="proposal-decision-channel"
                 value={presentationChannel}
-                onChange={(e) => setPresentationChannel(e.target.value as ProposalPresentationChannel)}
+                onChange={(e) => {
+                  if (isProposalPresentationChannel(e.target.value)) {
+                    setPresentationChannel(e.target.value);
+                  }
+                }}
                 className={PROPOSAL_THEME.select}
               >
                 <option value="in_person">Presencial</option>
@@ -1221,22 +1242,24 @@ export const ProposalDetailPage: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
-                Referência Operacional / Registro Formal
+              <label htmlFor="proposal-decision-reference" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+                Referência Operacional
               </label>
               <input
+                id="proposal-decision-reference"
                 type="text"
                 value={operationalRef}
                 onChange={(e) => setOperationalRef(e.target.value)}
-                placeholder="Ex: Mensagem gravada no protocolo ou termo assinado"
+                placeholder="Ex: Número de protocolo operacional interno"
                 className={PROPOSAL_THEME.input}
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-decision-notes" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Notas / Motivo (Opcional)
               </label>
               <textarea
+                id="proposal-decision-notes"
                 rows={2}
                 value={actionNotes}
                 onChange={(e) => setActionNotes(e.target.value)}
@@ -1245,12 +1268,12 @@ export const ProposalDetailPage: React.FC = () => {
               />
             </div>
             <p className="text-[10px] text-[#0B3D2E]/60 italic">
-              * Registro formal declaratório da manifestação do cliente.
+              Registro operacional interno; não constitui assinatura eletrônica nem prova externa da manifestação do cliente.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setActionModal(null)}
+                onClick={closeActionModal}
                 className={PROPOSAL_THEME.btnSecondary}
                 disabled={isProcessing}
               >
@@ -1265,22 +1288,21 @@ export const ProposalDetailPage: React.FC = () => {
                 Confirmar Registro
               </button>
             </div>
-          </div>
-        </div>
+        </ProposalActionDialog>
       )}
 
       {actionModal === 'cancel' && (
-        <div className="fixed inset-0 bg-[#0B3D2E]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 border border-[#0B3D2E]/20 text-[#0B3D2E]">
+        <ProposalActionDialog label="Cancelar proposta" onClose={closeActionModal}>
             <h3 className="text-base font-bold text-[#0B3D2E]">Cancelar Proposta</h3>
             <p className="text-xs text-[#0B3D2E]/70">
               Tem certeza que deseja cancelar esta proposta? Esta ação não poderá ser desfeita.
             </p>
             <div>
-              <label className="text-xs font-semibold text-[#0B3D2E] block mb-1">
+              <label htmlFor="proposal-cancellation-reason" className="text-xs font-semibold text-[#0B3D2E] block mb-1">
                 Motivo do Cancelamento
               </label>
               <textarea
+                id="proposal-cancellation-reason"
                 rows={3}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
@@ -1291,7 +1313,7 @@ export const ProposalDetailPage: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setActionModal(null)}
+                onClick={closeActionModal}
                 className={PROPOSAL_THEME.btnSecondary}
                 disabled={isProcessing}
               >
@@ -1306,8 +1328,7 @@ export const ProposalDetailPage: React.FC = () => {
                 Confirmar Cancelamento
               </button>
             </div>
-          </div>
-        </div>
+        </ProposalActionDialog>
       )}
     </div>
   );

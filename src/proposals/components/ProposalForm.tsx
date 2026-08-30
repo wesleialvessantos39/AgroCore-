@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   CreateProposalInput,
   Proposal,
@@ -15,6 +15,8 @@ import {
   validateProposalInput,
   getClientDisplayName,
   getClientDocument,
+  isProposalCategory,
+  isProposalType,
 } from '../validators';
 import { PROPOSAL_THEME } from '../theme';
 import { useClients } from '../../clients/useClients';
@@ -22,6 +24,7 @@ import { useProperties } from '../../properties/useProperties';
 import { useAuth } from '../../auth/useAuth';
 import { useOrganization } from '../../organization/useOrganization';
 import { useCapturerAssignment } from '../../hooks/useCapturerAssignment';
+import { ProposalActionDialog } from './ProposalActionDialog';
 
 interface ProposalFormProps {
   initialData?: Proposal;
@@ -103,6 +106,42 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+
+  const hasUnsavedChanges =
+    clientId !== (initialData?.clientId || '')
+    || propertyId !== (initialData?.propertyId || '')
+    || title !== (initialData?.title || '')
+    || proposalType !== (initialData?.proposalType || 'credit')
+    || category !== (initialData?.category || 'custeio')
+    || validityDays !== (initialData?.validityDays ? String(initialData.validityDays) : '30')
+    || amountRaw !== (initialData
+      ? (initialData.estimatedValue.amountCents / 100).toFixed(2).replace('.', ',')
+      : '')
+    || financingTermMonths !== (initialData?.calculationSummary.financingTermMonths !== undefined
+      ? String(initialData.calculationSummary.financingTermMonths)
+      : '')
+    || gracePeriodMonths !== (initialData?.calculationSummary.gracePeriodMonths !== undefined
+      ? String(initialData.calculationSummary.gracePeriodMonths)
+      : '')
+    || interestRateAnnualPercentage !== (
+      initialData?.calculationSummary.interestRateAnnualPercentage !== undefined
+        ? String(initialData.calculationSummary.interestRateAnnualPercentage)
+        : ''
+    )
+    || notes !== (initialData?.notes || '');
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  const closeDiscardDialog = useCallback(() => setShowDiscardDialog(false), []);
 
   // Filtrar imóveis pertencentes ao cliente selecionado e com status ativo
   const availableProperties = clientId
@@ -129,6 +168,12 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
     e.preventDefault();
     setGeneralError(null);
 
+    if (!globalThis.crypto?.randomUUID) {
+      setGeneralError('Não foi possível iniciar uma operação segura neste ambiente.');
+      return;
+    }
+    const idempotencyKey = globalThis.crypto.randomUUID();
+
     const cents = parseBRLToCents(amountRaw);
     const parsedValidity = validityDays ? parseInt(validityDays, 10) : 30;
     const parsedTerm = financingTermMonths ? parseInt(financingTermMonths, 10) : undefined;
@@ -148,6 +193,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
         interestRateAnnualPercentage: parsedInterest,
         notes: notes || undefined,
         expectedVersion: initialData.version,
+        idempotencyKey,
       };
 
       const validation = validateProposalInput(updatePayload, false);
@@ -178,6 +224,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
       gracePeriodMonths: parsedGrace,
       interestRateAnnualPercentage: parsedInterest,
       notes: notes || undefined,
+      idempotencyKey,
     };
 
     const validation = validateProposalInput(createPayload, true);
@@ -203,6 +250,8 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
     >
       {generalError && (
         <div
+          role="alert"
+          aria-live="assertive"
           className="p-4 bg-[#0B3D2E]/10 border border-[#0B3D2E]/30 rounded-xl text-[#0B3D2E] text-sm font-medium"
           id="proposal-form-error-banner"
         >
@@ -314,7 +363,9 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
             <select
               id="proposal-type-select"
               value={proposalType}
-              onChange={(e) => setProposalType(e.target.value as ProposalType)}
+              onChange={(e) => {
+                if (isProposalType(e.target.value)) setProposalType(e.target.value);
+              }}
               disabled={isSubmitting}
               className={PROPOSAL_THEME.select}
             >
@@ -339,7 +390,9 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
             <select
               id="proposal-category-select"
               value={category}
-              onChange={(e) => setCategory(e.target.value as ProposalCategory)}
+              onChange={(e) => {
+                if (isProposalCategory(e.target.value)) setCategory(e.target.value);
+              }}
               disabled={isSubmitting}
               className={PROPOSAL_THEME.select}
             >
@@ -515,7 +568,7 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#0B3D2E]/15">
         <button
           type="button"
-          onClick={onCancel}
+          onClick={() => hasUnsavedChanges ? setShowDiscardDialog(true) : onCancel()}
           disabled={isSubmitting}
           className={PROPOSAL_THEME.btnSecondary}
         >
@@ -534,6 +587,25 @@ export const ProposalForm: React.FC<ProposalFormProps> = ({
             : 'Cadastrar Proposta'}
         </button>
       </div>
+
+      {showDiscardDialog && (
+        <ProposalActionDialog label="Descartar alterações não salvas" onClose={closeDiscardDialog}>
+          <h3 className={`text-base font-bold ${PROPOSAL_THEME.textPrimary}`}>
+            Descartar alterações não salvas?
+          </h3>
+          <p className={`text-sm ${PROPOSAL_THEME.textSecondary}`}>
+            Os dados alterados neste formulário serão perdidos se você sair agora.
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" className={PROPOSAL_THEME.btnSecondary} onClick={closeDiscardDialog}>
+              Continuar editando
+            </button>
+            <button type="button" className={PROPOSAL_THEME.btnPrimary} onClick={onCancel}>
+              Descartar e sair
+            </button>
+          </div>
+        </ProposalActionDialog>
+      )}
     </form>
   );
 };

@@ -100,6 +100,13 @@ export interface ProposalReviewAssignment {
   readonly updatedAt: string; // ISO
 }
 
+export interface ProposalReviewNote {
+  readonly id: string;
+  readonly authorUserId: string;
+  readonly createdAt: string;
+  readonly reasons: string;
+}
+
 export type ProposalPresentationChannel = 'email' | 'phone' | 'in_person' | 'messaging' | 'other';
 export type ProposalClientDecision = 'accepted' | 'declined';
 
@@ -162,6 +169,8 @@ export interface Proposal {
   readonly propertySnapshot: ProposalPropertySnapshot | null;
   readonly capturerUserId: string;
   readonly capturerSnapshot: ProposalCapturerSnapshot;
+  readonly createdByUserId: string;
+  readonly submittedByUserId?: string | null;
   readonly proposalType: ProposalType;
   readonly category: ProposalCategory;
   readonly status: ProposalStatus;
@@ -172,13 +181,16 @@ export interface Proposal {
   readonly calculationSummary: ProposalCalculationSummary;
   readonly notes?: string;
   readonly activeReviewAssignment?: ProposalReviewAssignment | null;
+  readonly reviewNotes?: readonly ProposalReviewNote[];
   readonly presentationRecord?: ProposalPresentationRecord | null;
   readonly decisionRecord?: ProposalDecisionRecord | null;
   readonly submittedAt?: string | null; // ISO
   readonly approvedAt?: string | null; // ISO
   readonly approvedByUserId?: string | null;
+  readonly approvalNotes?: string;
   readonly rejectedAt?: string | null; // ISO
   readonly rejectedByUserId?: string | null;
+  readonly cancellationReason?: string;
   readonly createdAt: string; // ISO
   readonly updatedAt: string; // ISO
   readonly version: number;
@@ -196,7 +208,7 @@ export interface CreateProposalInput {
   readonly gracePeriodMonths?: number;
   readonly interestRateAnnualPercentage?: number;
   readonly notes?: string;
-  readonly idempotencyKey?: string;
+  readonly idempotencyKey: string;
 }
 
 export interface UpdateProposalInput {
@@ -211,15 +223,15 @@ export interface UpdateProposalInput {
   readonly interestRateAnnualPercentage?: number;
   readonly notes?: string;
   readonly expectedVersion: number;
-  readonly idempotencyKey?: string;
+  readonly idempotencyKey: string;
 }
 
 export interface PresentProposalInput {
   readonly channel: ProposalPresentationChannel;
   readonly notes?: string;
   readonly documentReference?: string;
-  readonly expectedVersion?: number;
-  readonly idempotencyKey?: string;
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
 }
 
 export interface RecordProposalDecisionInput {
@@ -227,8 +239,52 @@ export interface RecordProposalDecisionInput {
   readonly channel: ProposalPresentationChannel;
   readonly operationalReference?: string;
   readonly notes?: string;
-  readonly expectedVersion?: number;
-  readonly idempotencyKey?: string;
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
+}
+
+export interface ProposalCommandMetadata {
+  readonly proposalId: ProposalId;
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
+}
+
+export type SubmitProposalCommand = ProposalCommandMetadata;
+
+export interface AssignProposalReviewerCommand extends ProposalCommandMetadata {
+  readonly reviewerUserId: string;
+  readonly reassignmentReason?: string;
+}
+
+export type StartProposalReviewCommand = ProposalCommandMetadata;
+
+export interface RequestProposalChangesCommand extends ProposalCommandMetadata {
+  readonly reasons: string;
+}
+
+export interface ApproveProposalCommand extends ProposalCommandMetadata {
+  readonly notes?: string;
+}
+
+export interface RejectProposalCommand extends ProposalCommandMetadata {
+  readonly reason: string;
+}
+
+export interface PresentProposalCommand extends ProposalCommandMetadata {
+  readonly channel: ProposalPresentationChannel;
+  readonly notes?: string;
+  readonly documentReference?: string;
+}
+
+export interface RecordProposalDecisionCommand extends ProposalCommandMetadata {
+  readonly decision: ProposalClientDecision;
+  readonly channel: ProposalPresentationChannel;
+  readonly operationalReference?: string;
+  readonly notes?: string;
+}
+
+export interface CancelProposalCommand extends ProposalCommandMetadata {
+  readonly reason?: string;
 }
 
 export interface ProposalFilterOptions {
@@ -282,6 +338,8 @@ export type ProposalErrorCode =
   | 'CANNOT_EDIT_NON_DRAFT'
   | 'INVALID_CHANNEL'
   | 'INVALID_DECISION'
+  | 'HASH_UNAVAILABLE'
+  | 'SYSTEM_CONTEXT_REQUIRED'
   | 'OPERATION_NOT_ALLOWED';
 
 export class ProposalDomainError extends Error {

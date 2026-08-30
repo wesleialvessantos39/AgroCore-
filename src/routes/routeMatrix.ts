@@ -204,20 +204,47 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Formulário de elaboração e cadastro de nova proposta de crédito ou serviços técnicos.',
   },
   {
+    path: ROUTES.PROPOSALS_QUEUE,
+    category: 'authenticated_protected',
+    name: 'Fila Comercial',
+    requiresAuth: true,
+    requiredPermissions: 'proposals:assign_review',
+    scope: 'organization',
+    description: 'Fila organizacional para atribuição e acompanhamento do pipeline comercial.',
+  },
+  {
     path: ROUTES.PROPOSALS_EDIT,
     category: 'authenticated_protected',
     name: 'Editar Proposta',
     requiresAuth: true,
-    requiredPermissions: 'proposals:edit',
+    requiredPermissions: 'proposals:edit_draft',
     scope: 'organization',
     description: 'Formulário de edição e atualização de proposta existente.',
+  },
+  {
+    path: ROUTES.PROPOSALS_REVIEW,
+    category: 'authenticated_protected',
+    name: 'Revisão Técnica da Proposta',
+    requiresAuth: true,
+    requiredPermissions: ['proposals:view_assigned', 'proposals:review'],
+    scope: 'organization',
+    description: 'Revisão acessível somente ao projetista atualmente atribuído.',
+  },
+  {
+    path: ROUTES.PROPOSALS_HISTORY,
+    category: 'authenticated_protected',
+    name: 'Histórico da Proposta',
+    requiresAuth: true,
+    requiredPermissions: ['proposals:view', 'proposals:view_related', 'proposals:view_assigned'],
+    scope: 'organization',
+    description: 'Histórico cronológico e snapshots imutáveis da proposta.',
   },
   {
     path: ROUTES.PROPOSALS_DETAIL,
     category: 'authenticated_protected',
     name: 'Detalhes da Proposta',
     requiresAuth: true,
-    requiredPermissions: 'proposals:view',
+    requiredPermissions: ['proposals:view', 'proposals:view_related', 'proposals:view_assigned'],
     scope: 'organization',
     description: 'Visualização completa e detalhamento financeiro da proposta.',
   },
@@ -272,6 +299,14 @@ export function findRouteDefinition(path: string): RouteDefinition | undefined {
 
   if (/^\/propostas\/[^/]+\/editar$/.test(path)) {
     return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_EDIT);
+  }
+
+  if (/^\/propostas\/[^/]+\/revisao$/.test(path)) {
+    return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_REVIEW);
+  }
+
+  if (/^\/propostas\/[^/]+\/historico$/.test(path)) {
+    return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_HISTORY);
   }
 
   if (/^\/propostas\/[^/]+$/.test(path)) {

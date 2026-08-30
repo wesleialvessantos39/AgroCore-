@@ -409,6 +409,13 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     description: 'Visualizar propostas vinculadas a clientes sob responsabilidade do usuário.',
   },
   {
+    id: 'proposals:view_assigned',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Consultar Propostas Atribuídas',
+    description: 'Visualizar somente propostas atribuídas ao usuário para revisão técnica.',
+  },
+  {
     id: 'proposals:view_financials',
     scope: 'proposals',
     targetScope: 'organization',
@@ -421,13 +428,6 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     targetScope: 'organization',
     name: 'Cadastrar Propostas',
     description: 'Iniciar elaboração de nova proposta com dados cadastrais e financeiros.',
-  },
-  {
-    id: 'proposals:edit',
-    scope: 'proposals',
-    targetScope: 'organization',
-    name: 'Editar Propostas (Geral)',
-    description: 'Compatibilidade legada para alteração geral de dados de propostas.',
   },
   {
     id: 'proposals:edit_draft',

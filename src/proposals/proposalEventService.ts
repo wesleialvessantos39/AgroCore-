@@ -4,6 +4,7 @@
  */
 
 import { ProposalId, ProposalStatus } from '../types/proposals';
+import { registerDomainCleanup } from '../auth/domainCleanupRegistry';
 
 export type ProposalEventType =
   | 'proposal.submitted'
@@ -63,24 +64,25 @@ class ProposalEventBus {
   }
 
   public emit(event: ProposalDomainEvent): void {
-    this.events.push(event);
+    const storedEvent = cloneValue(event);
+    this.events.push(storedEvent);
     for (const listener of this.listeners) {
       try {
-        listener(event);
-      } catch (err) {
-        console.error('Erro ao processar listener de evento de proposta:', err);
+        listener(cloneValue(storedEvent));
+      } catch {
+        // Listeners são isolados; nenhuma exceção ou dado é enviado ao console.
       }
     }
   }
 
-  public addNotification(notification: Omit<ProposalNotification, 'id' | 'read'>): ProposalNotification {
+  public addNotification(notification: Omit<ProposalNotification, 'read'>): ProposalNotification {
     const newNotif: ProposalNotification = {
       ...notification,
-      id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       read: false,
     };
-    this.notifications.push(newNotif);
-    return newNotif;
+    const storedNotification = cloneValue(newNotif);
+    this.notifications.push(storedNotification);
+    return cloneValue(storedNotification);
   }
 
   public getNotificationsForUser(
@@ -91,7 +93,8 @@ class ProposalEventBus {
       .filter(
         (n) => n.organizationId === organizationId && n.recipientUserId === recipientUserId
       )
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map(cloneValue);
   }
 
   public getNotifications(
@@ -101,9 +104,15 @@ class ProposalEventBus {
     return this.getNotificationsForUser(organizationId, recipientUserId);
   }
 
-  public markNotificationAsRead(organizationId: string, notificationId: string): boolean {
+  public markNotificationAsRead(
+    organizationId: string,
+    recipientUserId: string,
+    notificationId: string
+  ): boolean {
     const idx = this.notifications.findIndex(
-      (n) => n.organizationId === organizationId && n.id === notificationId
+      (n) => n.organizationId === organizationId
+        && n.recipientUserId === recipientUserId
+        && n.id === notificationId
     );
     if (idx !== -1) {
       const current = this.notifications[idx];
@@ -126,7 +135,7 @@ class ProposalEventBus {
   public getEventsForProposal(organizationId: string, proposalId: ProposalId): readonly ProposalDomainEvent[] {
     return this.events.filter(
       (e) => e.organizationId === organizationId && e.proposalId === proposalId
-    );
+    ).map(cloneValue);
   }
 
   public clear(): void {
@@ -141,3 +150,14 @@ class ProposalEventBus {
 }
 
 export const proposalEventBus = ProposalEventBus.getInstance();
+
+function cloneValue<T>(value: T): T {
+  if (typeof globalThis.structuredClone === 'function') {
+    return globalThis.structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+registerDomainCleanup(() => {
+  proposalEventBus.clearAll();
+});

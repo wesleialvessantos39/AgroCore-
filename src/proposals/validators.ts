@@ -6,6 +6,7 @@
 import {
   CreateProposalInput,
   ProposalCategory,
+  ProposalPresentationChannel,
   ProposalStatus,
   ProposalType,
   UpdateProposalInput,
@@ -55,6 +56,26 @@ export const PROPOSAL_CATEGORY_LABELS: Record<ProposalCategory, string> = {
   servico_tecnico: 'Prestação de Serviços Técnicos',
   outros: 'Outros',
 };
+
+export function isProposalStatus(value: unknown): value is ProposalStatus {
+  return typeof value === 'string'
+    && Object.prototype.hasOwnProperty.call(PROPOSAL_STATUS_LABELS, value);
+}
+
+export function isProposalType(value: unknown): value is ProposalType {
+  return typeof value === 'string'
+    && Object.prototype.hasOwnProperty.call(PROPOSAL_TYPE_LABELS, value);
+}
+
+export function isProposalCategory(value: unknown): value is ProposalCategory {
+  return typeof value === 'string'
+    && Object.prototype.hasOwnProperty.call(PROPOSAL_CATEGORY_LABELS, value);
+}
+
+export function isProposalPresentationChannel(value: unknown): value is ProposalPresentationChannel {
+  return typeof value === 'string'
+    && ['email', 'phone', 'in_person', 'messaging', 'other'].includes(value);
+}
 
 export {
   formatCentsToBRL,
