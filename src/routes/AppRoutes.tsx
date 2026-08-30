@@ -140,6 +140,14 @@ const ProposalDocumentPage = lazy(() =>
   import('../pages/ProposalDocumentPage').then((module) => ({ default: module.ProposalDocumentPage }))
 );
 
+const ProposalTrackingPage = lazy(() =>
+  import('../pages/ProposalTrackingPage').then((module) => ({ default: module.ProposalTrackingPage }))
+);
+
+const ProposalHandoffPage = lazy(() =>
+  import('../pages/ProposalHandoffPage').then((module) => ({ default: module.ProposalHandoffPage }))
+);
+
 const MyAccountPage = lazy(() =>
   import('../pages/MyAccountPage').then((module) => ({
     default: module.MyAccountPage,
@@ -440,6 +448,14 @@ export function AppRoutes() {
               }
             />
             <Route
+              path="acompanhamento"
+              element={
+                <RequirePermission permission="proposals:view_commercial_tracking">
+                  <ProposalTrackingPage />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="novo"
               element={
                 <RequirePermission permission="proposals:create">
@@ -476,6 +492,14 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission="proposals:view_document">
                   <ProposalDocumentPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path=":proposalId/encaminhamento"
+              element={
+                <RequirePermission permission="proposals:view_handoff">
+                  <ProposalHandoffPage />
                 </RequirePermission>
               }
             />

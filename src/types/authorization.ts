@@ -91,6 +91,10 @@ export type Permission =
   | 'proposals:cancel'
   | 'proposals:view_document'
   | 'proposals:issue_document'
+  | 'proposals:view_commercial_tracking'
+  | 'proposals:manage_follow_up'
+  | 'proposals:view_handoff'
+  | 'proposals:prepare_handoff'
 
   // Escopo: Documentos
   | 'documents:view'

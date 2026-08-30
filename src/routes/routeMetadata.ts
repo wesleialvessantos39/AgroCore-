@@ -70,6 +70,10 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Fila Comercial | AgroCore',
     announcementTitle: 'Fila comercial de propostas',
   },
+  [ROUTES.PROPOSALS_TRACKING]: {
+    documentTitle: 'Acompanhamento Comercial | AgroCore',
+    announcementTitle: 'Acompanhamento comercial de propostas',
+  },
   [ROUTES.PROPOSALS_EDIT]: {
     documentTitle: 'Editar Proposta | AgroCore',
     announcementTitle: 'Editar proposta',
@@ -89,6 +93,10 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
   [ROUTES.PROPOSALS_DOCUMENT]: {
     documentTitle: 'Documento Comercial da Proposta | AgroCore',
     announcementTitle: 'Documento comercial da proposta',
+  },
+  [ROUTES.PROPOSALS_HANDOFF]: {
+    documentTitle: 'Encaminhamento Operacional | AgroCore',
+    announcementTitle: 'Encaminhamento operacional da proposta',
   },
   [ROUTES.MY_ACCOUNT]: {
     documentTitle: 'Minha Conta | AgroCore',
@@ -154,6 +162,10 @@ export function getRouteMetadata(pathname: string): RouteMetadata {
 
   if (/^\/propostas\/[^/]+\/documento$/.test(pathname)) {
     return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_DOCUMENT];
+  }
+
+  if (/^\/propostas\/[^/]+\/encaminhamento$/.test(pathname)) {
+    return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_HANDOFF];
   }
 
   if (/^\/propostas\/[^/]+$/.test(pathname)) {

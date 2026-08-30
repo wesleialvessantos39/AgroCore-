@@ -27,7 +27,10 @@ try {
   console.log('\n3. Executando testes do Documento Comercial Versionado (OE-005.004)...');
   runScript('scripts/test-proposal-documents.ts');
 
-  console.log('\n4. Executando auditoria de tema e conformidade visual...');
+  console.log('\n4. Executando acompanhamento comercial e encaminhamento pós-aceite (OE-005.005)...');
+  runScript('scripts/test-proposal-commercial-tracking.ts');
+
+  console.log('\n5. Executando auditoria de tema e conformidade visual...');
   runScript('scripts/test-proposals-theme.js');
 
   console.log('\n====================================================');

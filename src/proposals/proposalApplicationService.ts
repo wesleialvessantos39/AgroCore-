@@ -1,6 +1,6 @@
 /**
  * MÓDULO 005 — SERVIÇO DE APLICAÇÃO DE PROPOSTAS
- * Pipeline Comercial e Documento Comercial Versionado (OE-005.003 / OE-005.004)
+ * Pipeline, documento comercial e acompanhamento (OE-005.003 a OE-005.005)
  * AgroCore
  */
 
@@ -8,7 +8,9 @@ import {
   CreateProposalInput,
   ApproveProposalCommand,
   AssignProposalReviewerCommand,
+  CancelProposalFollowUpCommand,
   CancelProposalCommand,
+  CompleteProposalFollowUpCommand,
   PaginatedProposalsResult,
   PresentProposalCommand,
   Proposal,
@@ -16,20 +18,26 @@ import {
   ProposalCapturerSnapshot,
   ProposalClientSnapshot,
   ProposalCommercialDocument,
+  ProposalCommercialDashboard,
   ProposalDecisionRecord,
   ProposalDomainError,
   ProposalFilterOptions,
+  ProposalFollowUp,
   ProposalId,
   ProposalPresentationRecord,
+  ProposalOperationalHandoff,
+  ProposalOperationalHandoffDestination,
   ProposalPropertySnapshot,
   ProposalReviewAssignment,
   ProposalStatus,
   ProposalStatusHistoryEntry,
   ProposalVersionSnapshot,
   IssueProposalDocumentCommand,
+  PrepareProposalHandoffCommand,
   RecordProposalDecisionCommand,
   RejectProposalCommand,
   RequestProposalChangesCommand,
+  ScheduleProposalFollowUpCommand,
   StartProposalReviewCommand,
   SubmitProposalCommand,
   UpdateProposalInput,
@@ -90,12 +98,18 @@ export class ProposalApplicationService {
   private static snapshotsStore: Map<string, Map<ProposalId, ProposalVersionSnapshot[]>> = new Map();
   private static assignmentsStore: Map<string, Map<ProposalId, ProposalReviewAssignment[]>> = new Map();
   private static documentsStore: Map<string, Map<ProposalId, ProposalCommercialDocument[]>> = new Map();
+  private static followUpsStore: Map<string, Map<ProposalId, ProposalFollowUp[]>> = new Map();
+  private static handoffsStore: Map<string, Map<ProposalId, ProposalOperationalHandoff>> = new Map();
   private static counterStore: Map<string, number> = new Map();
   private static documentCounterStore: Map<string, number> = new Map();
   private static idempotencyStore: Map<string, { payloadHash: string; proposal: Proposal }> = new Map();
   private static documentIdempotencyStore: Map<string, { payloadHash: string; document: ProposalCommercialDocument }> = new Map();
+  private static followUpIdempotencyStore: Map<string, { payloadHash: string; followUp: ProposalFollowUp }> = new Map();
+  private static handoffIdempotencyStore: Map<string, { payloadHash: string; handoff: ProposalOperationalHandoff }> = new Map();
   private static inFlightOperations: Map<string, { payloadHash: string; promise: Promise<Proposal> }> = new Map();
   private static inFlightDocumentOperations: Map<string, { payloadHash: string; promise: Promise<ProposalCommercialDocument> }> = new Map();
+  private static inFlightFollowUpOperations: Map<string, { payloadHash: string; promise: Promise<ProposalFollowUp> }> = new Map();
+  private static inFlightHandoffOperations: Map<string, { payloadHash: string; promise: Promise<ProposalOperationalHandoff> }> = new Map();
   private static updateLocks: Map<string, Promise<void>> = new Map();
 
   private static isCleanupRegistered = false;
@@ -165,6 +179,20 @@ export class ProposalApplicationService {
     return ProposalApplicationService.documentsStore.get(orgId)!;
   }
 
+  private static getOrgFollowUpsStore(orgId: string): Map<ProposalId, ProposalFollowUp[]> {
+    if (!ProposalApplicationService.followUpsStore.has(orgId)) {
+      ProposalApplicationService.followUpsStore.set(orgId, new Map());
+    }
+    return ProposalApplicationService.followUpsStore.get(orgId)!;
+  }
+
+  private static getOrgHandoffsStore(orgId: string): Map<ProposalId, ProposalOperationalHandoff> {
+    if (!ProposalApplicationService.handoffsStore.has(orgId)) {
+      ProposalApplicationService.handoffsStore.set(orgId, new Map());
+    }
+    return ProposalApplicationService.handoffsStore.get(orgId)!;
+  }
+
   private static getNextNumber(orgId: string, clock: Clock): string {
     const current = ProposalApplicationService.counterStore.get(orgId) || 0;
     const next = current + 1;
@@ -186,12 +214,18 @@ export class ProposalApplicationService {
     ProposalApplicationService.snapshotsStore.clear();
     ProposalApplicationService.assignmentsStore.clear();
     ProposalApplicationService.documentsStore.clear();
+    ProposalApplicationService.followUpsStore.clear();
+    ProposalApplicationService.handoffsStore.clear();
     ProposalApplicationService.counterStore.clear();
     ProposalApplicationService.documentCounterStore.clear();
     ProposalApplicationService.idempotencyStore.clear();
     ProposalApplicationService.documentIdempotencyStore.clear();
+    ProposalApplicationService.followUpIdempotencyStore.clear();
+    ProposalApplicationService.handoffIdempotencyStore.clear();
     ProposalApplicationService.inFlightOperations.clear();
     ProposalApplicationService.inFlightDocumentOperations.clear();
+    ProposalApplicationService.inFlightFollowUpOperations.clear();
+    ProposalApplicationService.inFlightHandoffOperations.clear();
     ProposalApplicationService.updateLocks.clear();
     proposalEventBus.clearAll();
   }
@@ -312,6 +346,88 @@ export class ProposalApplicationService {
       return this.clone(document);
     } finally {
       ProposalApplicationService.inFlightDocumentOperations.delete(compositeKey);
+    }
+  }
+
+  private async runIdempotentFollowUpMutation(
+    operation: string,
+    proposalId: ProposalId,
+    idempotencyKey: string,
+    payload: unknown,
+    ctx: ProposalAppContext,
+    execute: () => Promise<ProposalFollowUp>
+  ): Promise<ProposalFollowUp> {
+    if (!idempotencyKey || idempotencyKey.trim().length < 8) {
+      throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave de idempotência inválida.');
+    }
+    const compositeKey = `${ctx.organizationId}:${proposalId}:${operation}:${idempotencyKey.trim()}`;
+    const payloadHash = canonicalJsonStringify(payload);
+    const completed = ProposalApplicationService.followUpIdempotencyStore.get(compositeKey);
+    if (completed) {
+      if (completed.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave reutilizada com conteúdo divergente.');
+      }
+      return this.clone(completed.followUp);
+    }
+    const inFlight = ProposalApplicationService.inFlightFollowUpOperations.get(compositeKey);
+    if (inFlight) {
+      if (inFlight.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave concorrente com conteúdo divergente.');
+      }
+      return this.clone(await inFlight.promise);
+    }
+    const promise = execute();
+    ProposalApplicationService.inFlightFollowUpOperations.set(compositeKey, { payloadHash, promise });
+    try {
+      const followUp = await promise;
+      ProposalApplicationService.followUpIdempotencyStore.set(compositeKey, {
+        payloadHash,
+        followUp: this.clone(followUp),
+      });
+      return this.clone(followUp);
+    } finally {
+      ProposalApplicationService.inFlightFollowUpOperations.delete(compositeKey);
+    }
+  }
+
+  private async runIdempotentHandoffMutation(
+    operation: string,
+    proposalId: ProposalId,
+    idempotencyKey: string,
+    payload: unknown,
+    ctx: ProposalAppContext,
+    execute: () => Promise<ProposalOperationalHandoff>
+  ): Promise<ProposalOperationalHandoff> {
+    if (!idempotencyKey || idempotencyKey.trim().length < 8) {
+      throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave de idempotência inválida.');
+    }
+    const compositeKey = `${ctx.organizationId}:${proposalId}:${operation}:${idempotencyKey.trim()}`;
+    const payloadHash = canonicalJsonStringify(payload);
+    const completed = ProposalApplicationService.handoffIdempotencyStore.get(compositeKey);
+    if (completed) {
+      if (completed.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave reutilizada com conteúdo divergente.');
+      }
+      return this.clone(completed.handoff);
+    }
+    const inFlight = ProposalApplicationService.inFlightHandoffOperations.get(compositeKey);
+    if (inFlight) {
+      if (inFlight.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave concorrente com conteúdo divergente.');
+      }
+      return this.clone(await inFlight.promise);
+    }
+    const promise = execute();
+    ProposalApplicationService.inFlightHandoffOperations.set(compositeKey, { payloadHash, promise });
+    try {
+      const handoff = await promise;
+      ProposalApplicationService.handoffIdempotencyStore.set(compositeKey, {
+        payloadHash,
+        handoff: this.clone(handoff),
+      });
+      return this.clone(handoff);
+    } finally {
+      ProposalApplicationService.inFlightHandoffOperations.delete(compositeKey);
     }
   }
 
@@ -516,6 +632,88 @@ export class ProposalApplicationService {
       snapshotsMap.set(proposal.id, snapshots);
       throw new ProposalDomainError('OPERATION_NOT_ALLOWED', 'Falha ao confirmar a transição atômica.');
     }
+  }
+
+  private emitCommercialOperation(
+    proposal: Proposal,
+    type: ProposalEventType,
+    actorUserId: string,
+    payload: Record<string, string | number | boolean>,
+    clock: Clock,
+    recipientUserIds: readonly string[] = []
+  ): void {
+    const correlationId = this.idGenerator.next('corr');
+    proposalEventBus.emit({
+      id: this.idGenerator.next('evt'),
+      type,
+      organizationId: proposal.organizationId,
+      proposalId: proposal.id,
+      proposalNumber: proposal.proposalNumber,
+      status: proposal.status,
+      versionNumber: proposal.version,
+      actorUserId,
+      correlationId,
+      timestamp: clock.now().toISOString(),
+      payload: this.clone(payload),
+    });
+    for (const recipientUserId of Array.from(new Set(recipientUserIds)).filter(Boolean)) {
+      proposalEventBus.addNotification({
+        id: this.idGenerator.next('notif'),
+        organizationId: proposal.organizationId,
+        recipientUserId,
+        proposalId: proposal.id,
+        proposalNumber: proposal.proposalNumber,
+        type,
+        title: type === 'proposal.handoff.prepared'
+          ? 'Encaminhamento operacional preparado'
+          : 'Acompanhamento comercial atualizado',
+        message: type === 'proposal.follow_up.scheduled'
+          ? `Novo acompanhamento interno agendado para a proposta ${proposal.proposalNumber}.`
+          : type === 'proposal.handoff.prepared'
+            ? `A proposta ${proposal.proposalNumber} possui referência operacional pós-aceite.`
+            : `O acompanhamento interno da proposta ${proposal.proposalNumber} foi atualizado.`,
+        createdAt: clock.now().toISOString(),
+      });
+    }
+  }
+
+  private closeOpenFollowUps(
+    proposal: Proposal,
+    actorUserId: string,
+    reasonCode: NonNullable<ProposalFollowUp['cancellationReasonCode']>,
+    clock: Clock
+  ): void {
+    const store = ProposalApplicationService.getOrgFollowUpsStore(proposal.organizationId);
+    const current = store.get(proposal.id) ?? [];
+    const nowIso = clock.now().toISOString();
+    let changed = false;
+    const next = current.map((followUp) => {
+      if (followUp.status !== 'scheduled') return followUp;
+      changed = true;
+      const cancelled: ProposalFollowUp = {
+        ...followUp,
+        status: 'cancelled',
+        cancelledAt: nowIso,
+        cancellationReasonCode: reasonCode,
+        version: followUp.version + 1,
+      };
+      this.emitCommercialOperation(
+        proposal,
+        'proposal.follow_up.cancelled',
+        actorUserId,
+        { followUpId: cancelled.id, reasonCode },
+        clock,
+        [cancelled.assignedUserId]
+      );
+      return cancelled;
+    });
+    if (changed) store.set(proposal.id, this.clone(next));
+  }
+
+  private getHandoffDestination(proposal: Proposal): ProposalOperationalHandoffDestination {
+    if (proposal.proposalType === 'credit') return 'credit_operations';
+    if (proposal.proposalType === 'appraisal') return 'appraisal_operations';
+    return 'technical_operations';
   }
 
   // --- 1. CRIAÇÃO DE PROPOSTA ---
@@ -1528,6 +1726,7 @@ export class ProposalApplicationService {
             existing, expiredProposal, artifacts.historyEntry, artifacts.snapshotEntry,
             'proposal.expired', 'system', { reasonCode: 'EXPIRED' }, clock
           );
+          this.closeOpenFollowUps(expiredProposal, 'system', 'PROPOSAL_EXPIRED', clock);
           throw new ProposalDomainError('PROPOSAL_EXPIRED', 'O prazo operacional da proposta expirou.');
         }
         const targetStatus: ProposalStatus = command.decision;
@@ -1552,6 +1751,12 @@ export class ProposalApplicationService {
         this.commitTransition(
           existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
           eventType, ctx.actor.userId, { decision: command.decision, channel: command.channel }, clock
+        );
+        this.closeOpenFollowUps(
+          updatedProposal,
+          ctx.actor.userId,
+          targetStatus === 'accepted' ? 'PROPOSAL_ACCEPTED' : 'PROPOSAL_DECLINED',
+          clock
         );
         return this.clone(updatedProposal);
       } finally {
@@ -1593,6 +1798,7 @@ export class ProposalApplicationService {
               current, expiredProposal, artifacts.historyEntry, artifacts.snapshotEntry,
               'proposal.expired', 'system', { reasonCode: 'EXPIRED' }, clock
             );
+            this.closeOpenFollowUps(expiredProposal, 'system', 'PROPOSAL_EXPIRED', clock);
             expiredCount++;
           } finally {
             release();
@@ -1643,11 +1849,308 @@ export class ProposalApplicationService {
           existing, updatedProposal, artifacts.historyEntry, artifacts.snapshotEntry,
           'proposal.cancelled', ctx.actor.userId, { reasonCode: 'CANCELLED' }, clock
         );
+        this.closeOpenFollowUps(updatedProposal, ctx.actor.userId, 'PROPOSAL_CANCELLED', clock);
         return this.clone(updatedProposal);
       } finally {
         release();
       }
     });
+  }
+
+  // --- 13. ACOMPANHAMENTO COMERCIAL INTERNO (OE-005.005) ---
+  public async scheduleProposalFollowUp(
+    command: ScheduleProposalFollowUpCommand,
+    ctx: ProposalAppContext,
+    clock: Clock = SystemClock
+  ): Promise<ProposalFollowUp> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:manage_follow_up');
+    const validChannels = ['email', 'phone', 'in_person', 'messaging', 'other'];
+    const validPurposes = ['decision_reminder', 'document_clarification', 'commercial_alignment', 'other'];
+    if (!validChannels.includes(command.channel)) {
+      throw new ProposalDomainError('INVALID_CHANNEL', 'Canal de acompanhamento inválido.');
+    }
+    if (!validPurposes.includes(command.purpose)) {
+      throw new ProposalDomainError('FOLLOW_UP_NOT_ALLOWED', 'Finalidade de acompanhamento inválida.');
+    }
+    return this.runIdempotentFollowUpMutation(
+      'schedule-follow-up', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+        const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+        try {
+          const proposal = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+          if (!proposal) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+          this.validateCommandMetadata(proposal, command);
+          this.checkReadAccess(proposal, ctx);
+          if (proposal.status !== 'presented') {
+            throw new ProposalDomainError(
+              'FOLLOW_UP_NOT_ALLOWED',
+              'Follow-up somente pode ser agendado para proposta apresentada e ainda sem decisão.'
+            );
+          }
+          const scheduledTime = new Date(command.scheduledFor).getTime();
+          const nowTime = clock.now().getTime();
+          const expiresTime = new Date(proposal.expiresAt).getTime();
+          if (!Number.isFinite(scheduledTime) || scheduledTime <= nowTime || scheduledTime >= expiresTime) {
+            throw new ProposalDomainError(
+              'FOLLOW_UP_DATE_INVALID',
+              'A data deve ser futura e anterior ao vencimento da proposta.'
+            );
+          }
+          const assignedUserId = command.assignedUserId?.trim();
+          const assignedMember = assignedUserId ? await ctx.memberResolver(assignedUserId) : null;
+          const allowedRoles: readonly OrganizationRole[] = ['owner', 'company_admin', 'manager', 'capturer'];
+          if (!assignedMember || !assignedMember.isActive || !allowedRoles.includes(assignedMember.organizationRole)) {
+            throw new ProposalDomainError('FOLLOW_UP_NOT_ALLOWED', 'Responsável comercial ativo não encontrado.');
+          }
+          if (ctx.actor.role === 'capturer') {
+            if (proposal.capturerUserId !== ctx.actor.userId || assignedUserId !== ctx.actor.userId) {
+              throw new ProposalDomainError(
+                'PERMISSION_DENIED',
+                'Captador somente agenda acompanhamento próprio em proposta relacionada.'
+              );
+            }
+          }
+          const followUpsStore = ProposalApplicationService.getOrgFollowUpsStore(ctx.organizationId);
+          const current = followUpsStore.get(proposal.id) ?? [];
+          if (current.some((followUp) => followUp.status === 'scheduled')) {
+            throw new ProposalDomainError(
+              'FOLLOW_UP_CONFLICT',
+              'Já existe um acompanhamento ativo para esta proposta.'
+            );
+          }
+          const nowIso = clock.now().toISOString();
+          const followUp: ProposalFollowUp = {
+            id: this.idGenerator.next('followup'),
+            organizationId: ctx.organizationId,
+            proposalId: proposal.id,
+            proposalVersionNumber: proposal.version,
+            assignedUserId,
+            scheduledFor: new Date(scheduledTime).toISOString(),
+            channel: command.channel,
+            purpose: command.purpose,
+            status: 'scheduled',
+            notes: command.notes?.trim() || undefined,
+            createdByUserId: ctx.actor.userId,
+            createdAt: nowIso,
+            version: 1,
+          };
+          followUpsStore.set(proposal.id, [...current, this.clone(followUp)]);
+          this.emitCommercialOperation(
+            proposal,
+            'proposal.follow_up.scheduled',
+            ctx.actor.userId,
+            { followUpId: followUp.id, channel: followUp.channel, purpose: followUp.purpose },
+            clock,
+            [followUp.assignedUserId]
+          );
+          return this.clone(followUp);
+        } finally {
+          release();
+        }
+      }
+    );
+  }
+
+  public async completeProposalFollowUp(
+    command: CompleteProposalFollowUpCommand,
+    ctx: ProposalAppContext,
+    clock: Clock = SystemClock
+  ): Promise<ProposalFollowUp> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:manage_follow_up');
+    const validOutcomes = ['contacted', 'no_response', 'decision_recorded', 'not_applicable'];
+    if (!validOutcomes.includes(command.outcome)) {
+      throw new ProposalDomainError('FOLLOW_UP_NOT_ALLOWED', 'Resultado de acompanhamento inválido.');
+    }
+    return this.runIdempotentFollowUpMutation(
+      'complete-follow-up', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+        const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+        try {
+          const proposal = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+          if (!proposal) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+          this.checkReadAccess(proposal, ctx);
+          if (proposal.status !== 'presented') {
+            throw new ProposalDomainError('FOLLOW_UP_NOT_ALLOWED', 'A proposta já encerrou o acompanhamento.');
+          }
+          const store = ProposalApplicationService.getOrgFollowUpsStore(ctx.organizationId);
+          const current = store.get(proposal.id) ?? [];
+          const index = current.findIndex((followUp) => followUp.id === command.followUpId);
+          const existing = index >= 0 ? current[index] : undefined;
+          if (!existing) throw new ProposalDomainError('FOLLOW_UP_NOT_FOUND', 'Acompanhamento não encontrado.');
+          if (existing.status !== 'scheduled' || existing.version !== command.expectedFollowUpVersion) {
+            throw new ProposalDomainError('FOLLOW_UP_CONFLICT', 'Acompanhamento já alterado por outra operação.');
+          }
+          if (ctx.actor.role === 'capturer' && existing.assignedUserId !== ctx.actor.userId) {
+            throw new ProposalDomainError('PERMISSION_DENIED', 'Acompanhamento atribuído a outro usuário.');
+          }
+          const completed: ProposalFollowUp = {
+            ...existing,
+            status: 'completed',
+            outcome: command.outcome,
+            notes: command.notes?.trim() || existing.notes,
+            completedAt: clock.now().toISOString(),
+            version: existing.version + 1,
+          };
+          const next = [...current];
+          next[index] = this.clone(completed);
+          store.set(proposal.id, next);
+          this.emitCommercialOperation(
+            proposal,
+            'proposal.follow_up.completed',
+            ctx.actor.userId,
+            { followUpId: completed.id, outcome: completed.outcome ?? 'not_applicable' },
+            clock,
+            [completed.assignedUserId]
+          );
+          return this.clone(completed);
+        } finally {
+          release();
+        }
+      }
+    );
+  }
+
+  public async cancelProposalFollowUp(
+    command: CancelProposalFollowUpCommand,
+    ctx: ProposalAppContext,
+    clock: Clock = SystemClock
+  ): Promise<ProposalFollowUp> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:manage_follow_up');
+    if (!command.reason || command.reason.trim().length < 3) {
+      throw new ProposalDomainError('REASON_REQUIRED', 'Cancelamento exige motivo operacional.');
+    }
+    return this.runIdempotentFollowUpMutation(
+      'cancel-follow-up', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+        const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+        try {
+          const proposal = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+          if (!proposal) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+          this.checkReadAccess(proposal, ctx);
+          const store = ProposalApplicationService.getOrgFollowUpsStore(ctx.organizationId);
+          const current = store.get(proposal.id) ?? [];
+          const index = current.findIndex((followUp) => followUp.id === command.followUpId);
+          const existing = index >= 0 ? current[index] : undefined;
+          if (!existing) throw new ProposalDomainError('FOLLOW_UP_NOT_FOUND', 'Acompanhamento não encontrado.');
+          if (existing.status !== 'scheduled' || existing.version !== command.expectedFollowUpVersion) {
+            throw new ProposalDomainError('FOLLOW_UP_CONFLICT', 'Acompanhamento já alterado por outra operação.');
+          }
+          if (ctx.actor.role === 'capturer' && existing.assignedUserId !== ctx.actor.userId) {
+            throw new ProposalDomainError('PERMISSION_DENIED', 'Acompanhamento atribuído a outro usuário.');
+          }
+          const cancelled: ProposalFollowUp = {
+            ...existing,
+            status: 'cancelled',
+            cancelledAt: clock.now().toISOString(),
+            cancellationReasonCode: 'MANUAL',
+            notes: command.reason.trim(),
+            version: existing.version + 1,
+          };
+          const next = [...current];
+          next[index] = this.clone(cancelled);
+          store.set(proposal.id, next);
+          this.emitCommercialOperation(
+            proposal,
+            'proposal.follow_up.cancelled',
+            ctx.actor.userId,
+            { followUpId: cancelled.id, reasonCode: 'MANUAL' },
+            clock,
+            [cancelled.assignedUserId]
+          );
+          return this.clone(cancelled);
+        } finally {
+          release();
+        }
+      }
+    );
+  }
+
+  // --- 14. ENCAMINHAMENTO OPERACIONAL PÓS-ACEITE (OE-005.005) ---
+  public async prepareProposalHandoff(
+    command: PrepareProposalHandoffCommand,
+    ctx: ProposalAppContext,
+    clock: Clock = SystemClock
+  ): Promise<ProposalOperationalHandoff> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:prepare_handoff');
+    return this.runIdempotentHandoffMutation(
+      'prepare-handoff', command.proposalId, command.idempotencyKey, command, ctx, async () => {
+        const release = await ProposalApplicationService.acquireLock(`${ctx.organizationId}:${command.proposalId}`);
+        try {
+          const proposal = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+          if (!proposal) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+          this.validateCommandMetadata(proposal, command);
+          this.checkReadAccess(proposal, ctx);
+          if (proposal.status !== 'accepted' || proposal.decisionRecord?.decision !== 'accepted') {
+            throw new ProposalDomainError(
+              'HANDOFF_NOT_AVAILABLE',
+              'Encaminhamento somente pode ser preparado após aceite operacional registrado.'
+            );
+          }
+          const existing = ProposalApplicationService.getOrgHandoffsStore(ctx.organizationId).get(proposal.id);
+          if (existing) return this.clone(existing);
+          const snapshot = (ProposalApplicationService.getOrgSnapshotsStore(ctx.organizationId).get(proposal.id) ?? [])
+            .find((candidate) => candidate.versionNumber === proposal.version && candidate.status === 'accepted');
+          const documentId = proposal.presentationRecord?.documentReference;
+          const document = documentId
+            ? (ProposalApplicationService.getOrgDocumentsStore(ctx.organizationId).get(proposal.id) ?? [])
+                .find((candidate) => candidate.id === documentId)
+            : undefined;
+          const presentedVersionNumber = proposal.presentationRecord?.presentedVersionNumber;
+          if (
+            !snapshot
+            || snapshot.snapshot.decisionRecord?.decision !== 'accepted'
+            || snapshot.snapshot.presentationRecord?.documentReference !== document?.id
+            || !document
+            || document.organizationId !== ctx.organizationId
+            || document.proposalId !== proposal.id
+            || presentedVersionNumber === undefined
+            || document.sourceVersionNumber !== presentedVersionNumber - 1
+          ) {
+            throw new ProposalDomainError(
+              'HANDOFF_INTEGRITY_FAILURE',
+              'Snapshot aceito ou documento comercial de origem não pôde ser comprovado.'
+            );
+          }
+          const preparedAt = clock.now().toISOString();
+          const handoffWithoutChecksum = {
+            id: this.idGenerator.next('handoff'),
+            organizationId: ctx.organizationId,
+            proposalId: proposal.id,
+            proposalNumber: proposal.proposalNumber,
+            acceptedVersionNumber: proposal.version,
+            acceptedSnapshotId: snapshot.id,
+            acceptedSnapshotChecksumSha256: snapshot.checksumSha256,
+            commercialDocumentId: document.id,
+            clientId: proposal.clientId,
+            propertyId: proposal.propertyId,
+            destination: this.getHandoffDestination(proposal),
+            preparedByUserId: ctx.actor.userId,
+            preparedAt,
+            disclaimerText: 'Referência operacional interna. Não cria contrato, projeto, laudo, operação de crédito, cobrança, assinatura ou obrigação financeira.',
+          } as const;
+          let checksumSha256: string;
+          try {
+            checksumSha256 = await calculateSha256(canonicalJsonStringify(handoffWithoutChecksum));
+          } catch {
+            throw new ProposalDomainError('HASH_UNAVAILABLE', 'Não foi possível calcular SHA-256 verdadeiro.');
+          }
+          const handoff: ProposalOperationalHandoff = { ...handoffWithoutChecksum, checksumSha256 };
+          ProposalApplicationService.getOrgHandoffsStore(ctx.organizationId).set(proposal.id, this.clone(handoff));
+          this.emitCommercialOperation(
+            proposal,
+            'proposal.handoff.prepared',
+            ctx.actor.userId,
+            { handoffId: handoff.id, destination: handoff.destination },
+            clock,
+            [proposal.capturerUserId]
+          );
+          return this.clone(handoff);
+        } finally {
+          release();
+        }
+      }
+    );
   }
 
   // --- CONSULTAS ---
@@ -1726,6 +2229,103 @@ export class ProposalApplicationService {
       throw new ProposalDomainError('DOCUMENT_NOT_FOUND', 'Documento comercial não encontrado.');
     }
     return this.clone(document);
+  }
+
+  public async getProposalFollowUps(
+    proposalId: ProposalId,
+    ctx: ProposalAppContext
+  ): Promise<readonly ProposalFollowUp[]> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:view_commercial_tracking');
+    await this.getProposalById(proposalId, ctx);
+    const list = ProposalApplicationService.getOrgFollowUpsStore(ctx.organizationId).get(proposalId) ?? [];
+    return this.clone(list).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  public async getProposalHandoff(
+    proposalId: ProposalId,
+    ctx: ProposalAppContext
+  ): Promise<ProposalOperationalHandoff | null> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:view_handoff');
+    await this.getProposalById(proposalId, ctx);
+    const handoff = ProposalApplicationService.getOrgHandoffsStore(ctx.organizationId).get(proposalId);
+    return handoff ? this.clone(handoff) : null;
+  }
+
+  public async getCommercialDashboard(
+    ctx: ProposalAppContext,
+    clock: Clock = SystemClock
+  ): Promise<ProposalCommercialDashboard> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:view_commercial_tracking');
+    if (ctx.actor.role === 'project_designer') {
+      throw new ProposalDomainError('PERMISSION_DENIED', 'Acompanhamento comercial não pertence ao escopo técnico.');
+    }
+    let visible = Array.from(ProposalApplicationService.getOrgStore(ctx.organizationId).values())
+      .filter((proposal) => proposal.organizationId === ctx.organizationId);
+    if (ctx.actor.role === 'capturer') {
+      this.requirePermission(ctx, 'proposals:view_related');
+      visible = visible.filter((proposal) => proposal.capturerUserId === ctx.actor.userId);
+    } else {
+      this.requirePermission(ctx, 'proposals:view');
+    }
+    const statuses: readonly ProposalStatus[] = [
+      'draft', 'submitted', 'under_review', 'changes_requested', 'approved', 'presented',
+      'accepted', 'declined', 'rejected', 'expired', 'cancelled',
+    ];
+    const statusCounts = Object.fromEntries(statuses.map((status) => [status, 0])) as Record<ProposalStatus, number>;
+    for (const proposal of visible) statusCounts[proposal.status] += 1;
+    const followUpsStore = ProposalApplicationService.getOrgFollowUpsStore(ctx.organizationId);
+    const handoffsStore = ProposalApplicationService.getOrgHandoffsStore(ctx.organizationId);
+    const nowTime = clock.now().getTime();
+    const mayViewFinancials = this.hasPermission(ctx, 'proposals:view_financials');
+    const trackedStatuses: readonly ProposalStatus[] = ['presented', 'accepted', 'declined', 'expired'];
+    const trackedItems = visible
+      .filter((proposal) => trackedStatuses.includes(proposal.status))
+      .map((proposal) => ({
+        proposalId: proposal.id,
+        proposalNumber: proposal.proposalNumber,
+        title: proposal.title,
+        clientName: proposal.clientSnapshot.name,
+        status: proposal.status,
+        expiresAt: proposal.expiresAt,
+        amountCents: mayViewFinancials ? proposal.estimatedValue.amountCents : undefined,
+        activeFollowUp: (followUpsStore.get(proposal.id) ?? []).find((followUp) => followUp.status === 'scheduled'),
+        handoffId: handoffsStore.get(proposal.id)?.id,
+      }))
+      .sort((a, b) => {
+        const aTime = a.activeFollowUp ? new Date(a.activeFollowUp.scheduledFor).getTime() : Number.MAX_SAFE_INTEGER;
+        const bTime = b.activeFollowUp ? new Date(b.activeFollowUp.scheduledFor).getTime() : Number.MAX_SAFE_INTEGER;
+        return aTime - bTime || a.proposalNumber.localeCompare(b.proposalNumber);
+      });
+    const decisionBase = statusCounts.accepted + statusCounts.declined + statusCounts.expired;
+    const sumAsSafeNumber = (items: readonly Proposal[]): number | undefined => {
+      const value = items.reduce((total, proposal) => total + BigInt(proposal.estimatedValue.amountCents), 0n);
+      return value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : undefined;
+    };
+    return {
+      totalVisible: visible.length,
+      statusCounts,
+      presentedOpenCount: statusCounts.presented,
+      acceptedCount: statusCounts.accepted,
+      declinedCount: statusCounts.declined,
+      expiredCount: statusCounts.expired,
+      overdueFollowUpCount: trackedItems.filter(
+        (item) => item.activeFollowUp && nowTime >= new Date(item.activeFollowUp.scheduledFor).getTime()
+      ).length,
+      decisionConversionBasisPoints: decisionBase === 0
+        ? 0
+        : Math.round((statusCounts.accepted * 10_000) / decisionBase),
+      totalVisibleAmountCents: mayViewFinancials ? sumAsSafeNumber(visible) : undefined,
+      acceptedAmountCents: mayViewFinancials
+        ? sumAsSafeNumber(visible.filter((proposal) => proposal.status === 'accepted'))
+        : undefined,
+      trackedItems: this.clone(trackedItems),
+      generatedAt: clock.now().toISOString(),
+    };
   }
 
   // --- LISTAGEM PAGINADA ---

@@ -499,6 +499,34 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     name: 'Emitir Documento Comercial',
     description: 'Gerar documento comercial versionado exclusivamente a partir de proposta aprovada.',
   },
+  {
+    id: 'proposals:view_commercial_tracking',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Consultar Acompanhamento Comercial',
+    description: 'Visualizar funil, prazos e follow-ups conforme o escopo autorizado da proposta.',
+  },
+  {
+    id: 'proposals:manage_follow_up',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Administrar Follow-ups Comerciais',
+    description: 'Agendar, concluir ou cancelar acompanhamentos internos de propostas apresentadas.',
+  },
+  {
+    id: 'proposals:view_handoff',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Consultar Encaminhamento Operacional',
+    description: 'Consultar a referência imutável de encaminhamento de uma proposta aceita.',
+  },
+  {
+    id: 'proposals:prepare_handoff',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Preparar Encaminhamento Operacional',
+    description: 'Preparar a referência interna pós-aceite sem criar contrato ou operação externa.',
+  },
 
   // Documentos
   {

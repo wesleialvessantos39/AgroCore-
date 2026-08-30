@@ -20,7 +20,11 @@ export type ProposalEventType =
   | 'proposal.declined'
   | 'proposal.expired'
   | 'proposal.cancelled'
-  | 'proposal.document.issued';
+  | 'proposal.document.issued'
+  | 'proposal.follow_up.scheduled'
+  | 'proposal.follow_up.completed'
+  | 'proposal.follow_up.cancelled'
+  | 'proposal.handoff.prepared';
 
 export interface ProposalDomainEvent {
   readonly id: string;

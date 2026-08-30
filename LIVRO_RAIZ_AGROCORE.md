@@ -411,7 +411,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - `OE-004.003`: Dossiê técnico estruturado (identificação, caracterização física e logística, benfeitorias, conclusão), homogeneização, estatística, métodos avaliatórios, prontidão técnica e fotografia canônica com checksum SHA-256. `AppraisalIssuanceService` exige `appraisals:issue`, responsável designado, perfil verificado, prontidão e estado `ready_to_issue`; versão e status são confirmados por um único `commitIssuedVersion`, sem caminho público de gravação avulsa.
 
 ### MÓDULO 005: PROPOSTAS DE CRÉDITO E PRESTAÇÃO DE SERVIÇOS
-- **Status Geral:** Implementado e homologado localmente até a OE-005.004.
+- **Status Geral:** Implementado e homologado localmente até a OE-005.005.
 - **Entregas Concluídas e Homologadas:**
   - `OE-005.001`: Fundação de propostas comerciais e técnicas, com contratos tipados (`Proposal`, snapshots canônicos, valores em centavos, cálculo financeiro e `ProposalStatus`) e armazenamento volátil isolado por organização.
   - `OE-005.002`: Fechamento final e saneamento de segurança e concorrência:
@@ -444,6 +444,15 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
     - **Limite Jurídico:** o documento informa expressamente que não constitui contrato, assinatura digital, aprovação de crédito ou garantia de liberação de recursos.
     - **Ciclo de Sessão:** documentos, contadores, idempotência, operações em voo, eventos e notificações participam da limpeza central do logout.
     - **Homologação comportamental documental:** 26 provas em `scripts/test-proposal-documents.ts`, além das 39 provas da fundação, 31 provas do pipeline e auditoria visual do módulo.
+  - `OE-005.005`: Acompanhamento e encerramento comercial governado:
+    - **Funil Derivado:** `/propostas/acompanhamento` calcula indicadores exclusivamente das propostas canônicas visíveis ao usuário, sem duplicar cadastros nem criar repositório analítico paralelo. Captadores permanecem restritos às próprias propostas; financeiro possui consulta somente leitura; projetistas não recebem acesso comercial implícito.
+    - **Follow-up Interno:** propostas `presented` podem possuir no máximo um acompanhamento ativo, sempre antes de `expiresAt`, com responsável organizacional ativo, finalidade e canal tipados. Agendamento, conclusão e cancelamento são operações idempotentes, serializadas e protegidas por versão.
+    - **Fechamento Determinístico:** aceite, recusa, expiração ou cancelamento encerram automaticamente acompanhamentos pendentes com códigos de motivo tipados. O recurso não envia e-mail, mensagem, telefonema e não integra agenda externa.
+    - **Encaminhamento Pós-Aceite:** `/propostas/:proposalId/encaminhamento` prepara uma referência operacional imutável somente após `accepted`, vinculando snapshot aceito e documento comercial apresentado, com checksum SHA-256 real e destino derivado do tipo canônico da proposta.
+    - **Limite Jurídico e Operacional:** o encaminhamento não cria contrato, projeto, laudo, operação de crédito, cobrança, assinatura ou obrigação financeira. Persistência real e integrações posteriores permanecem fora do escopo.
+    - **RBAC Granular:** `proposals:view_commercial_tracking`, `proposals:manage_follow_up`, `proposals:view_handoff` e `proposals:prepare_handoff` aplicam menor privilégio no serviço e nas rotas, com IDOR multitenant negado por padrão.
+    - **Auditoria e Ciclo de Sessão:** eventos de follow-up e handoff carregam somente metadados sanitizados; stores, idempotência, operações em voo, notificações e locks participam da limpeza central do logout.
+    - **Homologação comportamental:** 39 provas em `scripts/test-proposal-commercial-tracking.ts`, somadas às 39 provas da fundação, 31 do pipeline, 26 documentais e auditoria visual do módulo.
 
 ---
 
@@ -475,8 +484,9 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:proposals-foundation` | Valida domínio, finanças, multitenancy, idempotência, concorrência e rotas de propostas (39 provas) |
 | `npm run test:proposal-pipeline` | Valida comportamentalmente RBAC, atribuição, revisão, segregação, concorrência, prazos, SHA-256, privacidade, imutabilidade e limpeza do pipeline (31 provas) |
 | `npm run test:proposal-documents` | Valida emissão documental, snapshot aprovado, SHA-256, concorrência, idempotência, IDOR, minimização de dados, apresentação vinculada, rota segura e limpeza (26 provas) |
+| `npm run test:proposal-commercial-tracking` | Valida funil, follow-ups, responsáveis canônicos, concorrência, RBAC, fechamento automático, handoff pós-aceite, SHA-256, IDOR, rotas e limpeza (39 provas) |
 | `npm run test:proposals-theme` | Audita a paleta oficial e bloqueia famílias externas no Módulo 005 |
-| `npm run test:module-005` | Homologação consolidada da fundação, pipeline, documento comercial e tema do Módulo 005 (OE-005.001 a OE-005.004) |
+| `npm run test:module-005` | Homologação consolidada da fundação, pipeline, documento comercial, acompanhamento, handoff e tema do Módulo 005 (OE-005.001 a OE-005.005) |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -496,5 +506,5 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 ## 9. DIRETRIZES PARA AS PRÓXIMAS EXECUÇÕES
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
-2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.004 no escopo volátil atual; persistência real, assinatura digital, contratos e integrações externas permanecem fora do escopo.
+2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.005 no escopo volátil atual; persistência real, assinatura digital, contratos e integrações externas permanecem fora do escopo.
 3. **Próxima Ordem:** ainda não iniciada; sua execução deve partir do HEAD publicado e de CI aprovado, sem reabrir os contratos homologados desta ordem.

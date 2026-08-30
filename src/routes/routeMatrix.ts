@@ -213,6 +213,15 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Fila organizacional para atribuição e acompanhamento do pipeline comercial.',
   },
   {
+    path: ROUTES.PROPOSALS_TRACKING,
+    category: 'authenticated_protected',
+    name: 'Acompanhamento Comercial',
+    requiresAuth: true,
+    requiredPermissions: 'proposals:view_commercial_tracking',
+    scope: 'organization',
+    description: 'Funil, prazos e acompanhamentos internos das propostas visíveis ao usuário.',
+  },
+  {
     path: ROUTES.PROPOSALS_EDIT,
     category: 'authenticated_protected',
     name: 'Editar Proposta',
@@ -247,6 +256,15 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     requiredPermissions: 'proposals:view_document',
     scope: 'organization',
     description: 'Prévia A4 e impressão da projeção comercial imutável da proposta aprovada.',
+  },
+  {
+    path: ROUTES.PROPOSALS_HANDOFF,
+    category: 'authenticated_protected',
+    name: 'Encaminhamento Operacional',
+    requiresAuth: true,
+    requiredPermissions: 'proposals:view_handoff',
+    scope: 'organization',
+    description: 'Referência imutável pós-aceite sem criação de contrato ou operação externa.',
   },
   {
     path: ROUTES.PROPOSALS_DETAIL,
@@ -320,6 +338,10 @@ export function findRouteDefinition(path: string): RouteDefinition | undefined {
 
   if (/^\/propostas\/[^/]+\/documento$/.test(path)) {
     return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_DOCUMENT);
+  }
+
+  if (/^\/propostas\/[^/]+\/encaminhamento$/.test(path)) {
+    return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_HANDOFF);
   }
 
   if (/^\/propostas\/[^/]+$/.test(path)) {

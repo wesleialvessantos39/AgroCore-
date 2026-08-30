@@ -12,15 +12,20 @@ import {
   PresentProposalCommand,
   Proposal,
   ProposalCategory,
+  ProposalCommercialDashboard,
   ProposalCommercialDocument,
   ProposalFilterOptions,
   ProposalId,
+  ProposalFollowUp,
+  ProposalFollowUpOutcome,
+  ProposalOperationalHandoff,
   ProposalReviewAssignment,
   ProposalStatusHistoryEntry,
   ProposalStatus,
   ProposalType,
   ProposalVersionSnapshot,
   RecordProposalDecisionCommand,
+  ScheduleProposalFollowUpCommand,
   UpdateProposalInput,
 } from '../types/proposals';
 import {
@@ -100,6 +105,29 @@ export interface ProposalsContextValue {
     proposalId: ProposalId,
     documentId: string
   ) => Promise<ProposalCommercialDocument | null>;
+  readonly scheduleProposalFollowUp: (
+    proposalId: ProposalId,
+    input: Pick<ScheduleProposalFollowUpCommand, 'scheduledFor' | 'channel' | 'purpose' | 'notes'> & {
+      readonly assignedUserId?: string;
+    }
+  ) => Promise<MutationResult<ProposalFollowUp>>;
+  readonly completeProposalFollowUp: (
+    followUp: ProposalFollowUp,
+    outcome: ProposalFollowUpOutcome,
+    notes?: string
+  ) => Promise<MutationResult<ProposalFollowUp>>;
+  readonly cancelProposalFollowUp: (
+    followUp: ProposalFollowUp,
+    reason: string
+  ) => Promise<MutationResult<ProposalFollowUp>>;
+  readonly getProposalFollowUps: (proposalId: ProposalId) => Promise<readonly ProposalFollowUp[]>;
+  readonly getCommercialDashboard: () => Promise<ProposalCommercialDashboard | null>;
+  readonly prepareProposalHandoff: (
+    proposalId: ProposalId
+  ) => Promise<MutationResult<ProposalOperationalHandoff>>;
+  readonly getProposalHandoff: (
+    proposalId: ProposalId
+  ) => Promise<ProposalOperationalHandoff | null>;
 }
 
 const ProposalsContext = createContext<ProposalsContextValue | null>(null);
@@ -596,6 +624,130 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
     [appContext, proposalAppService]
   );
 
+  const scheduleProposalFollowUp = useCallback(
+    async (
+      proposalId: ProposalId,
+      input: Pick<ScheduleProposalFollowUpCommand, 'scheduledFor' | 'channel' | 'purpose' | 'notes'> & {
+        readonly assignedUserId?: string;
+      }
+    ): Promise<MutationResult<ProposalFollowUp>> => {
+      if (!appContext) return { success: false, error: 'Vínculo organizacional indisponível.' };
+      try {
+        const proposal = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!proposal) return { success: false, error: 'Proposta não encontrada.' };
+        const followUp = await proposalAppService.scheduleProposalFollowUp({
+          proposalId,
+          assignedUserId: input.assignedUserId ?? appContext.actor.userId,
+          scheduledFor: input.scheduledFor,
+          channel: input.channel,
+          purpose: input.purpose,
+          notes: input.notes,
+          expectedVersion: proposal.version,
+          idempotencyKey: mutationKey('schedule-follow-up', proposalId, proposal.version),
+        }, appContext);
+        return { success: true, data: followUp };
+      } catch (err: unknown) {
+        return { success: false, error: err instanceof Error ? err.message : 'Falha ao agendar acompanhamento.' };
+      }
+    },
+    [appContext, mutationKey, proposalAppService]
+  );
+
+  const completeProposalFollowUp = useCallback(
+    async (
+      followUp: ProposalFollowUp,
+      outcome: ProposalFollowUpOutcome,
+      notes?: string
+    ): Promise<MutationResult<ProposalFollowUp>> => {
+      if (!appContext) return { success: false, error: 'Vínculo organizacional indisponível.' };
+      try {
+        const completed = await proposalAppService.completeProposalFollowUp({
+          proposalId: followUp.proposalId,
+          followUpId: followUp.id,
+          expectedFollowUpVersion: followUp.version,
+          outcome,
+          notes,
+          idempotencyKey: mutationKey('complete-follow-up', followUp.id, followUp.version),
+        }, appContext);
+        return { success: true, data: completed };
+      } catch (err: unknown) {
+        return { success: false, error: err instanceof Error ? err.message : 'Falha ao concluir acompanhamento.' };
+      }
+    },
+    [appContext, mutationKey, proposalAppService]
+  );
+
+  const cancelProposalFollowUp = useCallback(
+    async (followUp: ProposalFollowUp, reason: string): Promise<MutationResult<ProposalFollowUp>> => {
+      if (!appContext) return { success: false, error: 'Vínculo organizacional indisponível.' };
+      try {
+        const cancelled = await proposalAppService.cancelProposalFollowUp({
+          proposalId: followUp.proposalId,
+          followUpId: followUp.id,
+          expectedFollowUpVersion: followUp.version,
+          reason,
+          idempotencyKey: mutationKey('cancel-follow-up', followUp.id, followUp.version),
+        }, appContext);
+        return { success: true, data: cancelled };
+      } catch (err: unknown) {
+        return { success: false, error: err instanceof Error ? err.message : 'Falha ao cancelar acompanhamento.' };
+      }
+    },
+    [appContext, mutationKey, proposalAppService]
+  );
+
+  const getProposalFollowUps = useCallback(
+    async (proposalId: ProposalId): Promise<readonly ProposalFollowUp[]> => {
+      if (!appContext) return [];
+      try {
+        return await proposalAppService.getProposalFollowUps(proposalId, appContext);
+      } catch {
+        return [];
+      }
+    },
+    [appContext, proposalAppService]
+  );
+
+  const getCommercialDashboard = useCallback(async (): Promise<ProposalCommercialDashboard | null> => {
+    if (!appContext) return null;
+    try {
+      return await proposalAppService.getCommercialDashboard(appContext);
+    } catch {
+      return null;
+    }
+  }, [appContext, proposalAppService]);
+
+  const prepareProposalHandoff = useCallback(
+    async (proposalId: ProposalId): Promise<MutationResult<ProposalOperationalHandoff>> => {
+      if (!appContext) return { success: false, error: 'Vínculo organizacional indisponível.' };
+      try {
+        const proposal = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!proposal) return { success: false, error: 'Proposta não encontrada.' };
+        const handoff = await proposalAppService.prepareProposalHandoff({
+          proposalId,
+          expectedVersion: proposal.version,
+          idempotencyKey: mutationKey('prepare-handoff', proposalId, proposal.version),
+        }, appContext);
+        return { success: true, data: handoff };
+      } catch (err: unknown) {
+        return { success: false, error: err instanceof Error ? err.message : 'Falha ao preparar encaminhamento.' };
+      }
+    },
+    [appContext, mutationKey, proposalAppService]
+  );
+
+  const getProposalHandoff = useCallback(
+    async (proposalId: ProposalId): Promise<ProposalOperationalHandoff | null> => {
+      if (!appContext) return null;
+      try {
+        return await proposalAppService.getProposalHandoff(proposalId, appContext);
+      } catch {
+        return null;
+      }
+    },
+    [appContext, proposalAppService]
+  );
+
   const contextValue = useMemo<ProposalsContextValue>(
     () => ({
       status,
@@ -629,6 +781,13 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       getProposalReviewAssignments,
       getProposalDocuments,
       getProposalDocumentById,
+      scheduleProposalFollowUp,
+      completeProposalFollowUp,
+      cancelProposalFollowUp,
+      getProposalFollowUps,
+      getCommercialDashboard,
+      prepareProposalHandoff,
+      getProposalHandoff,
     }),
     [
       status,
@@ -661,6 +820,13 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       getProposalReviewAssignments,
       getProposalDocuments,
       getProposalDocumentById,
+      scheduleProposalFollowUp,
+      completeProposalFollowUp,
+      cancelProposalFollowUp,
+      getProposalFollowUps,
+      getCommercialDashboard,
+      prepareProposalHandoff,
+      getProposalHandoff,
     ]
   );
 

@@ -1,6 +1,6 @@
 /**
  * MÓDULO 005 — PROPOSTAS DE CRÉDITO E PRESTAÇÃO DE SERVIÇOS TÉCNICOS
- * Contratos canônicos de domínio, pipeline e documento comercial.
+ * Contratos canônicos de domínio, pipeline, documento comercial e acompanhamento.
  * 
  * Regras:
  * A proposta é a fonte autoritativa; snapshots, histórico e documentos comerciais
@@ -192,6 +192,103 @@ export interface ProposalCommercialDocument {
   readonly checksumSha256: string;
 }
 
+export type ProposalFollowUpPurpose =
+  | 'decision_reminder'
+  | 'document_clarification'
+  | 'commercial_alignment'
+  | 'other';
+
+export type ProposalFollowUpStatus = 'scheduled' | 'completed' | 'cancelled';
+
+export type ProposalFollowUpOutcome =
+  | 'contacted'
+  | 'no_response'
+  | 'decision_recorded'
+  | 'not_applicable';
+
+/**
+ * Compromisso comercial interno. Não representa mensagem enviada, agenda externa
+ * ou contato efetivamente realizado com o cliente.
+ */
+export interface ProposalFollowUp {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly proposalId: ProposalId;
+  readonly proposalVersionNumber: number;
+  readonly assignedUserId: string;
+  readonly scheduledFor: string;
+  readonly channel: ProposalPresentationChannel;
+  readonly purpose: ProposalFollowUpPurpose;
+  readonly status: ProposalFollowUpStatus;
+  readonly outcome?: ProposalFollowUpOutcome;
+  readonly notes?: string;
+  readonly createdByUserId: string;
+  readonly createdAt: string;
+  readonly completedAt?: string;
+  readonly cancelledAt?: string;
+  readonly cancellationReasonCode?:
+    | 'MANUAL'
+    | 'PROPOSAL_ACCEPTED'
+    | 'PROPOSAL_DECLINED'
+    | 'PROPOSAL_EXPIRED'
+    | 'PROPOSAL_CANCELLED';
+  readonly version: number;
+}
+
+export type ProposalOperationalHandoffDestination =
+  | 'credit_operations'
+  | 'appraisal_operations'
+  | 'technical_operations';
+
+/**
+ * Encaminhamento interno imutável de uma proposta aceita. É apenas uma referência
+ * operacional e não cria contrato, projeto, laudo, crédito ou obrigação financeira.
+ */
+export interface ProposalOperationalHandoff {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly proposalId: ProposalId;
+  readonly proposalNumber: string;
+  readonly acceptedVersionNumber: number;
+  readonly acceptedSnapshotId: string;
+  readonly acceptedSnapshotChecksumSha256: string;
+  readonly commercialDocumentId: string;
+  readonly clientId: string;
+  readonly propertyId: string | null;
+  readonly destination: ProposalOperationalHandoffDestination;
+  readonly preparedByUserId: string;
+  readonly preparedAt: string;
+  readonly checksumSha256: string;
+  readonly disclaimerText: string;
+}
+
+export interface ProposalCommercialTrackingItem {
+  readonly proposalId: ProposalId;
+  readonly proposalNumber: string;
+  readonly title: string;
+  readonly clientName: string;
+  readonly status: ProposalStatus;
+  readonly expiresAt: string;
+  readonly amountCents?: number;
+  readonly activeFollowUp?: ProposalFollowUp;
+  readonly handoffId?: string;
+}
+
+export interface ProposalCommercialDashboard {
+  readonly totalVisible: number;
+  readonly statusCounts: Readonly<Record<ProposalStatus, number>>;
+  readonly presentedOpenCount: number;
+  readonly acceptedCount: number;
+  readonly declinedCount: number;
+  readonly expiredCount: number;
+  readonly overdueFollowUpCount: number;
+  readonly decisionConversionBasisPoints: number;
+  readonly totalVisibleAmountCents?: number;
+  readonly acceptedAmountCents?: number;
+  readonly trackedItems: readonly ProposalCommercialTrackingItem[];
+  readonly generatedAt: string;
+}
+
 export interface Proposal {
   readonly id: ProposalId;
   readonly organizationId: string;
@@ -312,6 +409,33 @@ export interface PresentProposalCommand extends ProposalCommandMetadata {
 
 export type IssueProposalDocumentCommand = ProposalCommandMetadata;
 
+export interface ScheduleProposalFollowUpCommand extends ProposalCommandMetadata {
+  readonly assignedUserId: string;
+  readonly scheduledFor: string;
+  readonly channel: ProposalPresentationChannel;
+  readonly purpose: ProposalFollowUpPurpose;
+  readonly notes?: string;
+}
+
+export interface CompleteProposalFollowUpCommand {
+  readonly proposalId: ProposalId;
+  readonly followUpId: string;
+  readonly expectedFollowUpVersion: number;
+  readonly outcome: ProposalFollowUpOutcome;
+  readonly notes?: string;
+  readonly idempotencyKey: string;
+}
+
+export interface CancelProposalFollowUpCommand {
+  readonly proposalId: ProposalId;
+  readonly followUpId: string;
+  readonly expectedFollowUpVersion: number;
+  readonly reason: string;
+  readonly idempotencyKey: string;
+}
+
+export type PrepareProposalHandoffCommand = ProposalCommandMetadata;
+
 export interface RecordProposalDecisionCommand extends ProposalCommandMetadata {
   readonly decision: ProposalClientDecision;
   readonly channel: ProposalPresentationChannel;
@@ -378,6 +502,12 @@ export type ProposalErrorCode =
   | 'DOCUMENT_NOT_FOUND'
   | 'DOCUMENT_NOT_ISSUABLE'
   | 'DOCUMENT_VERSION_MISMATCH'
+  | 'FOLLOW_UP_NOT_ALLOWED'
+  | 'FOLLOW_UP_NOT_FOUND'
+  | 'FOLLOW_UP_CONFLICT'
+  | 'FOLLOW_UP_DATE_INVALID'
+  | 'HANDOFF_NOT_AVAILABLE'
+  | 'HANDOFF_INTEGRITY_FAILURE'
   | 'SYSTEM_CONTEXT_REQUIRED'
   | 'OPERATION_NOT_ALLOWED';
 
