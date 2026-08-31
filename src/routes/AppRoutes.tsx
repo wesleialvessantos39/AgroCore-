@@ -152,6 +152,10 @@ const ProposalHandoffQueuePage = lazy(() =>
   import('../pages/ProposalHandoffQueuePage').then((module) => ({ default: module.ProposalHandoffQueuePage }))
 );
 
+const ProposalRenewalPage = lazy(() =>
+  import('../pages/ProposalRenewalPage').then((module) => ({ default: module.ProposalRenewalPage }))
+);
+
 const MyAccountPage = lazy(() =>
   import('../pages/MyAccountPage').then((module) => ({
     default: module.MyAccountPage,
@@ -512,6 +516,14 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission="proposals:view_handoff">
                   <ProposalHandoffPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path=":proposalId/renovar"
+              element={
+                <RequirePermission permission="proposals:renew">
+                  <ProposalRenewalPage />
                 </RequirePermission>
               }
             />

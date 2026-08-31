@@ -411,7 +411,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - `OE-004.003`: Dossiê técnico estruturado (identificação, caracterização física e logística, benfeitorias, conclusão), homogeneização, estatística, métodos avaliatórios, prontidão técnica e fotografia canônica com checksum SHA-256. `AppraisalIssuanceService` exige `appraisals:issue`, responsável designado, perfil verificado, prontidão e estado `ready_to_issue`; versão e status são confirmados por um único `commitIssuedVersion`, sem caminho público de gravação avulsa.
 
 ### MÓDULO 005: PROPOSTAS DE CRÉDITO E PRESTAÇÃO DE SERVIÇOS
-- **Status Geral:** Implementado e homologado localmente até a OE-005.006.
+- **Status Geral:** Implementado e homologado localmente até a OE-005.007.
 - **Entregas Concluídas e Homologadas:**
   - `OE-005.001`: Fundação de propostas comerciais e técnicas, com contratos tipados (`Proposal`, snapshots canônicos, valores em centavos, cálculo financeiro e `ProposalStatus`) e armazenamento volátil isolado por organização.
   - `OE-005.002`: Fechamento final e saneamento de segurança e concorrência:
@@ -462,7 +462,16 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
     - **Auditoria e Sessão:** evento `proposal.handoff.acknowledged` e notificações usam metadados sanitizados; comprovantes, idempotência, operações em voo, locks, eventos e notificações participam da limpeza central do logout.
     - **Proteção da Interface:** identificadores internos de Ordem de Execução foram removidos das páginas públicas. `scripts/test-ui-copy.ts` percorre a AST de todo `src/**/*.tsx` e bloqueia novos códigos `OE-xxx.xxx` em textos renderizáveis, sem confundir comentários técnicos com conteúdo de interface.
     - **Instalação Reproduzível:** `package-lock.json` foi regenerado sem referências a checkouts locais ou dependências por symlink; `npm ci` instala integralmente 224 pacotes em uma árvore limpa antes das validações.
-    - **Homologação comportamental:** 23 provas em `scripts/test-proposal-handoff-receipts.ts`; o Módulo 005 totaliza 158 provas comportamentais nas cinco suítes de domínio, além das auditorias de texto público e tema.
+    - **Homologação comportamental:** 23 provas em `scripts/test-proposal-handoff-receipts.ts`; até esta ordem o Módulo 005 totalizava 158 provas comportamentais em cinco suítes de domínio, além das auditorias de texto público e tema.
+  - `OE-005.007`: Renovação governada e linhagem de propostas encerradas:
+    - **Novo Rascunho sem Reabertura:** `renewProposal` aceita somente origem `declined`, `rejected`, `expired` ou `cancelled`; `accepted` e estados ativos permanecem fechados. A proposta de origem não é alterada e cada origem possui no máximo um sucessor canônico.
+    - **Cópia Segura e Dados Atuais:** o novo rascunho preserva somente condições comerciais permitidas e recarrega cliente, imóvel e captador de fontes canônicas. Decisão, apresentação, revisão, documentos, acompanhamentos, encaminhamentos e observações da origem não são copiados.
+    - **Linhagem Imutável:** `ProposalRenewalLink` registra raiz, sequência, estado e versão da origem, correlação e checksum SHA-256. Gerações sucessivas preservam a raiz e são consultadas por `getProposalRenewalLineage`.
+    - **RBAC e Vínculo:** `proposals:renew` é concedida a `owner`, `company_admin`, `manager` e captador relacionado. O captador precisa manter vínculo comercial ativo; financeiro, projetista, outro captador, outra organização e permissão injetada são negados por padrão.
+    - **Idempotência e Concorrência:** replays e comandos concorrentes equivalentes convergem para o mesmo rascunho; chave com payload divergente e tentativa de criar segundo sucessor incompatível produzem erros tipados.
+    - **Interface e Rotas:** `/propostas/:proposalId/renovar` usa builder com `encodeURIComponent`, apresenta somente linguagem comercial pública e informa que não cria contrato, assinatura, crédito, cobrança ou obrigação financeira.
+    - **Auditoria e Sessão:** evento `proposal.renewal.created` e notificações carregam somente metadados sanitizados; proposta, vínculos, idempotência, operações em voo, locks, eventos e notificações são eliminados pela limpeza central de logout.
+    - **Homologação comportamental:** 28 provas em `scripts/test-proposal-renewals.ts`; o Módulo 005 totaliza 186 provas comportamentais nas seis suítes de domínio, além das auditorias de texto público e tema.
 
 ---
 
@@ -496,9 +505,10 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:proposal-documents` | Valida emissão documental, snapshot aprovado, SHA-256, concorrência, idempotência, IDOR, minimização de dados, apresentação vinculada, rota segura e limpeza (26 provas) |
 | `npm run test:proposal-commercial-tracking` | Valida funil, follow-ups, responsáveis canônicos, concorrência, RBAC, fechamento automático, handoff pós-aceite, SHA-256, IDOR, rotas e limpeza (39 provas) |
 | `npm run test:proposal-handoff-receipts` | Valida fila por destino, recebimento canônico, SHA-256, concorrência, idempotência, IDOR, eventos sanitizados, rota e limpeza (23 provas) |
+| `npm run test:proposal-renewals` | Valida elegibilidade terminal, novo rascunho, linhagem SHA-256, cópia segura, RBAC, vínculo ativo, concorrência, idempotência, IDOR, eventos, rotas e limpeza (28 provas) |
 | `npm run test:ui-copy` | Audita via AST todas as telas TSX e impede identificadores internos de Ordem de Execução em conteúdo renderizável |
 | `npm run test:proposals-theme` | Audita a paleta oficial e bloqueia famílias externas no Módulo 005 |
-| `npm run test:module-005` | Homologação consolidada da fundação, pipeline, documento comercial, acompanhamento, recebimento, texto público e tema do Módulo 005 (OE-005.001 a OE-005.006; 158 provas comportamentais) |
+| `npm run test:module-005` | Homologação consolidada da fundação, pipeline, documento comercial, acompanhamento, recebimento, renovação, texto público e tema do Módulo 005 (OE-005.001 a OE-005.007; 186 provas comportamentais) |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -518,5 +528,5 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 ## 9. DIRETRIZES PARA AS PRÓXIMAS EXECUÇÕES
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
-2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.006 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
+2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.007 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
 3. **Próxima Ordem:** ainda não iniciada; sua execução deve partir do HEAD publicado e de CI aprovado, sem reabrir os contratos homologados desta ordem.

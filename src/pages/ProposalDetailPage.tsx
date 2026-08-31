@@ -4,6 +4,7 @@ import {
   Proposal,
   ProposalCommercialDocument,
   ProposalPresentationChannel,
+  ProposalRenewalLineage,
   ProposalStatus,
   ProposalStatusHistoryEntry,
   ProposalVersionSnapshot,
@@ -25,7 +26,13 @@ import { useProperties } from '../properties/useProperties';
 import { useAuthorization } from '../authorization/useAuthorization';
 import { useAuth } from '../auth/useAuth';
 import { useOrganization } from '../organization/useOrganization';
-import { ROUTES, getProposalDocumentPath, getProposalEditPath } from '../routes';
+import {
+  ROUTES,
+  getProposalDetailPath,
+  getProposalDocumentPath,
+  getProposalEditPath,
+  getProposalRenewalPath,
+} from '../routes';
 import { getOrganizationMembersGateway } from '../auth/organizationMembersGatewayFactory';
 import { OrganizationMember } from '../auth/organizationMembersGateway';
 
@@ -50,6 +57,7 @@ export const ProposalDetailPage: React.FC = () => {
     getProposalHistory,
     getProposalSnapshots,
     getProposalDocuments,
+    getProposalRenewalLineage,
   } = useProposals();
   const { clients } = useClients();
   const { properties } = useProperties();
@@ -58,6 +66,7 @@ export const ProposalDetailPage: React.FC = () => {
   const [history, setHistory] = useState<readonly ProposalStatusHistoryEntry[]>([]);
   const [snapshots, setSnapshots] = useState<readonly ProposalVersionSnapshot[]>([]);
   const [documents, setDocuments] = useState<readonly ProposalCommercialDocument[]>([]);
+  const [renewalLineage, setRenewalLineage] = useState<ProposalRenewalLineage | null>(null);
   const [members, setMembers] = useState<readonly OrganizationMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -99,21 +108,30 @@ export const ProposalDetailPage: React.FC = () => {
       const data = await getProposalById(proposalId);
       if (data) {
         setProposal(data);
-        const [h, s, d] = await Promise.all([
+        const [h, s, d, lineage] = await Promise.all([
           getProposalHistory(proposalId),
           getProposalSnapshots(proposalId),
           getProposalDocuments(proposalId),
+          getProposalRenewalLineage(proposalId),
         ]);
         setHistory(h || []);
         setSnapshots(s || []);
         setDocuments(d || []);
+        setRenewalLineage(lineage);
       } else {
         setErrorMessage('Proposta não encontrada.');
       }
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Erro ao carregar proposta.');
     }
-  }, [proposalId, getProposalById, getProposalHistory, getProposalSnapshots, getProposalDocuments]);
+  }, [
+    proposalId,
+    getProposalById,
+    getProposalHistory,
+    getProposalSnapshots,
+    getProposalDocuments,
+    getProposalRenewalLineage,
+  ]);
 
   useEffect(() => {
     let isMounted = true;
@@ -232,6 +250,11 @@ export const ProposalDetailPage: React.FC = () => {
   const canCancel =
     can('proposals:cancel') &&
     !isTerminal;
+
+  const canRenew =
+    can('proposals:renew')
+    && ['declined', 'rejected', 'expired', 'cancelled'].includes(proposal.status)
+    && !renewalLineage?.successor;
 
   // Executores de Ação
   const handleSubmitAction = async () => {
@@ -611,8 +634,55 @@ export const ProposalDetailPage: React.FC = () => {
               Cancelar
             </button>
           )}
+
+          {canRenew && (
+            <button
+              type="button"
+              onClick={() => navigate(getProposalRenewalPath(proposal.id))}
+              className={PROPOSAL_THEME.btnPrimary}
+              id="detail-renew-proposal-btn"
+              disabled={isProcessing}
+            >
+              Criar nova proposta vinculada
+            </button>
+          )}
         </div>
       </div>
+
+      {(renewalLineage?.ancestors.length || renewalLineage?.successor) && (
+        <section
+          aria-labelledby="proposal-renewal-lineage-title"
+          className="rounded-2xl border border-[#0B3D2E]/15 bg-[#78C89A]/10 p-4"
+        >
+          <h3 id="proposal-renewal-lineage-title" className="text-sm font-bold text-[#0B3D2E]">
+            Continuidade comercial
+          </h3>
+          <p className="mt-1 text-xs text-[#0B3D2E]/70">
+            Cada proposta permanece imutável em seu encerramento. A continuidade ocorre em um novo rascunho vinculado.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {renewalLineage.ancestors.map((link) => (
+              <button
+                key={link.id}
+                type="button"
+                onClick={() => navigate(getProposalDetailPath(link.sourceProposalId))}
+                className={PROPOSAL_THEME.btnSecondary}
+              >
+                Ver proposta anterior {link.sequenceNumber}
+              </button>
+            ))}
+            {renewalLineage.successor && (
+              <button
+                type="button"
+                onClick={() => navigate(getProposalDetailPath(renewalLineage.successor!.renewedProposalId))}
+                className={PROPOSAL_THEME.btnPrimary}
+              >
+                Abrir nova proposta vinculada
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Alertas de Sucesso / Erro */}
       {errorMessage && (

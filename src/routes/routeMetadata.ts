@@ -102,6 +102,10 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Encaminhamento Operacional | AgroCore',
     announcementTitle: 'Encaminhamento operacional da proposta',
   },
+  [ROUTES.PROPOSALS_RENEW]: {
+    documentTitle: 'Renovar Proposta | AgroCore',
+    announcementTitle: 'Criar nova proposta vinculada',
+  },
   [ROUTES.MY_ACCOUNT]: {
     documentTitle: 'Minha Conta | AgroCore',
     announcementTitle: 'Minha conta',
@@ -170,6 +174,10 @@ export function getRouteMetadata(pathname: string): RouteMetadata {
 
   if (/^\/propostas\/[^/]+\/encaminhamento$/.test(pathname)) {
     return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_HANDOFF];
+  }
+
+  if (/^\/propostas\/[^/]+\/renovar$/.test(pathname)) {
+    return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_RENEW];
   }
 
   if (/^\/propostas\/[^/]+$/.test(pathname)) {

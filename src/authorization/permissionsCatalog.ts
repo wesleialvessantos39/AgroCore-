@@ -541,6 +541,13 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     name: 'Confirmar Recebimento de Encaminhamento',
     description: 'Registrar de forma imutável o recebimento interno pela área de destino autorizada.',
   },
+  {
+    id: 'proposals:renew',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Renovar Proposta Encerrada',
+    description: 'Criar um novo rascunho vinculado a uma proposta terminal sem reabrir o registro original.',
+  },
 
   // Documentos
   {

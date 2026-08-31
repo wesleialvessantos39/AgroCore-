@@ -276,6 +276,15 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Referência imutável pós-aceite sem criação de contrato ou operação externa.',
   },
   {
+    path: ROUTES.PROPOSALS_RENEW,
+    category: 'authenticated_protected',
+    name: 'Renovar Proposta Encerrada',
+    requiresAuth: true,
+    requiredPermissions: 'proposals:renew',
+    scope: 'organization',
+    description: 'Criação governada de novo rascunho sem reabrir a proposta encerrada.',
+  },
+  {
     path: ROUTES.PROPOSALS_DETAIL,
     category: 'authenticated_protected',
     name: 'Detalhes da Proposta',
@@ -351,6 +360,10 @@ export function findRouteDefinition(path: string): RouteDefinition | undefined {
 
   if (/^\/propostas\/[^/]+\/encaminhamento$/.test(path)) {
     return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_HANDOFF);
+  }
+
+  if (/^\/propostas\/[^/]+\/renovar$/.test(path)) {
+    return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_RENEW);
   }
 
   if (/^\/propostas\/[^/]+$/.test(path)) {

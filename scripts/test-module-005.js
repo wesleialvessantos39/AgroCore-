@@ -33,10 +33,13 @@ try {
   console.log('\n5. Executando fila e recebimento de encaminhamentos (OE-005.006)...');
   runScript('scripts/test-proposal-handoff-receipts.ts');
 
-  console.log('\n6. Executando auditoria de textos públicos da interface...');
+  console.log('\n6. Executando renovação governada e linhagem de propostas (OE-005.007)...');
+  runScript('scripts/test-proposal-renewals.ts');
+
+  console.log('\n7. Executando auditoria de textos públicos da interface...');
   runScript('scripts/test-ui-copy.ts');
 
-  console.log('\n7. Executando auditoria de tema e conformidade visual...');
+  console.log('\n8. Executando auditoria de tema e conformidade visual...');
   runScript('scripts/test-proposals-theme.js');
 
   console.log('\n====================================================');

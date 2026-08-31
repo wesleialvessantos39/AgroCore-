@@ -26,6 +26,7 @@ export const ROUTES = {
   PROPOSALS_HISTORY: '/propostas/:proposalId/historico',
   PROPOSALS_DOCUMENT: '/propostas/:proposalId/documento',
   PROPOSALS_HANDOFF: '/propostas/:proposalId/encaminhamento',
+  PROPOSALS_RENEW: '/propostas/:proposalId/renovar',
   PROPOSALS_DETAIL: '/propostas/:proposalId',
   MY_ACCOUNT: '/minha-conta',
   ACCESS_DENIED: '/acesso-negado',
@@ -72,6 +73,10 @@ export function getProposalDocumentPath(proposalId: string): string {
 
 export function getProposalHandoffPath(proposalId: string): string {
   return `/propostas/${encodeURIComponent(proposalId)}/encaminhamento`;
+}
+
+export function getProposalRenewalPath(proposalId: string): string {
+  return `/propostas/${encodeURIComponent(proposalId)}/renovar`;
 }
 
 export function getAppraisalDetailPath(appraisalId: string): string {

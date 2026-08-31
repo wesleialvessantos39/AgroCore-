@@ -297,6 +297,34 @@ export interface ProposalHandoffQueue {
   readonly generatedAt: string;
 }
 
+/**
+ * Vínculo imutável entre uma proposta terminal e o novo rascunho criado para
+ * continuidade comercial. O vínculo não reabre nem altera a proposta de origem.
+ */
+export interface ProposalRenewalLink {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly sourceProposalId: ProposalId;
+  readonly renewedProposalId: ProposalId;
+  readonly rootProposalId: ProposalId;
+  readonly sequenceNumber: number;
+  readonly sourceVersionNumber: number;
+  readonly sourceStatus: Extract<ProposalStatus, 'declined' | 'rejected' | 'expired' | 'cancelled'>;
+  readonly reason: string;
+  readonly createdByUserId: string;
+  readonly createdAt: string;
+  readonly correlationId: string;
+  readonly checksumSha256: string;
+  readonly disclaimerText: string;
+}
+
+export interface ProposalRenewalLineage {
+  readonly proposalId: ProposalId;
+  readonly rootProposalId: ProposalId;
+  readonly ancestors: readonly ProposalRenewalLink[];
+  readonly successor?: ProposalRenewalLink;
+}
+
 export interface ProposalCommercialTrackingItem {
   readonly proposalId: ProposalId;
   readonly proposalNumber: string;
@@ -478,6 +506,13 @@ export interface AcknowledgeProposalHandoffCommand {
   readonly idempotencyKey: string;
 }
 
+export interface RenewProposalCommand {
+  readonly proposalId: ProposalId;
+  readonly expectedVersion: number;
+  readonly reason: string;
+  readonly idempotencyKey: string;
+}
+
 export interface RecordProposalDecisionCommand extends ProposalCommandMetadata {
   readonly decision: ProposalClientDecision;
   readonly channel: ProposalPresentationChannel;
@@ -553,6 +588,9 @@ export type ProposalErrorCode =
   | 'HANDOFF_RECEIPT_NOT_ALLOWED'
   | 'HANDOFF_RECEIPT_CONFLICT'
   | 'HANDOFF_DESTINATION_MISMATCH'
+  | 'RENEWAL_NOT_ALLOWED'
+  | 'RENEWAL_ALREADY_EXISTS'
+  | 'RENEWAL_INTEGRITY_FAILURE'
   | 'SYSTEM_CONTEXT_REQUIRED'
   | 'OPERATION_NOT_ALLOWED';
 

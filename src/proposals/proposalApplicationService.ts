@@ -31,6 +31,8 @@ import {
   ProposalHandoffQueue,
   ProposalHandoffReceipt,
   ProposalPropertySnapshot,
+  ProposalRenewalLineage,
+  ProposalRenewalLink,
   ProposalReviewAssignment,
   ProposalStatus,
   ProposalStatusHistoryEntry,
@@ -40,6 +42,7 @@ import {
   RecordProposalDecisionCommand,
   RejectProposalCommand,
   RequestProposalChangesCommand,
+  RenewProposalCommand,
   ScheduleProposalFollowUpCommand,
   StartProposalReviewCommand,
   SubmitProposalCommand,
@@ -104,6 +107,7 @@ export class ProposalApplicationService {
   private static followUpsStore: Map<string, Map<ProposalId, ProposalFollowUp[]>> = new Map();
   private static handoffsStore: Map<string, Map<ProposalId, ProposalOperationalHandoff>> = new Map();
   private static handoffReceiptsStore: Map<string, Map<ProposalId, ProposalHandoffReceipt>> = new Map();
+  private static renewalLinksStore: Map<string, Map<ProposalId, ProposalRenewalLink>> = new Map();
   private static counterStore: Map<string, number> = new Map();
   private static documentCounterStore: Map<string, number> = new Map();
   private static idempotencyStore: Map<string, { payloadHash: string; proposal: Proposal }> = new Map();
@@ -206,6 +210,13 @@ export class ProposalApplicationService {
     return ProposalApplicationService.handoffReceiptsStore.get(orgId)!;
   }
 
+  private static getOrgRenewalLinksStore(orgId: string): Map<ProposalId, ProposalRenewalLink> {
+    if (!ProposalApplicationService.renewalLinksStore.has(orgId)) {
+      ProposalApplicationService.renewalLinksStore.set(orgId, new Map());
+    }
+    return ProposalApplicationService.renewalLinksStore.get(orgId)!;
+  }
+
   private static getNextNumber(orgId: string, clock: Clock): string {
     const current = ProposalApplicationService.counterStore.get(orgId) || 0;
     const next = current + 1;
@@ -230,6 +241,7 @@ export class ProposalApplicationService {
     ProposalApplicationService.followUpsStore.clear();
     ProposalApplicationService.handoffsStore.clear();
     ProposalApplicationService.handoffReceiptsStore.clear();
+    ProposalApplicationService.renewalLinksStore.clear();
     ProposalApplicationService.counterStore.clear();
     ProposalApplicationService.documentCounterStore.clear();
     ProposalApplicationService.idempotencyStore.clear();
@@ -725,6 +737,8 @@ export class ProposalApplicationService {
           ? 'Encaminhamento operacional preparado'
           : type === 'proposal.handoff.acknowledged'
             ? 'Encaminhamento recebido pela área responsável'
+            : type === 'proposal.renewal.created'
+              ? 'Nova proposta criada por renovação'
             : 'Acompanhamento comercial atualizado',
         message: type === 'proposal.follow_up.scheduled'
           ? `Novo acompanhamento interno agendado para a proposta ${proposal.proposalNumber}.`
@@ -732,6 +746,8 @@ export class ProposalApplicationService {
             ? `A proposta ${proposal.proposalNumber} possui referência operacional pós-aceite.`
             : type === 'proposal.handoff.acknowledged'
               ? `O encaminhamento da proposta ${proposal.proposalNumber} foi recebido internamente.`
+              : type === 'proposal.renewal.created'
+                ? `A proposta ${proposal.proposalNumber} foi criada como novo rascunho vinculado.`
             : `O acompanhamento interno da proposta ${proposal.proposalNumber} foi atualizado.`,
         createdAt: clock.now().toISOString(),
       });
@@ -787,6 +803,34 @@ export class ProposalApplicationService {
       return destination === 'appraisal_operations' || destination === 'technical_operations';
     }
     return false;
+  }
+
+  private isRenewableStatus(
+    status: ProposalStatus
+  ): status is ProposalRenewalLink['sourceStatus'] {
+    return status === 'declined'
+      || status === 'rejected'
+      || status === 'expired'
+      || status === 'cancelled';
+  }
+
+  private async verifyRenewalLink(link: ProposalRenewalLink): Promise<void> {
+    const { checksumSha256, ...payload } = link;
+    let calculatedChecksum: string;
+    try {
+      calculatedChecksum = await calculateSha256(canonicalJsonStringify(payload));
+    } catch {
+      throw new ProposalDomainError(
+        'RENEWAL_INTEGRITY_FAILURE',
+        'Não foi possível verificar a integridade do vínculo de renovação.'
+      );
+    }
+    if (calculatedChecksum !== checksumSha256) {
+      throw new ProposalDomainError(
+        'RENEWAL_INTEGRITY_FAILURE',
+        'O vínculo de renovação não possui integridade comprovada.'
+      );
+    }
   }
 
   // --- 1. CRIAÇÃO DE PROPOSTA ---
@@ -2331,6 +2375,170 @@ export class ProposalApplicationService {
     );
   }
 
+  // --- 15. RENOVAÇÃO GOVERNADA (proposta terminal -> novo rascunho) ---
+  public async renewProposal(
+    command: RenewProposalCommand,
+    ctx: ProposalAppContext,
+    clock: Clock = SystemClock
+  ): Promise<Proposal> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:renew');
+    const reason = command.reason.trim();
+    if (reason.length < 5 || reason.length > 500) {
+      throw new ProposalDomainError(
+        'REASON_REQUIRED',
+        'Informe um motivo de renovação entre 5 e 500 caracteres.'
+      );
+    }
+    const normalizedCommand: RenewProposalCommand = { ...command, reason };
+    return this.runIdempotentMutation(
+      'renew',
+      command.proposalId,
+      command.idempotencyKey,
+      normalizedCommand,
+      ctx,
+      async () => {
+        const release = await ProposalApplicationService.acquireLock(
+          `${ctx.organizationId}:${command.proposalId}:renewal`
+        );
+        try {
+          const proposals = ProposalApplicationService.getOrgStore(ctx.organizationId);
+          const source = proposals.get(command.proposalId);
+          if (!source || source.organizationId !== ctx.organizationId) {
+            throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta de origem não encontrada.');
+          }
+          this.checkReadAccess(source, ctx);
+          this.validateCommandMetadata(source, normalizedCommand);
+          if (!this.isRenewableStatus(source.status)) {
+            throw new ProposalDomainError(
+              'RENEWAL_NOT_ALLOWED',
+              'Somente propostas recusadas, rejeitadas, expiradas ou canceladas podem gerar um novo rascunho.'
+            );
+          }
+
+          const assignment = await ctx.assignmentGateway.getActiveAssignment(
+            ctx.organizationId,
+            source.clientId
+          );
+          if (!assignment || assignment.status !== 'active') {
+            throw new ProposalDomainError(
+              'CAPTURER_NOT_ASSIGNED',
+              'Não existe vínculo comercial ativo para criar a nova proposta.'
+            );
+          }
+          const assignedCapturer = await ctx.memberResolver(assignment.capturerUserId);
+          if (
+            !assignedCapturer
+            || !assignedCapturer.isActive
+            || assignedCapturer.organizationRole !== 'capturer'
+          ) {
+            throw new ProposalDomainError(
+              'CAPTURER_NOT_ASSIGNED',
+              'O captador do vínculo comercial não possui associação organizacional ativa.'
+            );
+          }
+          if (
+            ctx.actor.role === 'capturer'
+            && (
+              source.capturerUserId !== ctx.actor.userId
+              || assignment.capturerUserId !== ctx.actor.userId
+            )
+          ) {
+            throw new ProposalDomainError(
+              'CAPTURER_NOT_ASSIGNED',
+              'O vínculo comercial ativo com o cliente não pôde ser confirmado.'
+            );
+          }
+
+          const links = ProposalApplicationService.getOrgRenewalLinksStore(ctx.organizationId);
+          const existingLink = links.get(source.id);
+          if (existingLink) {
+            await this.verifyRenewalLink(existingLink);
+            if (existingLink.reason !== reason) {
+              throw new ProposalDomainError(
+                'RENEWAL_ALREADY_EXISTS',
+                'A proposta já possui um novo rascunho vinculado.'
+              );
+            }
+            const existingRenewal = proposals.get(existingLink.renewedProposalId);
+            if (!existingRenewal) {
+              throw new ProposalDomainError(
+                'RENEWAL_INTEGRITY_FAILURE',
+                'O novo rascunho vinculado não foi encontrado.'
+              );
+            }
+            return this.clone(existingRenewal);
+          }
+
+          const incomingLink = Array.from(links.values()).find(
+            (link) => link.renewedProposalId === source.id
+          );
+          if (incomingLink) await this.verifyRenewalLink(incomingLink);
+          const rootProposalId = incomingLink?.rootProposalId ?? source.id;
+          const sequenceNumber = (incomingLink?.sequenceNumber ?? 0) + 1;
+          const createInput: CreateProposalInput = {
+            clientId: source.clientId,
+            propertyId: source.propertyId,
+            title: `${source.title} — Renovação`,
+            proposalType: source.proposalType,
+            category: source.category,
+            validityDays: source.validityDays,
+            requestedAmountCents: source.estimatedValue.amountCents,
+            financingTermMonths: source.calculationSummary.financingTermMonths,
+            gracePeriodMonths: source.calculationSummary.gracePeriodMonths,
+            interestRateAnnualPercentage: source.calculationSummary.interestRateAnnualPercentage,
+            idempotencyKey: command.idempotencyKey,
+          };
+          const renewed = await this.executeCreateProposal(createInput, ctx, clock);
+          const correlationId = this.idGenerator.next('corr');
+          const linkWithoutChecksum = {
+            id: this.idGenerator.next('renewal'),
+            organizationId: ctx.organizationId,
+            sourceProposalId: source.id,
+            renewedProposalId: renewed.id,
+            rootProposalId,
+            sequenceNumber,
+            sourceVersionNumber: source.version,
+            sourceStatus: source.status,
+            reason,
+            createdByUserId: ctx.actor.userId,
+            createdAt: clock.now().toISOString(),
+            correlationId,
+            disclaimerText: 'Novo rascunho comercial vinculado. A proposta de origem permanece encerrada e nenhum contrato, assinatura, crédito, cobrança ou obrigação é criado.',
+          } as const;
+          let checksumSha256: string;
+          try {
+            checksumSha256 = await calculateSha256(canonicalJsonStringify(linkWithoutChecksum));
+          } catch {
+            proposals.delete(renewed.id);
+            throw new ProposalDomainError(
+              'RENEWAL_INTEGRITY_FAILURE',
+              'Não foi possível registrar o vínculo íntegro da renovação.'
+            );
+          }
+          const link: ProposalRenewalLink = { ...linkWithoutChecksum, checksumSha256 };
+          links.set(source.id, this.clone(link));
+          this.emitCommercialOperation(
+            renewed,
+            'proposal.renewal.created',
+            ctx.actor.userId,
+            {
+              sourceProposalId: source.id,
+              rootProposalId,
+              sequenceNumber,
+            },
+            clock,
+            [source.capturerUserId, ctx.actor.userId],
+            correlationId
+          );
+          return this.clone(renewed);
+        } finally {
+          release();
+        }
+      }
+    );
+  }
+
   // --- CONSULTAS ---
   public async getProposalById(proposalId: ProposalId, ctx: ProposalAppContext): Promise<Proposal | null> {
     this.validateContext(ctx);
@@ -2368,6 +2576,42 @@ export class ProposalApplicationService {
     const snapshotsMap = ProposalApplicationService.getOrgSnapshotsStore(ctx.organizationId);
     const list = snapshotsMap.get(proposalId) || [];
     return this.clone(list).sort((a, b) => a.versionNumber - b.versionNumber);
+  }
+
+  public async getProposalRenewalLineage(
+    proposalId: ProposalId,
+    ctx: ProposalAppContext
+  ): Promise<ProposalRenewalLineage> {
+    this.validateContext(ctx);
+    await this.getProposalById(proposalId, ctx);
+    const links = ProposalApplicationService.getOrgRenewalLinksStore(ctx.organizationId);
+    const ancestors: ProposalRenewalLink[] = [];
+    const visited = new Set<ProposalId>([proposalId]);
+    let currentProposalId = proposalId;
+    while (true) {
+      const incoming = Array.from(links.values()).find(
+        (link) => link.renewedProposalId === currentProposalId
+      );
+      if (!incoming) break;
+      await this.verifyRenewalLink(incoming);
+      if (visited.has(incoming.sourceProposalId)) {
+        throw new ProposalDomainError(
+          'RENEWAL_INTEGRITY_FAILURE',
+          'Foi detectado um ciclo inválido na linhagem de renovação.'
+        );
+      }
+      visited.add(incoming.sourceProposalId);
+      ancestors.unshift(this.clone(incoming));
+      currentProposalId = incoming.sourceProposalId;
+    }
+    const successor = links.get(proposalId);
+    if (successor) await this.verifyRenewalLink(successor);
+    return {
+      proposalId,
+      rootProposalId: ancestors[0]?.rootProposalId ?? proposalId,
+      ancestors: this.clone(ancestors),
+      successor: successor ? this.clone(successor) : undefined,
+    };
   }
 
   public async getProposalReviewAssignments(

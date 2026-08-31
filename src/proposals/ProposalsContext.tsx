@@ -21,6 +21,7 @@ import {
   ProposalHandoffQueue,
   ProposalHandoffReceipt,
   ProposalOperationalHandoff,
+  ProposalRenewalLineage,
   ProposalReviewAssignment,
   ProposalStatusHistoryEntry,
   ProposalStatus,
@@ -137,6 +138,13 @@ export interface ProposalsContextValue {
     proposalId: ProposalId
   ) => Promise<ProposalHandoffReceipt | null>;
   readonly getProposalHandoffQueue: () => Promise<ProposalHandoffQueue | null>;
+  readonly renewProposal: (
+    proposalId: ProposalId,
+    reason: string
+  ) => Promise<MutationResult<Proposal>>;
+  readonly getProposalRenewalLineage: (
+    proposalId: ProposalId
+  ) => Promise<ProposalRenewalLineage | null>;
 }
 
 const ProposalsContext = createContext<ProposalsContextValue | null>(null);
@@ -796,6 +804,45 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
     }
   }, [appContext, proposalAppService]);
 
+  const renewProposal = useCallback(
+    async (proposalId: ProposalId, reason: string): Promise<MutationResult<Proposal>> => {
+      if (!appContext) return { success: false, error: 'Vínculo organizacional indisponível.' };
+      if (!can('proposals:renew')) {
+        return { success: false, error: 'Acesso negado: sem permissão para renovar propostas.' };
+      }
+      try {
+        const source = await proposalAppService.getProposalById(proposalId, appContext);
+        if (!source) return { success: false, error: 'Proposta de origem não encontrada.' };
+        const renewed = await proposalAppService.renewProposal({
+          proposalId,
+          expectedVersion: source.version,
+          reason,
+          idempotencyKey: mutationKey('renew-proposal', proposalId, source.version),
+        }, appContext);
+        await loadProposals();
+        return { success: true, data: renewed };
+      } catch (err: unknown) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Falha ao criar a nova proposta vinculada.',
+        };
+      }
+    },
+    [appContext, can, loadProposals, mutationKey, proposalAppService]
+  );
+
+  const getProposalRenewalLineage = useCallback(
+    async (proposalId: ProposalId): Promise<ProposalRenewalLineage | null> => {
+      if (!appContext) return null;
+      try {
+        return await proposalAppService.getProposalRenewalLineage(proposalId, appContext);
+      } catch {
+        return null;
+      }
+    },
+    [appContext, proposalAppService]
+  );
+
   const contextValue = useMemo<ProposalsContextValue>(
     () => ({
       status,
@@ -839,6 +886,8 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       acknowledgeProposalHandoff,
       getProposalHandoffReceipt,
       getProposalHandoffQueue,
+      renewProposal,
+      getProposalRenewalLineage,
     }),
     [
       status,
@@ -881,6 +930,8 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       acknowledgeProposalHandoff,
       getProposalHandoffReceipt,
       getProposalHandoffQueue,
+      renewProposal,
+      getProposalRenewalLineage,
     ]
   );
 
