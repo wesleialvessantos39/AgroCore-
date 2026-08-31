@@ -1,4 +1,6 @@
 import type {
+  DocumentRequirement,
+  DocumentRequirementListQuery,
   DocumentReference,
   DocumentReferenceListQuery,
 } from '../../types/documents';
@@ -6,8 +8,10 @@ import { DocumentDomainError } from '../../types/documents';
 import type {
   ArchiveDocumentRecord,
   CreateDocumentRecord,
+  CreateDocumentRequirementRecord,
   DocumentReferenceGateway,
   ReplaceDocumentRecord,
+  ResolveDocumentRequirementRecord,
 } from '../documentGateway';
 
 interface IdempotencyRecord {
@@ -15,20 +19,39 @@ interface IdempotencyRecord {
   readonly documentId: string;
 }
 
+interface RequirementIdempotencyRecord {
+  readonly payloadHash: string;
+  readonly requirementId: string;
+}
+
 function cloneReference(reference: DocumentReference): DocumentReference {
   return structuredClone(reference);
+}
+
+function cloneRequirement(requirement: DocumentRequirement): DocumentRequirement {
+  return structuredClone(requirement);
 }
 
 /** Armazenamento estritamente volátil e vazio, exclusivo do ambiente DEV. */
 export class PreviewDocumentReferenceGateway implements DocumentReferenceGateway {
   private readonly referencesByOrganization = new Map<string, Map<string, DocumentReference>>();
   private readonly idempotencyRecords = new Map<string, IdempotencyRecord>();
+  private readonly requirementsByOrganization = new Map<string, Map<string, DocumentRequirement>>();
+  private readonly requirementIdempotencyRecords = new Map<string, RequirementIdempotencyRecord>();
 
   private getOrganizationStore(organizationId: string): Map<string, DocumentReference> {
     const existing = this.referencesByOrganization.get(organizationId);
     if (existing) return existing;
     const created = new Map<string, DocumentReference>();
     this.referencesByOrganization.set(organizationId, created);
+    return created;
+  }
+
+  private getRequirementStore(organizationId: string): Map<string, DocumentRequirement> {
+    const existing = this.requirementsByOrganization.get(organizationId);
+    if (existing) return existing;
+    const created = new Map<string, DocumentRequirement>();
+    this.requirementsByOrganization.set(organizationId, created);
     return created;
   }
 
@@ -64,6 +87,41 @@ export class PreviewDocumentReferenceGateway implements DocumentReferenceGateway
     this.idempotencyRecords.set(`${organizationId}:${operation}:${idempotencyKey}`, {
       payloadHash,
       documentId,
+    });
+  }
+
+  private replayRequirement(
+    organizationId: string,
+    operation: string,
+    idempotencyKey: string,
+    payloadHash: string
+  ): DocumentRequirement | null {
+    const key = `${organizationId}:${operation}:${idempotencyKey}`;
+    const previous = this.requirementIdempotencyRecords.get(key);
+    if (!previous) return null;
+    if (previous.payloadHash !== payloadHash) {
+      throw new DocumentDomainError(
+        'IDEMPOTENCY_CONFLICT',
+        'A chave da operação já foi utilizada com informações diferentes.'
+      );
+    }
+    const requirement = this.getRequirementStore(organizationId).get(previous.requirementId);
+    if (!requirement) {
+      throw new DocumentDomainError('INVALID_STATE', 'O resultado anterior não está mais disponível.');
+    }
+    return cloneRequirement(requirement);
+  }
+
+  private rememberRequirement(
+    organizationId: string,
+    operation: string,
+    idempotencyKey: string,
+    payloadHash: string,
+    requirementId: string
+  ): void {
+    this.requirementIdempotencyRecords.set(`${organizationId}:${operation}:${idempotencyKey}`, {
+      payloadHash,
+      requirementId,
     });
   }
 
@@ -192,9 +250,121 @@ export class PreviewDocumentReferenceGateway implements DocumentReferenceGateway
     return cloneReference(archived);
   }
 
+  async listRequirements(
+    query: DocumentRequirementListQuery,
+    signal?: AbortSignal
+  ): Promise<readonly DocumentRequirement[]> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const requirements = [...this.getRequirementStore(query.organizationId).values()]
+      .filter((item) => !query.status || query.status === 'all' || item.status === query.status)
+      .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id));
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    return requirements.map(cloneRequirement);
+  }
+
+  async getRequirementById(
+    organizationId: string,
+    requirementId: string
+  ): Promise<DocumentRequirement | null> {
+    const requirement = this.getRequirementStore(organizationId).get(requirementId);
+    return requirement ? cloneRequirement(requirement) : null;
+  }
+
+  async createRequirement(input: CreateDocumentRequirementRecord): Promise<DocumentRequirement> {
+    const { requirement } = input;
+    const replay = this.replayRequirement(
+      requirement.organizationId,
+      'create-requirement',
+      input.idempotencyKey,
+      input.payloadHash
+    );
+    if (replay) return replay;
+
+    const store = this.getRequirementStore(requirement.organizationId);
+    const duplicate = [...store.values()].find(
+      (candidate) =>
+        candidate.status === 'open' &&
+        candidate.logicalOwnerType === requirement.logicalOwnerType &&
+        candidate.logicalOwnerId === requirement.logicalOwnerId &&
+        candidate.category === requirement.category
+    );
+    if (duplicate) {
+      throw new DocumentDomainError(
+        'DUPLICATE_OPEN_REQUIREMENT',
+        'Já existe uma pendência aberta dessa categoria para o mesmo atendimento.'
+      );
+    }
+
+    store.set(requirement.id, Object.freeze(cloneRequirement(requirement)));
+    this.rememberRequirement(
+      requirement.organizationId,
+      'create-requirement',
+      input.idempotencyKey,
+      input.payloadHash,
+      requirement.id
+    );
+    return cloneRequirement(requirement);
+  }
+
+  async resolveRequirement(input: ResolveDocumentRequirementRecord): Promise<DocumentRequirement> {
+    const { requirement } = input;
+    const replay = this.replayRequirement(
+      requirement.organizationId,
+      input.operation,
+      input.idempotencyKey,
+      input.payloadHash
+    );
+    if (replay) return replay;
+
+    const store = this.getRequirementStore(requirement.organizationId);
+    const current = store.get(requirement.id);
+    if (!current) {
+      throw new DocumentDomainError('REQUIREMENT_NOT_FOUND', 'Pendência documental não encontrada.');
+    }
+    if (current.versionNumber !== input.expectedVersion) {
+      throw new DocumentDomainError('VERSION_CONFLICT', 'A pendência foi alterada por outra operação.');
+    }
+    if (current.status !== 'open') {
+      throw new DocumentDomainError('REQUIREMENT_ALREADY_RESOLVED', 'A pendência já foi encerrada.');
+    }
+    if (requirement.versionNumber !== current.versionNumber + 1) {
+      throw new DocumentDomainError('VERSION_CONFLICT', 'A nova versão da pendência é inválida.');
+    }
+
+    if (input.operation === 'fulfill') {
+      const documentId = input.linkedDocumentId;
+      const document = documentId
+        ? this.getOrganizationStore(requirement.organizationId).get(documentId)
+        : null;
+      if (
+        !document ||
+        document.status !== 'active' ||
+        document.logicalOwnerType !== current.logicalOwnerType ||
+        document.logicalOwnerId !== current.logicalOwnerId ||
+        document.category !== current.category
+      ) {
+        throw new DocumentDomainError(
+          'REQUIREMENT_MISMATCH',
+          'O documento escolhido não atende esta pendência.'
+        );
+      }
+    }
+
+    store.set(requirement.id, Object.freeze(cloneRequirement(requirement)));
+    this.rememberRequirement(
+      requirement.organizationId,
+      input.operation,
+      input.idempotencyKey,
+      input.payloadHash,
+      requirement.id
+    );
+    return cloneRequirement(requirement);
+  }
+
   clearAllSessionData(): void {
     this.referencesByOrganization.clear();
     this.idempotencyRecords.clear();
+    this.requirementsByOrganization.clear();
+    this.requirementIdempotencyRecords.clear();
   }
 }
-

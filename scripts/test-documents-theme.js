@@ -6,6 +6,8 @@ const TARGETS = [
   'src/pages/DocumentsPage.tsx',
   'src/pages/DocumentReferenceCreatePage.tsx',
   'src/pages/DocumentReferenceDetailPage.tsx',
+  'src/pages/DocumentGovernancePage.tsx',
+  'src/pages/DocumentRequirementCreatePage.tsx',
 ];
 
 const FORBIDDEN = [
@@ -48,10 +50,12 @@ function walk(target) {
 console.log('Auditando tema e interface do Módulo 006...');
 TARGETS.forEach(walk);
 
-const createPage = fs.readFileSync('src/pages/DocumentReferenceCreatePage.tsx', 'utf8');
-if (/type=["']file["']/.test(createPage)) {
-  console.error('[SEGURANÇA] A fundação documental não pode oferecer input de arquivo.');
-  violations += 1;
+for (const page of TARGETS.filter((target) => target.endsWith('.tsx'))) {
+  const source = fs.readFileSync(page, 'utf8');
+  if (/type=["']file["']/.test(source)) {
+    console.error(`[SEGURANÇA] ${page} não pode oferecer input de arquivo.`);
+    violations += 1;
+  }
 }
 
 if (violations > 0) {
@@ -60,4 +64,3 @@ if (violations > 0) {
 }
 
 console.log('✅ Módulo 006 usa exclusivamente a identidade AgroCore e não oferece upload de arquivo.');
-

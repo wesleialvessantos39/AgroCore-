@@ -16,7 +16,6 @@ import {
   FileCheck,
   History,
   Lock,
-  Copy,
   ExternalLink,
   Award,
 } from 'lucide-react';
@@ -60,7 +59,6 @@ export function AppraisalIssuancePanel({
   const [issuanceError, setIssuanceError] = useState<string | null>(null);
   const [issuanceSuccess, setIssuanceSuccess] = useState<string | null>(null);
   const [selectedVersionForInspection, setSelectedVersionForInspection] = useState<AppraisalIssuedVersion | null>(null);
-  const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
   // Avaliação de Prontidão em Tempo Real
   const readiness = useMemo(() => {
@@ -96,21 +94,13 @@ export function AppraisalIssuancePanel({
 
     try {
       const issued = await onIssueFormalVersion();
-      setIssuanceSuccess(
-        `Versão ${issued.versionNumber} emitida com sucesso com Checksum SHA-256: ${issued.checksumSha256.substring(0, 16)}...`
-      );
+      setIssuanceSuccess(`Versão ${issued.versionNumber} emitida com sucesso e integridade verificada.`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha na emissão formal da versão.';
       setIssuanceError(msg);
     } finally {
       setIsIssuing(false);
     }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedHash(text);
-    setTimeout(() => setCopiedHash(null), 3000);
   };
 
   return (
@@ -123,7 +113,7 @@ export function AppraisalIssuancePanel({
             Emissão Formal e Governança Pericial (NBR 14653)
           </h3>
           <p className="text-xs text-[#0B3D2E]/70 mt-0.5">
-            Verificação de conformidade normativa, integridade criptográfica SHA-256 e trilha imutável.
+            Verificação de conformidade normativa, integridade e histórico de versões.
           </p>
         </div>
 
@@ -208,7 +198,7 @@ export function AppraisalIssuancePanel({
           >
             <Lock className="w-4 h-4 text-[#78C89A]" />
             {isIssuing
-              ? 'Emitindo e Calculando Checksum SHA-256...'
+              ? 'Emitindo e verificando a versão...'
               : `Emitir Versão Formal ${issuedVersions.length + 1} (NBR 14653)`}
           </button>
           {!isDesignatedResponsible && (
@@ -266,7 +256,7 @@ export function AppraisalIssuancePanel({
       <div className="p-5 bg-white border border-[#0B3D2E]/15 rounded-2xl space-y-4">
         <h4 className="text-xs font-bold text-[#0B3D2E] uppercase tracking-wide flex items-center gap-2">
           <History className="w-4 h-4 text-[#0B3D2E]" />
-          Histórico de Versões Emitidas & Checksums de Integridade ({issuedVersions.length})
+          Histórico de versões emitidas ({issuedVersions.length})
         </h4>
 
         {issuedVersions.length === 0 ? (
@@ -294,23 +284,7 @@ export function AppraisalIssuancePanel({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs text-[#0B3D2E]">
-                    <span className="font-semibold">Checksum SHA-256:</span>
-                    <code className="px-1.5 py-0.5 bg-[#0B3D2E]/5 rounded text-[11px] font-mono text-[#0B3D2E]">
-                      {v.checksumSha256.substring(0, 24)}...{v.checksumSha256.substring(56)}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(v.checksumSha256)}
-                      className="p-1 text-[#0B3D2E]/60 hover:text-[#0B3D2E] rounded"
-                      title="Copiar Hash SHA-256 completo"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                    {copiedHash === v.checksumSha256 && (
-                      <span className="text-[10px] text-[#0B3D2E] font-bold">Copiado!</span>
-                    )}
-                  </div>
+                  <p className="text-xs font-semibold text-[#0B3D2E]">Integridade verificada pelo sistema.</p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -320,7 +294,7 @@ export function AppraisalIssuancePanel({
                     className="px-3 py-1.5 text-xs font-semibold text-[#0B3D2E] bg-[#0B3D2E]/5 border border-[#0B3D2E]/20 rounded-xl hover:bg-[#0B3D2E]/10 transition-colors flex items-center gap-1.5"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    Inspecionar Snapshot
+                    Ver dados da versão
                   </button>
                 </div>
               </div>
@@ -329,7 +303,7 @@ export function AppraisalIssuancePanel({
         )}
       </div>
 
-      {/* Modal de Inspeção do Snapshot Canônico */}
+      {/* Modal de inspeção da versão preservada */}
       {selectedVersionForInspection && (
         <div className={APPRAISAL_THEME.modalOverlay}>
           <div className="bg-white border border-[#0B3D2E]/20 rounded-2xl shadow-xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto text-[#0B3D2E]">
@@ -337,11 +311,9 @@ export function AppraisalIssuancePanel({
               <div>
                 <h3 className="text-base font-bold text-[#0B3D2E] flex items-center gap-2">
                   <Lock className="w-4 h-4 text-[#0B3D2E]" />
-                  Fotografia Canônica — Versão {selectedVersionForInspection.versionNumber}
+                  Dados preservados — Versão {selectedVersionForInspection.versionNumber}
                 </h3>
-                <p className="text-xs text-[#0B3D2E]/70 font-mono mt-0.5">
-                  SHA-256: {selectedVersionForInspection.checksumSha256}
-                </p>
+                <p className="text-xs text-[#0B3D2E]/70 mt-0.5">Integridade verificada pelo sistema.</p>
               </div>
               <button
                 type="button"
@@ -355,17 +327,11 @@ export function AppraisalIssuancePanel({
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-[#0B3D2E]/5 rounded-xl space-y-1">
                 <p><strong>Emissão:</strong> {new Date(selectedVersionForInspection.issuedAt).toLocaleString('pt-BR')}</p>
-                <p><strong>Responsável:</strong> {selectedVersionForInspection.issuedByUserName} ({selectedVersionForInspection.issuedByUserId})</p>
+                <p><strong>Responsável:</strong> {selectedVersionForInspection.issuedByUserName}</p>
                 <p><strong>Total de Amostras:</strong> {selectedVersionForInspection.snapshot.marketSamples.length}</p>
                 <p><strong>Valor Homologado:</strong> {formatBRL(selectedVersionForInspection.snapshot.calculations.breakdown?.finalAdoptedValue || selectedVersionForInspection.snapshot.calculations.breakdown?.totalCalculatedValue || 0)}</p>
               </div>
 
-              <div>
-                <span className="font-bold text-[#0B3D2E] block mb-1">Payload JSON Imutável:</span>
-                <pre className="p-3 bg-[#0B3D2E]/5 border border-[#0B3D2E]/15 rounded-xl font-mono text-[10px] max-h-60 overflow-y-auto text-[#0B3D2E]">
-                  {JSON.stringify(selectedVersionForInspection.snapshot, null, 2)}
-                </pre>
-              </div>
             </div>
 
             <div className="flex justify-end pt-2">

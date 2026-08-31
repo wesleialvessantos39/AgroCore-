@@ -164,6 +164,14 @@ const DocumentReferenceCreatePage = lazy(() =>
   import('../pages/DocumentReferenceCreatePage').then((module) => ({ default: module.DocumentReferenceCreatePage }))
 );
 
+const DocumentGovernancePage = lazy(() =>
+  import('../pages/DocumentGovernancePage').then((module) => ({ default: module.DocumentGovernancePage }))
+);
+
+const DocumentRequirementCreatePage = lazy(() =>
+  import('../pages/DocumentRequirementCreatePage').then((module) => ({ default: module.DocumentRequirementCreatePage }))
+);
+
 const DocumentReferenceDetailPage = lazy(() =>
   import('../pages/DocumentReferenceDetailPage').then((module) => ({ default: module.DocumentReferenceDetailPage }))
 );
@@ -332,6 +340,22 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission="clients:create">
                   <ClientCreatePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="pendencias"
+              element={
+                <RequirePermission permission="documents:view_requirements">
+                  <DocumentGovernancePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="pendencias/nova"
+              element={
+                <RequirePermission permission="documents:manage_requirements">
+                  <DocumentRequirementCreatePage />
                 </RequirePermission>
               }
             />

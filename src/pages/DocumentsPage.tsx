@@ -1,4 +1,4 @@
-import { Archive, FileCheck2, Plus, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Archive, ClipboardList, FileCheck2, Plus, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthorization } from '../authorization/useAuthorization';
 import { DOCUMENT_THEME } from '../documents/theme';
@@ -22,10 +22,6 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
-function formatBytes(value: number): string {
-  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value / 1024) + ' KiB';
-}
-
 export function DocumentsPage() {
   const navigate = useNavigate();
   const { can } = useAuthorization();
@@ -35,9 +31,9 @@ export function DocumentsPage() {
     <div id="page-documents" className={DOCUMENT_THEME.page}>
       <header className="flex flex-col gap-4 border-b border-[#0B3D2E]/15 pb-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0B3D2E] sm:text-3xl">Gestão documental</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[#0B3D2E] sm:text-3xl">Documentos</h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#0B3D2E]/70 sm:text-base">
-            Referências documentais versionadas e vinculadas às fontes canônicas da organização.
+            Organize e acompanhe os documentos usados nos atendimentos da empresa.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -50,6 +46,16 @@ export function DocumentsPage() {
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
             Atualizar
           </button>
+          {can('documents:view_requirements') && (
+            <button
+              type="button"
+              className={DOCUMENT_THEME.buttonSecondary}
+              onClick={() => navigate(ROUTES.DOCUMENT_REQUIREMENTS)}
+            >
+              <ClipboardList className="h-4 w-4" aria-hidden="true" />
+              Pendências e prazos
+            </button>
+          )}
           {can('documents:register_reference') && (
             <button
               type="button"
@@ -57,18 +63,18 @@ export function DocumentsPage() {
               onClick={() => navigate(ROUTES.DOCUMENTS_NEW)}
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
-              Registrar referência
+              Adicionar documento
             </button>
           )}
         </div>
       </header>
 
-      <section className={`${DOCUMENT_THEME.surfaceSoft} p-4`} aria-label="Limites da infraestrutura documental">
+      <section className={`${DOCUMENT_THEME.surfaceSoft} p-4`} aria-label="Disponibilidade de arquivos">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0B3D2E]" aria-hidden="true" />
           <p className="text-sm leading-relaxed text-[#0B3D2E]">
-            Esta etapa registra somente metadados. O AgroCore não recebe, armazena nem disponibiliza arquivos,
-            bytes, Base64 ou links temporários neste ambiente.
+            Nesta etapa, salve apenas as informações do documento. O arquivo não será enviado nem ficará
+            disponível para abrir ou baixar.
           </p>
         </div>
       </section>
@@ -85,13 +91,13 @@ export function DocumentsPage() {
                 value={filters.search ?? ''}
                 maxLength={100}
                 onChange={(event) => setFilters({ ...filters, search: event.target.value })}
-                placeholder="Nome da referência"
+                placeholder="Nome do documento"
               />
             </span>
           </label>
 
           <label className="block text-sm font-semibold text-[#0B3D2E]">
-            <span className="mb-1.5 block">Entidade</span>
+            <span className="mb-1.5 block">Relacionado a</span>
             <select
               className={DOCUMENT_THEME.input}
               value={filters.ownerType ?? 'all'}
@@ -136,20 +142,20 @@ export function DocumentsPage() {
 
       <section aria-labelledby="document-list-title">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 id="document-list-title" className="text-lg font-bold text-[#0B3D2E]">Referências autorizadas</h2>
+          <h2 id="document-list-title" className="text-lg font-bold text-[#0B3D2E]">Documentos disponíveis</h2>
           <span className="text-sm text-[#0B3D2E]/65">{references.length} registro(s)</span>
         </div>
 
         {status === 'loading' && (
           <div className={`${DOCUMENT_THEME.surfaceSoft} p-8 text-center`} role="status" aria-live="polite">
             <RefreshCw className="mx-auto h-6 w-6 animate-spin text-[#0B3D2E]" aria-hidden="true" />
-            <p className="mt-3 text-sm text-[#0B3D2E]">Carregando referências documentais…</p>
+            <p className="mt-3 text-sm text-[#0B3D2E]">Carregando documentos…</p>
           </div>
         )}
 
         {(['error', 'unavailable', 'forbidden'] as const).includes(status as 'error' | 'unavailable' | 'forbidden') && (
           <div className={`${DOCUMENT_THEME.surfaceSoft} p-6`} role="alert" aria-live="assertive">
-            <p className="font-semibold text-[#0B3D2E]">Não foi possível mostrar as referências.</p>
+            <p className="font-semibold text-[#0B3D2E]">Não foi possível mostrar os documentos.</p>
             <p className="mt-1 text-sm text-[#0B3D2E]/70">{errorMessage ?? 'Acesso ou serviço indisponível.'}</p>
             <button type="button" className={`${DOCUMENT_THEME.buttonSecondary} mt-4`} onClick={() => void refresh()}>
               Tentar novamente
@@ -160,9 +166,9 @@ export function DocumentsPage() {
         {status === 'empty' && (
           <div className={`${DOCUMENT_THEME.surfaceSoft} p-8 text-center`}>
             <Archive className="mx-auto h-7 w-7 text-[#0B3D2E]" aria-hidden="true" />
-            <p className="mt-3 font-semibold text-[#0B3D2E]">Nenhuma referência encontrada</p>
+            <p className="mt-3 font-semibold text-[#0B3D2E]">Nenhum documento encontrado</p>
             <p className="mt-1 text-sm text-[#0B3D2E]/70">
-              Ajuste os filtros ou registre metadados quando houver uma fonte canônica disponível.
+              Ajuste os filtros ou adicione um documento quando houver um atendimento disponível.
             </p>
           </div>
         )}
@@ -188,7 +194,7 @@ export function DocumentsPage() {
                       {DOCUMENT_CATEGORY_LABELS[reference.category]} · {DOCUMENT_OWNER_LABELS[reference.logicalOwnerType]}
                     </span>
                     <span className="mt-1 block text-xs text-[#0B3D2E]/55">
-                      Versão {reference.versionNumber} · {formatBytes(reference.fileSizeBytes)} · Atualizada em {formatDate(reference.updatedAt)}
+                      Versão {reference.versionNumber} · Atualizada em {formatDate(reference.updatedAt)}
                     </span>
                   </span>
                 </button>
@@ -200,4 +206,3 @@ export function DocumentsPage() {
     </div>
   );
 }
-

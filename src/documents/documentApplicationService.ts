@@ -3,16 +3,24 @@ import type { Permission } from '../types/authorization';
 import {
   DocumentDomainError,
   type ArchiveDocumentReferenceInput,
+  type CreateDocumentRequirementInput,
   type DocumentAccessScope,
   type DocumentApplicationContext,
   type DocumentCategory,
+  type DocumentGovernanceDashboard,
   type DocumentLogicalOwnerType,
   type DocumentMimeType,
   type DocumentOwnerResolution,
   type DocumentReference,
   type DocumentReferenceFilters,
+  type DocumentRequirement,
+  type DocumentRequirementEffectiveState,
+  type DocumentRequirementProjection,
+  type DocumentValidityState,
+  type FulfillDocumentRequirementInput,
   type RegisterDocumentReferenceInput,
   type ReplaceDocumentReferenceInput,
+  type ResolveDocumentRequirementInput,
 } from '../types/documents';
 import {
   calculateDocumentSha256,
@@ -169,7 +177,8 @@ function ensureNoForbiddenPayload(value: unknown, path = 'entrada'): void {
   }
 }
 
-function parseFileSize(value: unknown): number {
+function parseFileSize(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
   if (!Number.isSafeInteger(value) || typeof value !== 'number' || value < 1 || value > MAX_FILE_SIZE_BYTES) {
     throw new DocumentDomainError(
       'INVALID_INPUT',
@@ -177,6 +186,88 @@ function parseFileSize(value: unknown): number {
     );
   }
   return value;
+}
+
+function parseExpectedVersion(value: unknown): number {
+  if (!Number.isSafeInteger(value) || typeof value !== 'number' || value < 1) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Versão esperada inválida.');
+  }
+  return value;
+}
+
+function parseCreateRequirementInput(value: unknown): CreateDocumentRequirementInput {
+  ensureNoForbiddenPayload(value);
+  if (!isRecord(value)) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Dados da pendência documental inválidos.');
+  }
+  if (!OWNER_TYPES.includes(value.logicalOwnerType as DocumentLogicalOwnerType)) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Tipo de vínculo não reconhecido.');
+  }
+  if (!CATEGORIES.includes(value.category as DocumentCategory)) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Categoria documental não reconhecida.');
+  }
+  if (!ACCESS_SCOPES.includes(value.accessScope as DocumentAccessScope)) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Regra de acesso não reconhecida.');
+  }
+  return {
+    logicalOwnerType: value.logicalOwnerType as DocumentLogicalOwnerType,
+    logicalOwnerId: compactText(value.logicalOwnerId, 'Registro relacionado', 1, 160),
+    category: value.category as DocumentCategory,
+    title: compactText(value.title, 'Título da pendência', 3, 120),
+    accessScope: value.accessScope as DocumentAccessScope,
+    dueOn: parseIsoDate(value.dueOn, 'Prazo'),
+    notes: optionalText(value.notes, 'Orientação', 500),
+    idempotencyKey: parseIdempotencyKey(value.idempotencyKey),
+  };
+}
+
+function parseFulfillRequirementInput(value: unknown): FulfillDocumentRequirementInput {
+  ensureNoForbiddenPayload(value);
+  if (!isRecord(value)) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Dados de atendimento da pendência inválidos.');
+  }
+  return {
+    requirementId: compactText(value.requirementId, 'Pendência documental', 1, 160),
+    documentId: compactText(value.documentId, 'Documento', 1, 160),
+    expectedVersion: parseExpectedVersion(value.expectedVersion),
+    idempotencyKey: parseIdempotencyKey(value.idempotencyKey),
+  };
+}
+
+function parseResolveRequirementInput(value: unknown): ResolveDocumentRequirementInput {
+  ensureNoForbiddenPayload(value);
+  if (!isRecord(value)) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Dados de encerramento da pendência inválidos.');
+  }
+  return {
+    requirementId: compactText(value.requirementId, 'Pendência documental', 1, 160),
+    expectedVersion: parseExpectedVersion(value.expectedVersion),
+    reason: compactText(value.reason, 'Motivo', 3, 240),
+    idempotencyKey: parseIdempotencyKey(value.idempotencyKey),
+  };
+}
+
+function utcDate(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+export function evaluateDocumentValidity(
+  reference: Pick<DocumentReference, 'expiresOn'>,
+  now: Date,
+  warningDays = 30
+): DocumentValidityState {
+  if (!Number.isSafeInteger(warningDays) || warningDays < 0 || warningDays > 3650) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Janela de aviso de validade inválida.');
+  }
+  if (!reference.expiresOn) return 'no_expiration';
+  const today = utcDate(now);
+  if (reference.expiresOn < today) return 'expired';
+  const remainingDays = Math.floor(
+    (new Date(`${reference.expiresOn}T00:00:00.000Z`).getTime() -
+      new Date(`${today}T00:00:00.000Z`).getTime()) /
+      86_400_000
+  );
+  return remainingDays <= warningDays ? 'expiring_soon' : 'current';
 }
 
 function parseRegisterInput(value: unknown): RegisterDocumentReferenceInput {
@@ -316,6 +407,70 @@ export class DocumentApplicationService {
     return owner.authorizedUserIds.includes(context.actor.userId);
   }
 
+  private canAccessRequirement(
+    context: DocumentApplicationContext,
+    requirement: DocumentRequirement,
+    owner: DocumentOwnerResolution
+  ): boolean {
+    if (this.isManagement(context)) return true;
+    if (requirement.accessScope === 'management') return false;
+    return owner.authorizedUserIds.includes(context.actor.userId);
+  }
+
+  private async getRequirement(
+    context: DocumentApplicationContext,
+    requirementId: string
+  ): Promise<{ readonly requirement: DocumentRequirement; readonly owner: DocumentOwnerResolution }> {
+    const requirement = await this.gateway.getRequirementById(context.organizationId, requirementId);
+    if (!requirement) {
+      throw new DocumentDomainError('REQUIREMENT_NOT_FOUND', 'Pendência documental não encontrada.');
+    }
+    const owner = await this.resolveAndValidateOwner(
+      context,
+      requirement.logicalOwnerType,
+      requirement.logicalOwnerId
+    );
+    if (!this.canAccessRequirement(context, requirement, owner)) {
+      throw new DocumentDomainError('FORBIDDEN', 'Pendência documental fora do escopo autorizado.');
+    }
+    return { requirement, owner };
+  }
+
+  private projectRequirement(
+    requirement: DocumentRequirement,
+    linkedDocument: DocumentReference | undefined,
+    warningDays: number,
+    now: Date
+  ): DocumentRequirementProjection {
+    if (requirement.status === 'waived' || requirement.status === 'cancelled') {
+      return { requirement: structuredClone(requirement), effectiveState: requirement.status };
+    }
+    if (requirement.status === 'open') {
+      const effectiveState: DocumentRequirementEffectiveState =
+        requirement.dueOn && requirement.dueOn < utcDate(now) ? 'overdue' : 'pending';
+      return { requirement: structuredClone(requirement), effectiveState };
+    }
+    if (!linkedDocument || linkedDocument.status !== 'active') {
+      return {
+        requirement: structuredClone(requirement),
+        effectiveState: 'document_unavailable',
+      };
+    }
+    const documentValidity = evaluateDocumentValidity(linkedDocument, now, warningDays);
+    const effectiveState: DocumentRequirementEffectiveState =
+      documentValidity === 'expired'
+        ? 'document_expired'
+        : documentValidity === 'expiring_soon'
+          ? 'document_expiring'
+          : 'fulfilled';
+    return {
+      requirement: structuredClone(requirement),
+      effectiveState,
+      linkedDocument: cloneReference(linkedDocument),
+      documentValidity,
+    };
+  }
+
   private assertCanMutateOwner(
     context: DocumentApplicationContext,
     owner: DocumentOwnerResolution,
@@ -337,18 +492,19 @@ export class DocumentApplicationService {
       { ...filters, organizationId: context.organizationId },
       signal
     );
-    const visible: DocumentReference[] = [];
-    for (const reference of references) {
-      const owner = await context.resolveOwner(reference.logicalOwnerType, reference.logicalOwnerId);
-      if (
-        owner.exists &&
-        owner.organizationId === context.organizationId &&
-        this.canAccess(context, reference, owner)
-      ) {
-        visible.push(cloneReference(reference));
-      }
-    }
-    return visible;
+    const visibility = await Promise.all(
+      references.map(async (reference) => ({
+        reference,
+        owner: await context.resolveOwner(reference.logicalOwnerType, reference.logicalOwnerId),
+      }))
+    );
+    return visibility.flatMap(({ reference, owner }) =>
+      owner.exists &&
+      owner.organizationId === context.organizationId &&
+      this.canAccess(context, reference, owner)
+        ? [cloneReference(reference)]
+        : []
+    );
   }
 
   async getReferenceById(
@@ -565,5 +721,363 @@ export class DocumentApplicationService {
       metadata: Object.freeze({ versionNumber: result.versionNumber, archived: true }),
     });
     return cloneReference(result);
+  }
+
+  async listRequirements(
+    context: DocumentApplicationContext,
+    warningDays = 30,
+    signal?: AbortSignal
+  ): Promise<readonly DocumentRequirementProjection[]> {
+    this.assertPermission(context, 'documents:view_requirements');
+    if (!Number.isSafeInteger(warningDays) || warningDays < 0 || warningDays > 3650) {
+      throw new DocumentDomainError('INVALID_INPUT', 'Janela de aviso de validade inválida.');
+    }
+    const requirements = await this.gateway.listRequirements(
+      { organizationId: context.organizationId, status: 'all' },
+      signal
+    );
+    const visibility = await Promise.all(
+      requirements.map(async (requirement) => ({
+        requirement,
+        owner: await context.resolveOwner(requirement.logicalOwnerType, requirement.logicalOwnerId),
+      }))
+    );
+    const visible = visibility.flatMap(({ requirement, owner }) =>
+      owner.exists &&
+      owner.organizationId === context.organizationId &&
+      this.canAccessRequirement(context, requirement, owner)
+        ? [requirement]
+        : []
+    );
+    const documents = await Promise.all(
+      visible.map((requirement) =>
+        requirement.linkedDocumentId
+          ? this.gateway.getReferenceById(context.organizationId, requirement.linkedDocumentId)
+          : Promise.resolve(null)
+      )
+    );
+    const now = this.clock.now();
+    return visible.map((requirement, index) =>
+      this.projectRequirement(requirement, documents[index] ?? undefined, warningDays, now)
+    );
+  }
+
+  async getGovernanceDashboard(
+    context: DocumentApplicationContext,
+    warningDays = 30,
+    signal?: AbortSignal
+  ): Promise<DocumentGovernanceDashboard> {
+    const [requirements, references] = await Promise.all([
+      this.listRequirements(context, warningDays, signal),
+      this.listReferences(context, { status: 'active' }, signal),
+    ]);
+    const now = this.clock.now();
+    const expiringDocuments = references.filter(
+      (reference) => evaluateDocumentValidity(reference, now, warningDays) === 'expiring_soon'
+    );
+    const expiredDocuments = references.filter(
+      (reference) => evaluateDocumentValidity(reference, now, warningDays) === 'expired'
+    );
+    const count = (states: readonly DocumentRequirementEffectiveState[]) =>
+      requirements.filter((item) => states.includes(item.effectiveState)).length;
+    return {
+      generatedAt: now.toISOString(),
+      warningDays,
+      requirements,
+      availableDocuments: references.map(cloneReference),
+      expiringDocuments: expiringDocuments.map(cloneReference),
+      expiredDocuments: expiredDocuments.map(cloneReference),
+      totals: {
+        pending: count(['pending']),
+        overdue: count(['overdue']),
+        fulfilled: count(['fulfilled']),
+        attentionRequired: count([
+          'overdue',
+          'document_expiring',
+          'document_expired',
+          'document_unavailable',
+        ]),
+        waived: count(['waived']),
+      },
+    };
+  }
+
+  async createRequirement(
+    context: DocumentApplicationContext,
+    command: unknown
+  ): Promise<DocumentRequirement> {
+    this.assertPermission(context, 'documents:manage_requirements');
+    const input = parseCreateRequirementInput(command);
+    const owner = await this.resolveAndValidateOwner(
+      context,
+      input.logicalOwnerType,
+      input.logicalOwnerId
+    );
+    this.assertCanMutateOwner(context, owner, input.accessScope);
+    const now = this.clock.now().toISOString();
+    const checksumPayload = {
+      organizationId: context.organizationId,
+      logicalOwnerType: input.logicalOwnerType,
+      logicalOwnerId: input.logicalOwnerId,
+      category: input.category,
+      title: input.title,
+      accessScope: input.accessScope,
+      dueOn: input.dueOn,
+      notes: input.notes,
+      status: 'open',
+      versionNumber: 1,
+    };
+    const payloadHash = await calculateDocumentSha256(canonicalDocumentJson(checksumPayload));
+    const requirement: DocumentRequirement = {
+      id: this.idGenerator.generate(),
+      organizationId: context.organizationId,
+      logicalOwnerType: input.logicalOwnerType,
+      logicalOwnerId: input.logicalOwnerId,
+      category: input.category,
+      title: input.title,
+      accessScope: input.accessScope,
+      status: 'open',
+      dueOn: input.dueOn,
+      notes: input.notes,
+      versionNumber: 1,
+      integrityCodeSha256: payloadHash,
+      createdByUserId: context.actor.userId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const result = await this.gateway.createRequirement({
+      requirement,
+      idempotencyKey: input.idempotencyKey,
+      payloadHash,
+    });
+    documentEventJournal.record({
+      id: this.idGenerator.generate(),
+      organizationId: context.organizationId,
+      actorUserId: context.actor.userId,
+      eventType: 'document.requirement.created',
+      requirementId: result.id,
+      logicalOwnerType: result.logicalOwnerType,
+      logicalOwnerId: result.logicalOwnerId,
+      category: result.category,
+      correlationId: input.idempotencyKey,
+      idempotencyKey: input.idempotencyKey,
+      occurredAt: result.createdAt,
+      metadata: Object.freeze({ versionNumber: result.versionNumber, status: result.status }),
+    });
+    return structuredClone(result);
+  }
+
+  async fulfillRequirement(
+    context: DocumentApplicationContext,
+    command: unknown
+  ): Promise<DocumentRequirement> {
+    this.assertPermission(context, 'documents:fulfill_requirements');
+    const input = parseFulfillRequirementInput(command);
+    const { requirement } = await this.getRequirement(context, input.requirementId);
+    const payloadHash = await calculateDocumentSha256(
+      canonicalDocumentJson({
+        organizationId: context.organizationId,
+        requirementId: input.requirementId,
+        documentId: input.documentId,
+        expectedVersion: input.expectedVersion,
+        operation: 'fulfill',
+      })
+    );
+    const isPotentialReplay =
+      requirement.status === 'fulfilled' &&
+      requirement.linkedDocumentId === input.documentId &&
+      requirement.versionNumber === input.expectedVersion + 1;
+    if (isPotentialReplay) {
+      const replay = await this.gateway.resolveRequirement({
+        requirement,
+        expectedVersion: input.expectedVersion,
+        operation: 'fulfill',
+        linkedDocumentId: input.documentId,
+        idempotencyKey: input.idempotencyKey,
+        payloadHash,
+      });
+      documentEventJournal.record({
+        id: this.idGenerator.generate(),
+        organizationId: context.organizationId,
+        actorUserId: context.actor.userId,
+        eventType: 'document.requirement.fulfilled',
+        documentId: input.documentId,
+        requirementId: replay.id,
+        logicalOwnerType: replay.logicalOwnerType,
+        logicalOwnerId: replay.logicalOwnerId,
+        category: replay.category,
+        correlationId: input.idempotencyKey,
+        idempotencyKey: input.idempotencyKey,
+        occurredAt: replay.updatedAt,
+        metadata: Object.freeze({ versionNumber: replay.versionNumber, status: replay.status }),
+      });
+      return structuredClone(replay);
+    }
+    const document = await this.gateway.getReferenceById(context.organizationId, input.documentId);
+    if (!document || document.status !== 'active') {
+      throw new DocumentDomainError('REFERENCE_NOT_FOUND', 'Documento ativo não encontrado.');
+    }
+    const documentOwner = await this.resolveAndValidateOwner(
+      context,
+      document.logicalOwnerType,
+      document.logicalOwnerId
+    );
+    if (!this.canAccess(context, document, documentOwner)) {
+      throw new DocumentDomainError('FORBIDDEN', 'Documento fora do escopo autorizado.');
+    }
+    if (
+      document.logicalOwnerType !== requirement.logicalOwnerType ||
+      document.logicalOwnerId !== requirement.logicalOwnerId ||
+      document.category !== requirement.category
+    ) {
+      throw new DocumentDomainError('REQUIREMENT_MISMATCH', 'O documento escolhido não atende esta pendência.');
+    }
+    const operationNow = this.clock.now();
+    if (evaluateDocumentValidity(document, operationNow) === 'expired') {
+      throw new DocumentDomainError('DOCUMENT_EXPIRED', 'Um documento vencido não pode atender a pendência.');
+    }
+    const now = operationNow.toISOString();
+    const updatedPayload = {
+      ...requirement,
+      status: 'fulfilled' as const,
+      linkedDocumentId: document.id,
+      versionNumber: input.expectedVersion + 1,
+      updatedAt: now,
+      resolvedAt: now,
+      resolvedByUserId: context.actor.userId,
+      resolutionReason: undefined,
+      integrityCodeSha256: '',
+    };
+    const integrityCodeSha256 = await calculateDocumentSha256(
+      canonicalDocumentJson({ ...updatedPayload, integrityCodeSha256: undefined })
+    );
+    const result = await this.gateway.resolveRequirement({
+      requirement: { ...updatedPayload, integrityCodeSha256 },
+      expectedVersion: input.expectedVersion,
+      operation: 'fulfill',
+      linkedDocumentId: document.id,
+      idempotencyKey: input.idempotencyKey,
+      payloadHash,
+    });
+    documentEventJournal.record({
+      id: this.idGenerator.generate(),
+      organizationId: context.organizationId,
+      actorUserId: context.actor.userId,
+      eventType: 'document.requirement.fulfilled',
+      documentId: document.id,
+      requirementId: result.id,
+      logicalOwnerType: result.logicalOwnerType,
+      logicalOwnerId: result.logicalOwnerId,
+      category: result.category,
+      correlationId: input.idempotencyKey,
+      idempotencyKey: input.idempotencyKey,
+      occurredAt: result.updatedAt,
+      metadata: Object.freeze({ versionNumber: result.versionNumber, status: result.status }),
+    });
+    return structuredClone(result);
+  }
+
+  private async closeRequirement(
+    context: DocumentApplicationContext,
+    command: unknown,
+    operation: 'waive' | 'cancel'
+  ): Promise<DocumentRequirement> {
+    this.assertPermission(context, 'documents:manage_requirements');
+    const input = parseResolveRequirementInput(command);
+    const { requirement } = await this.getRequirement(context, input.requirementId);
+    const payloadHash = await calculateDocumentSha256(
+      canonicalDocumentJson({
+        organizationId: context.organizationId,
+        requirementId: input.requirementId,
+        expectedVersion: input.expectedVersion,
+        reason: input.reason,
+        operation,
+      })
+    );
+    const targetStatus: DocumentRequirement['status'] =
+      operation === 'waive' ? 'waived' : 'cancelled';
+    const isPotentialReplay =
+      requirement.status === targetStatus && requirement.versionNumber === input.expectedVersion + 1;
+    if (isPotentialReplay) {
+      const replay = await this.gateway.resolveRequirement({
+        requirement,
+        expectedVersion: input.expectedVersion,
+        operation,
+        idempotencyKey: input.idempotencyKey,
+        payloadHash,
+      });
+      documentEventJournal.record({
+        id: this.idGenerator.generate(),
+        organizationId: context.organizationId,
+        actorUserId: context.actor.userId,
+        eventType:
+          operation === 'waive'
+            ? 'document.requirement.waived'
+            : 'document.requirement.cancelled',
+        requirementId: replay.id,
+        logicalOwnerType: replay.logicalOwnerType,
+        logicalOwnerId: replay.logicalOwnerId,
+        category: replay.category,
+        correlationId: input.idempotencyKey,
+        idempotencyKey: input.idempotencyKey,
+        occurredAt: replay.updatedAt,
+        metadata: Object.freeze({ versionNumber: replay.versionNumber, status: replay.status }),
+      });
+      return structuredClone(replay);
+    }
+    const now = this.clock.now().toISOString();
+    const updatedPayload = {
+      ...requirement,
+      status: targetStatus,
+      linkedDocumentId: undefined,
+      versionNumber: input.expectedVersion + 1,
+      updatedAt: now,
+      resolvedAt: now,
+      resolvedByUserId: context.actor.userId,
+      resolutionReason: input.reason,
+      integrityCodeSha256: '',
+    };
+    const integrityCodeSha256 = await calculateDocumentSha256(
+      canonicalDocumentJson({ ...updatedPayload, integrityCodeSha256: undefined })
+    );
+    const result = await this.gateway.resolveRequirement({
+      requirement: { ...updatedPayload, integrityCodeSha256 },
+      expectedVersion: input.expectedVersion,
+      operation,
+      idempotencyKey: input.idempotencyKey,
+      payloadHash,
+    });
+    documentEventJournal.record({
+      id: this.idGenerator.generate(),
+      organizationId: context.organizationId,
+      actorUserId: context.actor.userId,
+      eventType:
+        operation === 'waive'
+          ? 'document.requirement.waived'
+          : 'document.requirement.cancelled',
+      requirementId: result.id,
+      logicalOwnerType: result.logicalOwnerType,
+      logicalOwnerId: result.logicalOwnerId,
+      category: result.category,
+      correlationId: input.idempotencyKey,
+      idempotencyKey: input.idempotencyKey,
+      occurredAt: result.updatedAt,
+      metadata: Object.freeze({ versionNumber: result.versionNumber, status: result.status }),
+    });
+    return structuredClone(result);
+  }
+
+  async waiveRequirement(
+    context: DocumentApplicationContext,
+    command: unknown
+  ): Promise<DocumentRequirement> {
+    return this.closeRequirement(context, command, 'waive');
+  }
+
+  async cancelRequirement(
+    context: DocumentApplicationContext,
+    command: unknown
+  ): Promise<DocumentRequirement> {
+    return this.closeRequirement(context, command, 'cancel');
   }
 }

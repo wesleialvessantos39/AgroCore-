@@ -213,10 +213,7 @@ export const ProposalDocumentPage: React.FC = () => {
 
         <section aria-labelledby="proposal-document-integrity" className="space-y-2 border-t border-[#0B3D2E]/15 pt-5 text-xs">
           <h2 id="proposal-document-integrity" className="text-sm font-bold">Integridade técnica</h2>
-          <p>SHA-256 do documento:</p>
-          <code className="block break-all rounded-lg bg-[#0B3D2E]/5 p-2">{document.checksumSha256}</code>
-          <p>SHA-256 do snapshot de origem:</p>
-          <code className="block break-all rounded-lg bg-[#0B3D2E]/5 p-2">{document.sourceChecksumSha256}</code>
+          <p>As informações desta versão foram verificadas e preservadas pelo sistema.</p>
         </section>
 
         <footer className="border-t border-[#0B3D2E] pt-4 text-xs leading-relaxed">

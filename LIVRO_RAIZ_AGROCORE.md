@@ -268,10 +268,13 @@ Reconhecendo a rotina pericial e de consultoria agronômica, o sistema permite a
 ---
 
 ### 6.7 Gestão de Documentos e Anexos Técnicos
-- **Fundação Referencial Implementada:** a OE-006.001 registra somente metadados canônicos identificados por `documentId`, vinculados a cliente, imóvel, solicitação, laudo ou proposta existente. Nenhum arquivo integra o agregado atual.
-- Cada referência contém `organizationId`, `logicalOwnerType`, `logicalOwnerId`, `category`, `versionNumber`, `fileSizeBytes` declarado, `mimeType`, escopo de acesso, situação, datas referenciais, checksum SHA-256 dos metadados e autoria organizacional.
+- **Fundação Referencial Implementada:** a OE-006.001 registra somente informações identificadas por `documentId`, vinculadas a cliente, imóvel, solicitação, laudo ou proposta existente. Nenhum arquivo integra o agregado atual.
+- Cada referência contém `organizationId`, `logicalOwnerType`, `logicalOwnerId`, `category`, `versionNumber`, `mimeType`, escopo de acesso, situação, datas referenciais, checksum SHA-256 interno e autoria organizacional. `fileSizeBytes` é opcional e não é solicitado na interface enquanto não existir arquivo real.
 - A substituição cria uma nova referência ativa, preserva a anterior como `superseded` e mantém a cadeia imutável por `predecessorDocumentId`. O arquivamento é versionado e exige motivo operacional.
 - O serviço rejeita em tempo de execução arquivo, `Blob`, buffers, Base64, URLs, credenciais, tokens e payloads incompatíveis, inclusive diante de tentativa de contorno da tipagem.
+- **Governança e Validade Implementadas:** a OE-006.002 introduz `DocumentRequirement`, prazos, estados aberto/atendido/dispensado/cancelado, associação governada a documento compatível e projeções determinísticas de pendência vencida, documento próximo do vencimento, vencido ou indisponível.
+- Somente `owner`, `company_admin` e `manager` criam, dispensam ou cancelam pendências; projetista e captador consultam e atendem apenas pendências dos próprios atendimentos; financeiro e superadministrador de plataforma não recebem acesso implícito.
+- As rotas `/documentos/pendencias` e `/documentos/pendencias/nova` apresentam painel, indicadores e ações conforme as permissões. A linguagem pública não expõe códigos de ordem, IDs de implementação, checksum, hash, metadado, snapshot ou termos equivalentes.
 - Uma futura infraestrutura segura poderá armazenar o conteúdo físico de modo único e associá-lo aos mesmos identificadores, sem alterar as fontes canônicas nem duplicar arquivos entre módulos.
 - Documentos sensíveis e dados de clientes (CPF, CNPJ, dados bancários) jamais serão registrados em arquivos de log do servidor ou do cliente.
 - É expressamente proibido o armazenamento de arquivos reais de documentos em `localStorage`, `sessionStorage` ou `IndexedDB`.
@@ -475,9 +478,9 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
     - **Homologação comportamental:** 28 provas em `scripts/test-proposal-renewals.ts`; o Módulo 005 totaliza 186 provas comportamentais nas seis suítes de domínio, além das auditorias de texto público e tema.
 
 ### MÓDULO 006: GESTÃO DOCUMENTAL E ANEXOS TÉCNICOS
-- **Status Geral:** Em desenvolvimento; OE-006.001 implementada e homologada localmente.
+- **Status Geral:** Em desenvolvimento; OE-006.001 e OE-006.002 implementadas e homologadas no escopo volátil.
 - **Entregas da OE-006.001:**
-  - **Agregado Referencial Canônico:** `DocumentReference` possui organização, entidade lógica, categoria, nome de exibição, MIME permitido, tamanho declarado, escopo de acesso, situação, versão, datas, autoria e checksum SHA-256 dos metadados. `storageState` permanece obrigatoriamente `metadata_only`.
+  - **Agregado Referencial Canônico:** `DocumentReference` possui organização, entidade lógica, categoria, nome de exibição, MIME permitido, tamanho opcional, escopo de acesso, situação, versão, datas, autoria e checksum SHA-256 interno. `storageState` permanece obrigatoriamente `metadata_only`.
   - **Fontes Canônicas:** referências aceitam exclusivamente clientes, imóveis, solicitações de laudo, laudos e propostas já existentes na mesma organização. A interface usa seletores derivados dessas fontes e não oferece campo livre para identificadores internos.
   - **RBAC Granular:** permissões reais `documents:view`, `documents:register_reference` e `documents:manage`. A permissão preliminar `documents:upload` foi removida porque não existe infraestrutura de upload. Proprietário, administrador e gerente governam referências; projetista e captador registram somente em entidades das quais participam; financeiro consulta apenas metadados de escopo organizacional; superadministrador permanece isolado dos dados privados.
   - **Segurança de Conteúdo:** validadores recusam arquivo, `Blob`, bytes, buffers, Base64, URL, token, credencial e segredo. MIME é limitado a PDF, JPEG, PNG e TIFF; tamanho e datas são validados sem armazenar conteúdo físico.
@@ -486,6 +489,16 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - **Auditoria e Sessão:** eventos append-only carregam apenas IDs e metadados sanitizados; referências, idempotência e diário de eventos são eliminados pela limpeza central do logout.
   - **Rotas e Interface:** `/documentos`, `/documentos/novo` e `/documentos/:documentId` usam guards de permissão, builders com `encodeURIComponent`, navegação segura, estados acessíveis e paleta oficial. Não existe `input type="file"`, visualização ou download simulado.
   - **Homologação Comportamental:** 39 provas em `scripts/test-documents-foundation.ts`, auditoria visual em `scripts/test-documents-theme.js` e agregador `test:module-006`.
+- **Entregas da OE-006.002:**
+  - **Pendências Governadas:** `DocumentRequirement` relaciona categoria, atendimento, prazo, acesso, situação, versão, autoria e integridade. Duplicidades abertas equivalentes são recusadas.
+  - **Validade Determinística:** `evaluateDocumentValidity` classifica documentos sem vencimento, vigentes, próximos do vencimento e vencidos usando relógio injetável e datas UTC. Documento vencido não atende pendência.
+  - **Atendimento Seguro:** somente documento ativo da mesma organização, atendimento e categoria pode atender uma pendência. Dispensa e cancelamento exigem motivo e permissão administrativa.
+  - **Concorrência e Idempotência:** criação e encerramento usam versão esperada, chave idempotente e armazenamento volátil autoritativo; operações concorrentes incompatíveis produzem um único vencedor.
+  - **RBAC Granular:** permissões `documents:view_requirements`, `documents:fulfill_requirements` e `documents:manage_requirements` aplicadas no serviço, contexto, rotas e interface.
+  - **Painel Operacional:** `/documentos/pendencias` reúne pendências, atrasos e validades; `/documentos/pendencias/nova` permite criação administrativa sem digitação de IDs internos.
+  - **Linguagem Pública:** textos técnicos foram removidos das telas documentais e das exposições residuais em propostas e laudos. `test:ui-copy` bloqueia termos internos em todo `src/**/*.tsx`; `test:documents-ui-copy` reforça a cobertura do Módulo 006.
+  - **Sessão e Limites:** pendências, documentos, operações idempotentes e eventos são limpos no logout. Upload, download, storage real, Base64 e links temporários continuam inexistentes.
+  - **Homologação Comportamental:** 32 provas em `scripts/test-document-governance.ts`; o Módulo 006 totaliza 71 provas comportamentais, além das auditorias de texto público e tema.
 
 ---
 
@@ -520,12 +533,14 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:proposal-commercial-tracking` | Valida funil, follow-ups, responsáveis canônicos, concorrência, RBAC, fechamento automático, handoff pós-aceite, SHA-256, IDOR, rotas e limpeza (39 provas) |
 | `npm run test:proposal-handoff-receipts` | Valida fila por destino, recebimento canônico, SHA-256, concorrência, idempotência, IDOR, eventos sanitizados, rota e limpeza (23 provas) |
 | `npm run test:proposal-renewals` | Valida elegibilidade terminal, novo rascunho, linhagem SHA-256, cópia segura, RBAC, vínculo ativo, concorrência, idempotência, IDOR, eventos, rotas e limpeza (28 provas) |
-| `npm run test:ui-copy` | Audita via AST todas as telas TSX e impede identificadores internos de Ordem de Execução em conteúdo renderizável |
+| `npm run test:ui-copy` | Audita via AST todas as telas TSX e impede códigos de ordem e termos internos de implementação em conteúdo renderizável |
 | `npm run test:proposals-theme` | Audita a paleta oficial e bloqueia famílias externas no Módulo 005 |
 | `npm run test:module-005` | Homologação consolidada da fundação, pipeline, documento comercial, acompanhamento, recebimento, renovação, texto público e tema do Módulo 005 (OE-005.001 a OE-005.007; 186 provas comportamentais) |
 | `npm run test:documents-foundation` | Valida metadados seguros, fontes canônicas, RBAC, IDOR, versionamento, idempotência, concorrência, eventos, rotas e limpeza documental (39 provas) |
+| `npm run test:document-governance` | Valida pendências, validade, RBAC, isolamento, associação documental, concorrência, idempotência, eventos, rotas e limpeza (32 provas) |
+| `npm run test:documents-ui-copy` | Impede linguagem interna e códigos de ordem nas páginas públicas do Módulo 006 |
 | `npm run test:documents-theme` | Audita a paleta oficial, variantes proibidas e ausência de campo de upload no Módulo 006 |
-| `npm run test:module-006` | Homologação consolidada da fundação referencial do Módulo 006 (OE-006.001) |
+| `npm run test:module-006` | Homologação consolidada do Módulo 006 até OE-006.002 (71 provas comportamentais, texto público e tema) |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -546,4 +561,4 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
 2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.007 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
-3. **Módulo 006 — Gestão Documental:** iniciado pela OE-006.001 no modo estritamente referencial. A próxima ordem será a OE-006.002 e deverá ampliar governança, validade e integração operacional sem simular storage, upload ou download enquanto a infraestrutura real não existir.
+3. **Módulo 006 — Gestão Documental:** concluído até OE-006.002 no modo estritamente referencial, com pendências e validade operacionais sem storage, upload ou download. A OE-006.003 ainda não foi iniciada e deverá preservar esses limites até existir infraestrutura real formalmente autorizada.

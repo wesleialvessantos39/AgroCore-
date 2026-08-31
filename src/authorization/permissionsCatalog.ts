@@ -571,6 +571,27 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     name: 'Gerenciar Documentos',
     description: 'Versionar, substituir e arquivar referências documentais da organização.',
   },
+  {
+    id: 'documents:view_requirements',
+    scope: 'documents',
+    targetScope: 'organization',
+    name: 'Consultar Pendências Documentais',
+    description: 'Consultar pendências e prazos de documentos dentro do próprio escopo operacional.',
+  },
+  {
+    id: 'documents:fulfill_requirements',
+    scope: 'documents',
+    targetScope: 'organization',
+    name: 'Atender Pendências Documentais',
+    description: 'Associar um documento registrado a uma pendência do próprio escopo operacional.',
+  },
+  {
+    id: 'documents:manage_requirements',
+    scope: 'documents',
+    targetScope: 'organization',
+    name: 'Gerenciar Pendências Documentais',
+    description: 'Criar, dispensar e cancelar pendências documentais da organização.',
+  },
 
   // Vistorias e Visitas
   {

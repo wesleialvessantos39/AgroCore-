@@ -1,10 +1,17 @@
 import type {
   ArchiveDocumentRecord,
   CreateDocumentRecord,
+  CreateDocumentRequirementRecord,
   DocumentReferenceGateway,
   ReplaceDocumentRecord,
+  ResolveDocumentRequirementRecord,
 } from './documentGateway';
-import type { DocumentReference, DocumentReferenceListQuery } from '../types/documents';
+import type {
+  DocumentReference,
+  DocumentReferenceListQuery,
+  DocumentRequirement,
+  DocumentRequirementListQuery,
+} from '../types/documents';
 import { DocumentDomainError } from '../types/documents';
 
 function unavailable(): never {
@@ -41,5 +48,26 @@ export class UnavailableDocumentReferenceGateway implements DocumentReferenceGat
   async archiveReference(_input: ArchiveDocumentRecord): Promise<DocumentReference> {
     return unavailable();
   }
-}
 
+  async listRequirements(
+    _query: DocumentRequirementListQuery,
+    _signal?: AbortSignal
+  ): Promise<readonly DocumentRequirement[]> {
+    return unavailable();
+  }
+
+  async getRequirementById(
+    _organizationId: string,
+    _requirementId: string
+  ): Promise<DocumentRequirement | null> {
+    return unavailable();
+  }
+
+  async createRequirement(_input: CreateDocumentRequirementRecord): Promise<DocumentRequirement> {
+    return unavailable();
+  }
+
+  async resolveRequirement(_input: ResolveDocumentRequirementRecord): Promise<DocumentRequirement> {
+    return unavailable();
+  }
+}

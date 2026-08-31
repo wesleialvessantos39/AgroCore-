@@ -116,7 +116,7 @@ export const ProposalRenewalPage: React.FC = () => {
         </p>
         <h1 className="text-2xl font-bold text-[#0B3D2E]">Criar nova proposta vinculada</h1>
         <p className="text-sm text-[#0B3D2E]/70">
-          A proposta encerrada não será reaberta. Um novo rascunho receberá dados canônicos atuais do cliente,
+          A proposta encerrada não será reaberta. Um novo rascunho receberá os dados atuais do cliente,
           do imóvel e do vínculo comercial.
         </p>
       </header>

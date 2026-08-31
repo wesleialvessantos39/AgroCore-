@@ -439,7 +439,7 @@ export function AppraisalsProvider({
 
       if (input.newStatus === 'issued' || input.newStatus === 'superseded') {
         throw new Error(
-          'A emissão e a substituição de versões exigem comandos canônicos específicos e não podem usar a atualização genérica de status.'
+          'A emissão e a substituição de versões devem ser realizadas pelas ações próprias dessas etapas.'
         );
       }
 
@@ -502,7 +502,7 @@ export function AppraisalsProvider({
         property.clientLinks && property.clientLinks.some((link) => link.clientId === input.clientId);
 
       if (!isLinkedToClient) {
-        throw new Error('O imóvel selecionado não possui vínculo canônico com o cliente informado.');
+        throw new Error('O imóvel selecionado não está relacionado ao cliente informado.');
       }
 
       const gateway = getAppraisalGateway();

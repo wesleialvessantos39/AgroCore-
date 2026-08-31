@@ -42,6 +42,8 @@
     "test:proposals-theme": "node scripts/test-proposals-theme.js",
     "test:module-005": "node --import tsx scripts/test-module-005.js",
     "test:documents-foundation": "node --import tsx scripts/test-documents-foundation.ts",
+    "test:document-governance": "node --import tsx scripts/test-document-governance.ts",
+    "test:documents-ui-copy": "node --import tsx scripts/test-documents-ui-copy.ts",
     "test:documents-theme": "node scripts/test-documents-theme.js",
     "test:module-006": "node --import tsx scripts/test-module-006.js",
     "test:rebranding": "node --import tsx scripts/test-rebranding.js",

@@ -38,7 +38,7 @@ export interface DocumentReference {
   readonly category: DocumentCategory;
   readonly displayName: string;
   readonly mimeType: DocumentMimeType;
-  readonly fileSizeBytes: number;
+  readonly fileSizeBytes?: number;
   readonly accessScope: DocumentAccessScope;
   readonly status: DocumentReferenceStatus;
   readonly versionNumber: number;
@@ -67,7 +67,7 @@ export interface RegisterDocumentReferenceInput {
   readonly category: DocumentCategory;
   readonly displayName: string;
   readonly mimeType: DocumentMimeType;
-  readonly fileSizeBytes: number;
+  readonly fileSizeBytes?: number;
   readonly accessScope: DocumentAccessScope;
   readonly issuedOn?: string;
   readonly expiresOn?: string;
@@ -80,7 +80,7 @@ export interface ReplaceDocumentReferenceInput {
   readonly expectedVersion: number;
   readonly displayName: string;
   readonly mimeType: DocumentMimeType;
-  readonly fileSizeBytes: number;
+  readonly fileSizeBytes?: number;
   readonly issuedOn?: string;
   readonly expiresOn?: string;
   readonly notes?: string;
@@ -103,6 +103,99 @@ export interface DocumentReferenceFilters {
 
 export interface DocumentReferenceListQuery extends DocumentReferenceFilters {
   readonly organizationId: string;
+}
+
+export type DocumentValidityState =
+  | 'no_expiration'
+  | 'current'
+  | 'expiring_soon'
+  | 'expired';
+
+export type DocumentRequirementStatus = 'open' | 'fulfilled' | 'waived' | 'cancelled';
+
+export type DocumentRequirementEffectiveState =
+  | 'pending'
+  | 'overdue'
+  | 'fulfilled'
+  | 'document_expiring'
+  | 'document_expired'
+  | 'document_unavailable'
+  | 'waived'
+  | 'cancelled';
+
+export interface DocumentRequirement {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly logicalOwnerType: DocumentLogicalOwnerType;
+  readonly logicalOwnerId: string;
+  readonly category: DocumentCategory;
+  readonly title: string;
+  readonly accessScope: DocumentAccessScope;
+  readonly status: DocumentRequirementStatus;
+  readonly dueOn?: string;
+  readonly notes?: string;
+  readonly linkedDocumentId?: DocumentReferenceId;
+  readonly versionNumber: number;
+  readonly integrityCodeSha256: string;
+  readonly createdByUserId: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly resolvedAt?: string;
+  readonly resolvedByUserId?: string;
+  readonly resolutionReason?: string;
+}
+
+export interface CreateDocumentRequirementInput {
+  readonly logicalOwnerType: DocumentLogicalOwnerType;
+  readonly logicalOwnerId: string;
+  readonly category: DocumentCategory;
+  readonly title: string;
+  readonly accessScope: DocumentAccessScope;
+  readonly dueOn?: string;
+  readonly notes?: string;
+  readonly idempotencyKey: string;
+}
+
+export interface FulfillDocumentRequirementInput {
+  readonly requirementId: string;
+  readonly documentId: DocumentReferenceId;
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
+}
+
+export interface ResolveDocumentRequirementInput {
+  readonly requirementId: string;
+  readonly expectedVersion: number;
+  readonly reason: string;
+  readonly idempotencyKey: string;
+}
+
+export interface DocumentRequirementListQuery {
+  readonly organizationId: string;
+  readonly status?: DocumentRequirementStatus | 'all';
+}
+
+export interface DocumentRequirementProjection {
+  readonly requirement: DocumentRequirement;
+  readonly effectiveState: DocumentRequirementEffectiveState;
+  readonly linkedDocument?: DocumentReference;
+  readonly documentValidity?: DocumentValidityState;
+}
+
+export interface DocumentGovernanceDashboard {
+  readonly generatedAt: string;
+  readonly warningDays: number;
+  readonly requirements: readonly DocumentRequirementProjection[];
+  readonly availableDocuments: readonly DocumentReference[];
+  readonly expiringDocuments: readonly DocumentReference[];
+  readonly expiredDocuments: readonly DocumentReference[];
+  readonly totals: {
+    readonly pending: number;
+    readonly overdue: number;
+    readonly fulfilled: number;
+    readonly attentionRequired: number;
+    readonly waived: number;
+  };
 }
 
 export interface DocumentOwnerResolution {
@@ -128,14 +221,19 @@ export interface DocumentApplicationContext {
 export type DocumentDomainEventType =
   | 'document.reference.registered'
   | 'document.reference.replaced'
-  | 'document.reference.archived';
+  | 'document.reference.archived'
+  | 'document.requirement.created'
+  | 'document.requirement.fulfilled'
+  | 'document.requirement.waived'
+  | 'document.requirement.cancelled';
 
 export interface DocumentDomainEvent {
   readonly id: string;
   readonly organizationId: string;
   readonly actorUserId: string;
   readonly eventType: DocumentDomainEventType;
-  readonly documentId: DocumentReferenceId;
+  readonly documentId?: DocumentReferenceId;
+  readonly requirementId?: string;
   readonly logicalOwnerType: DocumentLogicalOwnerType;
   readonly logicalOwnerId: string;
   readonly category: DocumentCategory;
@@ -157,6 +255,11 @@ export type DocumentDomainErrorCode =
   | 'VERSION_CONFLICT'
   | 'IDEMPOTENCY_CONFLICT'
   | 'DUPLICATE_ACTIVE_REFERENCE'
+  | 'REQUIREMENT_NOT_FOUND'
+  | 'DUPLICATE_OPEN_REQUIREMENT'
+  | 'REQUIREMENT_MISMATCH'
+  | 'REQUIREMENT_ALREADY_RESOLVED'
+  | 'DOCUMENT_EXPIRED'
   | 'INVALID_STATE'
   | 'SERVICE_UNAVAILABLE';
 
@@ -190,4 +293,3 @@ export const DOCUMENT_OWNER_LABELS: Readonly<Record<DocumentLogicalOwnerType, st
   appraisal: 'Laudo de avaliação',
   proposal: 'Proposta',
 });
-

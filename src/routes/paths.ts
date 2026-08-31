@@ -30,6 +30,8 @@ export const ROUTES = {
   PROPOSALS_DETAIL: '/propostas/:proposalId',
   DOCUMENTS: '/documentos',
   DOCUMENTS_NEW: '/documentos/novo',
+  DOCUMENT_REQUIREMENTS: '/documentos/pendencias',
+  DOCUMENT_REQUIREMENTS_NEW: '/documentos/pendencias/nova',
   DOCUMENTS_DETAIL: '/documentos/:documentId',
   MY_ACCOUNT: '/minha-conta',
   ACCESS_DENIED: '/acesso-negado',

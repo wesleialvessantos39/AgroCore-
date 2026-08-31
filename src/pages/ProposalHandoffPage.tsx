@@ -105,8 +105,8 @@ export const ProposalHandoffPage: React.FC = () => {
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {proposal ? 'Voltar à proposta' : 'Voltar à fila'}
         </Link>
         <p className={`mt-4 text-sm font-semibold ${PROPOSAL_THEME.textSecondary}`}>{proposal?.proposalNumber ?? handoff!.proposalNumber}</p>
-        <h1 className={`text-2xl font-bold ${PROPOSAL_THEME.textPrimary}`}>Encaminhamento operacional pós-aceite</h1>
-        <p className={`mt-2 ${PROPOSAL_THEME.textSecondary}`}>Referência interna para continuidade futura. Nenhum contrato ou operação externa é criado nesta etapa.</p>
+        <h1 className={`text-2xl font-bold ${PROPOSAL_THEME.textPrimary}`}>Encaminhamento interno após o aceite</h1>
+        <p className={`mt-2 ${PROPOSAL_THEME.textSecondary}`}>Registro interno para dar continuidade ao atendimento. Nenhum contrato ou operação externa é criado nesta etapa.</p>
       </header>
 
       {feedback && (
@@ -122,10 +122,10 @@ export const ProposalHandoffPage: React.FC = () => {
       {!handoff && (
         <section className={`${PROPOSAL_THEME.surface} ${PROPOSAL_THEME.border} rounded-2xl border p-6`}>
           <FileCheck2 className="mb-4 h-8 w-8 text-[#0B3D2E]" aria-hidden="true" />
-          <h2 className={`text-lg font-bold ${PROPOSAL_THEME.textPrimary}`}>Preparar referência canônica</h2>
+          <h2 className={`text-lg font-bold ${PROPOSAL_THEME.textPrimary}`}>Preparar encaminhamento</h2>
           {proposal?.status === 'accepted' ? (
             <>
-              <p className={`mt-2 text-sm ${PROPOSAL_THEME.textSecondary}`}>O sistema verificará o snapshot aceito e o documento comercial efetivamente apresentado.</p>
+              <p className={`mt-2 text-sm ${PROPOSAL_THEME.textSecondary}`}>O sistema verificará a versão aceita e o documento comercial apresentado.</p>
               {can('proposals:prepare_handoff') ? (
                 <button type="button" className={`${PROPOSAL_THEME.btnPrimary} mt-5`} disabled={busy} onClick={() => void handlePrepare()}>
                   {busy ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ShieldCheck className="h-4 w-4" aria-hidden="true" />}
@@ -144,19 +144,16 @@ export const ProposalHandoffPage: React.FC = () => {
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-1 h-6 w-6 shrink-0 text-[#0B3D2E]" aria-hidden="true" />
             <div>
-              <h2 id="handoff-title" className={`text-xl font-bold ${PROPOSAL_THEME.textPrimary}`}>Encaminhamento íntegro</h2>
+              <h2 id="handoff-title" className={`text-xl font-bold ${PROPOSAL_THEME.textPrimary}`}>Encaminhamento preparado</h2>
               <p className={`text-sm ${PROPOSAL_THEME.textSecondary}`}>{formatDate(handoff.preparedAt)}</p>
             </div>
           </div>
           <dl className="mt-6 grid gap-4 sm:grid-cols-2">
             <div><dt className={`text-xs font-semibold ${PROPOSAL_THEME.textSecondary}`}>Destino interno</dt><dd className={`mt-1 font-semibold ${PROPOSAL_THEME.textPrimary}`}>{DESTINATION_LABELS[handoff.destination]}</dd></div>
             <div><dt className={`text-xs font-semibold ${PROPOSAL_THEME.textSecondary}`}>Versão aceita</dt><dd className={`mt-1 font-semibold ${PROPOSAL_THEME.textPrimary}`}>v{handoff.acceptedVersionNumber}</dd></div>
-            <div><dt className={`text-xs font-semibold ${PROPOSAL_THEME.textSecondary}`}>Documento comercial</dt><dd className={`mt-1 break-all font-mono text-xs ${PROPOSAL_THEME.textPrimary}`}>{handoff.commercialDocumentId}</dd></div>
-            <div><dt className={`text-xs font-semibold ${PROPOSAL_THEME.textSecondary}`}>Snapshot aceito</dt><dd className={`mt-1 break-all font-mono text-xs ${PROPOSAL_THEME.textPrimary}`}>{handoff.acceptedSnapshotId}</dd></div>
           </dl>
           <div className={`${PROPOSAL_THEME.surfaceSoft} ${PROPOSAL_THEME.border} mt-6 rounded-xl border p-4`}>
-            <p className={`text-xs font-semibold ${PROPOSAL_THEME.textSecondary}`}>Checksum SHA‑256 do encaminhamento</p>
-            <p className={`mt-1 break-all font-mono text-xs ${PROPOSAL_THEME.textPrimary}`}>{handoff.checksumSha256}</p>
+            <p className={`text-sm font-semibold ${PROPOSAL_THEME.textPrimary}`}>Integridade do encaminhamento verificada pelo sistema.</p>
           </div>
           <p className={`mt-5 text-sm ${PROPOSAL_THEME.textSecondary}`}>{handoff.disclaimerText}</p>
           {!receipt && can('proposals:acknowledge_handoff') && (
@@ -178,7 +175,7 @@ export const ProposalHandoffPage: React.FC = () => {
             </div>
           </div>
           <p className={`mt-4 text-sm ${PROPOSAL_THEME.textSecondary}`}>{receipt.disclaimerText}</p>
-          <p className={`mt-4 break-all font-mono text-xs ${PROPOSAL_THEME.textPrimary}`}>{receipt.checksumSha256}</p>
+          <p className={`mt-4 text-sm font-semibold ${PROPOSAL_THEME.textPrimary}`}>Recebimento registrado com integridade.</p>
         </section>
       )}
     </div>

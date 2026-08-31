@@ -107,16 +107,24 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     announcementTitle: 'Criar nova proposta vinculada',
   },
   [ROUTES.DOCUMENTS]: {
-    documentTitle: 'Gestão Documental | AgroCore',
-    announcementTitle: 'Gestão documental',
+    documentTitle: 'Documentos | AgroCore',
+    announcementTitle: 'Documentos',
   },
   [ROUTES.DOCUMENTS_NEW]: {
-    documentTitle: 'Registrar Referência Documental | AgroCore',
-    announcementTitle: 'Registrar referência documental',
+    documentTitle: 'Adicionar Documento | AgroCore',
+    announcementTitle: 'Adicionar documento',
+  },
+  [ROUTES.DOCUMENT_REQUIREMENTS]: {
+    documentTitle: 'Pendências e Prazos | AgroCore',
+    announcementTitle: 'Pendências e prazos de documentos',
+  },
+  [ROUTES.DOCUMENT_REQUIREMENTS_NEW]: {
+    documentTitle: 'Nova Pendência de Documento | AgroCore',
+    announcementTitle: 'Criar pendência de documento',
   },
   [ROUTES.DOCUMENTS_DETAIL]: {
-    documentTitle: 'Referência Documental | AgroCore',
-    announcementTitle: 'Detalhes da referência documental',
+    documentTitle: 'Documento | AgroCore',
+    announcementTitle: 'Detalhes do documento',
   },
   [ROUTES.MY_ACCOUNT]: {
     documentTitle: 'Minha Conta | AgroCore',

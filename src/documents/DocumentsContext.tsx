@@ -17,13 +17,18 @@ import { useAppraisals } from '../appraisals/useAppraisals';
 import { useProposals } from '../proposals/useProposals';
 import type {
   ArchiveDocumentReferenceInput,
+  CreateDocumentRequirementInput,
   DocumentApplicationContext,
+  DocumentGovernanceDashboard,
   DocumentLogicalOwnerType,
   DocumentOwnerResolution,
   DocumentReference,
   DocumentReferenceFilters,
+  DocumentRequirement,
+  FulfillDocumentRequirementInput,
   RegisterDocumentReferenceInput,
   ReplaceDocumentReferenceInput,
+  ResolveDocumentRequirementInput,
 } from '../types/documents';
 import { DocumentDomainError } from '../types/documents';
 import { DocumentApplicationService } from './documentApplicationService';
@@ -37,9 +42,9 @@ export type DocumentsContextStatus =
   | 'unavailable'
   | 'error';
 
-export interface DocumentMutationResult {
+export interface DocumentMutationResult<T = DocumentReference> {
   readonly success: boolean;
-  readonly data?: DocumentReference;
+  readonly data?: T;
   readonly error?: string;
   readonly errorCode?: string;
 }
@@ -49,9 +54,13 @@ export interface DocumentsContextValue {
   readonly references: readonly DocumentReference[];
   readonly filters: DocumentReferenceFilters;
   readonly errorMessage: string | null;
+  readonly governanceStatus: DocumentsContextStatus;
+  readonly governance: DocumentGovernanceDashboard | null;
+  readonly governanceErrorMessage: string | null;
   readonly isLoading: boolean;
   readonly setFilters: (filters: DocumentReferenceFilters) => void;
   readonly refresh: () => Promise<void>;
+  readonly refreshGovernance: () => Promise<void>;
   readonly getReferenceById: (documentId: string) => Promise<DocumentReference | null>;
   readonly registerReference: (
     input: Omit<RegisterDocumentReferenceInput, 'idempotencyKey'>
@@ -62,6 +71,18 @@ export interface DocumentsContextValue {
   readonly archiveReference: (
     input: Omit<ArchiveDocumentReferenceInput, 'idempotencyKey'>
   ) => Promise<DocumentMutationResult>;
+  readonly createRequirement: (
+    input: Omit<CreateDocumentRequirementInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<DocumentRequirement>>;
+  readonly fulfillRequirement: (
+    input: Omit<FulfillDocumentRequirementInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<DocumentRequirement>>;
+  readonly waiveRequirement: (
+    input: Omit<ResolveDocumentRequirementInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<DocumentRequirement>>;
+  readonly cancelRequirement: (
+    input: Omit<ResolveDocumentRequirementInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<DocumentRequirement>>;
 }
 
 const DocumentsContext = createContext<DocumentsContextValue | null>(null);
@@ -86,10 +107,16 @@ export function DocumentsProvider({ children }: { readonly children: React.React
   const [references, setReferences] = useState<readonly DocumentReference[]>([]);
   const [filters, setFilters] = useState<DocumentReferenceFilters>({ status: 'all' });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [governanceStatus, setGovernanceStatus] = useState<DocumentsContextStatus>('idle');
+  const [governance, setGovernance] = useState<DocumentGovernanceDashboard | null>(null);
+  const [governanceErrorMessage, setGovernanceErrorMessage] = useState<string | null>(null);
   const requestSequence = useRef(0);
+  const governanceRequestSequence = useRef(0);
   const abortController = useRef<AbortController | null>(null);
+  const governanceAbortController = useRef<AbortController | null>(null);
   const activeOrganizationId = activeOrganization?.id ?? null;
   const service = useMemo(() => new DocumentApplicationService(), []);
+  const canViewGovernance = activePermissions.has('documents:view_requirements');
 
   const resolveOwner = useCallback(
     async (
@@ -221,16 +248,76 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     }
   }, [activeMembership, activeOrganizationId, authStatus, buildContext, filters, organizationStatus, service, session]);
 
+  const refreshGovernance = useCallback(async () => {
+    if (
+      authStatus !== 'authenticated' ||
+      organizationStatus !== 'active' ||
+      !activeOrganizationId ||
+      !session ||
+      !activeMembership ||
+      !canViewGovernance
+    ) {
+      setGovernance(null);
+      setGovernanceStatus('idle');
+      setGovernanceErrorMessage(null);
+      return;
+    }
+
+    governanceAbortController.current?.abort();
+    const controller = new AbortController();
+    governanceAbortController.current = controller;
+    const sequence = ++governanceRequestSequence.current;
+    setGovernanceStatus('loading');
+    setGovernanceErrorMessage(null);
+    try {
+      const result = await service.getGovernanceDashboard(buildContext(), 30, controller.signal);
+      if (controller.signal.aborted || sequence !== governanceRequestSequence.current) return;
+      setGovernance(result);
+      setGovernanceStatus(
+        result.requirements.length > 0 ||
+          result.expiringDocuments.length > 0 ||
+          result.expiredDocuments.length > 0
+          ? 'ready'
+          : 'empty'
+      );
+    } catch (error) {
+      if (controller.signal.aborted || sequence !== governanceRequestSequence.current) return;
+      setGovernance(null);
+      if (error instanceof DocumentDomainError) {
+        setGovernanceErrorMessage(error.message);
+        setGovernanceStatus(
+          error.code === 'SERVICE_UNAVAILABLE'
+            ? 'unavailable'
+            : error.code === 'FORBIDDEN'
+              ? 'forbidden'
+              : 'error'
+        );
+      } else {
+        setGovernanceErrorMessage('Não foi possível consultar pendências e prazos.');
+        setGovernanceStatus('error');
+      }
+    }
+  }, [activeMembership, activeOrganizationId, authStatus, buildContext, canViewGovernance, organizationStatus, service, session]);
+
   useEffect(() => {
     void refresh();
     return () => abortController.current?.abort();
   }, [refresh]);
 
   useEffect(() => {
+    void refreshGovernance();
+    return () => governanceAbortController.current?.abort();
+  }, [refreshGovernance]);
+
+  useEffect(() => {
     requestSequence.current += 1;
     abortController.current?.abort();
+    governanceRequestSequence.current += 1;
+    governanceAbortController.current?.abort();
     setReferences([]);
+    setGovernance(null);
     setErrorMessage(null);
+    setGovernanceErrorMessage(null);
   }, [activeOrganizationId, session?.user.id]);
 
   const getReferenceById = useCallback(
@@ -239,10 +326,10 @@ export function DocumentsProvider({ children }: { readonly children: React.React
   );
 
   const executeMutation = useCallback(
-    async (operation: () => Promise<DocumentReference>): Promise<DocumentMutationResult> => {
+    async <T,>(operation: () => Promise<T>): Promise<DocumentMutationResult<T>> => {
       try {
         const data = await operation();
-        await refresh();
+        await Promise.all([refresh(), refreshGovernance()]);
         return { success: true, data };
       } catch (error) {
         if (error instanceof DocumentDomainError) {
@@ -251,7 +338,7 @@ export function DocumentsProvider({ children }: { readonly children: React.React
         return { success: false, error: 'Não foi possível concluir a operação documental.' };
       }
     },
-    [refresh]
+    [refresh, refreshGovernance]
   );
 
   const registerReference = useCallback(
@@ -287,21 +374,73 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     [buildContext, executeMutation, service]
   );
 
+  const createRequirement = useCallback(
+    (input: Omit<CreateDocumentRequirementInput, 'idempotencyKey'>) =>
+      executeMutation(() =>
+        service.createRequirement(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('document-requirement-create'),
+        })
+      ),
+    [buildContext, executeMutation, service]
+  );
+
+  const fulfillRequirement = useCallback(
+    (input: Omit<FulfillDocumentRequirementInput, 'idempotencyKey'>) =>
+      executeMutation(() =>
+        service.fulfillRequirement(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('document-requirement-fulfill'),
+        })
+      ),
+    [buildContext, executeMutation, service]
+  );
+
+  const waiveRequirement = useCallback(
+    (input: Omit<ResolveDocumentRequirementInput, 'idempotencyKey'>) =>
+      executeMutation(() =>
+        service.waiveRequirement(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('document-requirement-waive'),
+        })
+      ),
+    [buildContext, executeMutation, service]
+  );
+
+  const cancelRequirement = useCallback(
+    (input: Omit<ResolveDocumentRequirementInput, 'idempotencyKey'>) =>
+      executeMutation(() =>
+        service.cancelRequirement(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('document-requirement-cancel'),
+        })
+      ),
+    [buildContext, executeMutation, service]
+  );
+
   const value = useMemo<DocumentsContextValue>(
     () => ({
       status,
       references,
       filters,
       errorMessage,
+      governanceStatus,
+      governance,
+      governanceErrorMessage,
       isLoading: status === 'loading',
       setFilters,
       refresh,
+      refreshGovernance,
       getReferenceById,
       registerReference,
       replaceReference,
       archiveReference,
+      createRequirement,
+      fulfillRequirement,
+      waiveRequirement,
+      cancelRequirement,
     }),
-    [archiveReference, errorMessage, filters, getReferenceById, references, refresh, registerReference, replaceReference, status]
+    [archiveReference, cancelRequirement, createRequirement, errorMessage, filters, fulfillRequirement, getReferenceById, governance, governanceErrorMessage, governanceStatus, references, refresh, refreshGovernance, registerReference, replaceReference, status, waiveRequirement]
   );
 
   return <DocumentsContext.Provider value={value}>{children}</DocumentsContext.Provider>;

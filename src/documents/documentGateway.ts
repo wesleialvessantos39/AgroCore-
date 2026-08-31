@@ -1,4 +1,6 @@
 import type {
+  DocumentRequirement,
+  DocumentRequirementListQuery,
   DocumentReference,
   DocumentReferenceListQuery,
 } from '../types/documents';
@@ -24,6 +26,21 @@ export interface ArchiveDocumentRecord {
   readonly payloadHash: string;
 }
 
+export interface CreateDocumentRequirementRecord {
+  readonly requirement: DocumentRequirement;
+  readonly idempotencyKey: string;
+  readonly payloadHash: string;
+}
+
+export interface ResolveDocumentRequirementRecord {
+  readonly requirement: DocumentRequirement;
+  readonly expectedVersion: number;
+  readonly operation: 'fulfill' | 'waive' | 'cancel';
+  readonly linkedDocumentId?: string;
+  readonly idempotencyKey: string;
+  readonly payloadHash: string;
+}
+
 export interface DocumentReferenceGateway {
   listReferences(
     query: DocumentReferenceListQuery,
@@ -36,6 +53,15 @@ export interface DocumentReferenceGateway {
   createReference(input: CreateDocumentRecord): Promise<DocumentReference>;
   replaceReference(input: ReplaceDocumentRecord): Promise<DocumentReference>;
   archiveReference(input: ArchiveDocumentRecord): Promise<DocumentReference>;
+  listRequirements(
+    query: DocumentRequirementListQuery,
+    signal?: AbortSignal
+  ): Promise<readonly DocumentRequirement[]>;
+  getRequirementById(
+    organizationId: string,
+    requirementId: string
+  ): Promise<DocumentRequirement | null>;
+  createRequirement(input: CreateDocumentRequirementRecord): Promise<DocumentRequirement>;
+  resolveRequirement(input: ResolveDocumentRequirementRecord): Promise<DocumentRequirement>;
   clearAllSessionData?(): void;
 }
-

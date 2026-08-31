@@ -7,6 +7,19 @@ import path from 'node:path';
 import ts from 'typescript';
 
 const INTERNAL_ORDER_PATTERN = /\bOE\s*[-‐‑–—]\s*\d{3}(?:[.\-‐‑–—]\d{3})?/iu;
+const INTERNAL_TECHNICAL_COPY_PATTERNS = [
+  /\bchecksum\b/iu,
+  /\bsha-?256\b/iu,
+  /\bsnapshot(?:s)?\b/iu,
+  /\bpayload\b/iu,
+  /\bgateway\b/iu,
+  /\bidempot(?:ente|ência|ency)?\b/iu,
+  /\bidor\b/iu,
+  /\bmultitenan(?:t|cy)?\b/iu,
+  /\bmetadad(?:o|os)\b/iu,
+  /\bcan[oô]nic(?:o|a|os|as)\b/iu,
+  /\bbytes?\b/iu,
+] as const;
 const sourceRoot = path.resolve('src');
 const violations: string[] = [];
 
@@ -26,7 +39,11 @@ function inspectFile(filePath: string): void {
     if (ts.isJsxText(node) || ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       candidate = node.text;
     }
-    if (candidate && INTERNAL_ORDER_PATTERN.test(candidate)) {
+    if (
+      candidate &&
+      (INTERNAL_ORDER_PATTERN.test(candidate) ||
+        INTERNAL_TECHNICAL_COPY_PATTERNS.some((pattern) => pattern.test(candidate)))
+    ) {
       const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
       violations.push(`${path.relative(process.cwd(), filePath)}:${position.line + 1}`);
     }
@@ -38,9 +55,9 @@ function inspectFile(filePath: string): void {
 for (const filePath of listTsxFiles(sourceRoot)) inspectFile(filePath);
 
 if (violations.length > 0) {
-  console.error('Identificadores internos de Ordem de Execução encontrados em textos da interface:');
+  console.error('Identificadores ou termos internos encontrados em textos da interface:');
   for (const violation of violations) console.error(`- ${violation}`);
   process.exit(1);
 }
 
-console.log('✅ Interface sem identificadores internos de Ordem de Execução.');
+console.log('✅ Interface sem códigos de ordem ou termos internos de implementação.');

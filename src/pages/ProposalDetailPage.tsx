@@ -883,7 +883,7 @@ export const ProposalDetailPage: React.FC = () => {
             {/* Cliente */}
             <div>
               <span className="text-[11px] text-[#0B3D2E]/60 uppercase font-semibold block">
-                Cliente / Produtor (Snapshot)
+                Dados do cliente / produtor
               </span>
               <div className="text-xs text-[#0B3D2E] mt-0.5">
                 <p className="font-bold">{proposal.clientSnapshot.name || (client ? getClientDisplayName(client) : 'Cliente')}</p>
@@ -1022,14 +1022,14 @@ export const ProposalDetailPage: React.FC = () => {
           )}
         </div>
 
-        {/* Snapshots Imutáveis de Versão */}
+        {/* Histórico técnico de versões */}
         <div className="bg-white border border-[#0B3D2E]/15 rounded-2xl p-5 shadow-2xs space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[#0B3D2E] border-b border-[#0B3D2E]/15 pb-2">
-            Snapshots Imutáveis de Versão (SHA-256)
+            Histórico de versões
           </h3>
           {snapshots.length === 0 ? (
             <p className="text-xs text-[#0B3D2E]/60 italic py-4 text-center">
-              Nenhum snapshot de versão congelado até o momento.
+              Nenhuma versão preservada até o momento.
             </p>
           ) : (
             <div className="space-y-3">
@@ -1047,9 +1047,7 @@ export const ProposalDetailPage: React.FC = () => {
                       {new Date(snap.createdAt).toLocaleTimeString('pt-BR')}
                     </span>
                   </div>
-                  <p className="text-[10px] text-[#0B3D2E]/70 font-mono break-all">
-                    Checksum SHA-256: {snap.checksumSha256}
-                  </p>
+                  <p className="text-[10px] text-[#0B3D2E]/70">Integridade verificada pelo sistema.</p>
                 </div>
               ))}
             </div>
