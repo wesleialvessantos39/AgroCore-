@@ -1,10 +1,11 @@
 /**
  * MÓDULO 005 — SERVIÇO DE APLICAÇÃO DE PROPOSTAS
- * Pipeline, documento comercial e acompanhamento (OE-005.003 a OE-005.005)
+ * Pipeline, documento comercial e operações internas pós-aceite.
  * AgroCore
  */
 
 import {
+  AcknowledgeProposalHandoffCommand,
   CreateProposalInput,
   ApproveProposalCommand,
   AssignProposalReviewerCommand,
@@ -27,6 +28,8 @@ import {
   ProposalPresentationRecord,
   ProposalOperationalHandoff,
   ProposalOperationalHandoffDestination,
+  ProposalHandoffQueue,
+  ProposalHandoffReceipt,
   ProposalPropertySnapshot,
   ProposalReviewAssignment,
   ProposalStatus,
@@ -100,16 +103,19 @@ export class ProposalApplicationService {
   private static documentsStore: Map<string, Map<ProposalId, ProposalCommercialDocument[]>> = new Map();
   private static followUpsStore: Map<string, Map<ProposalId, ProposalFollowUp[]>> = new Map();
   private static handoffsStore: Map<string, Map<ProposalId, ProposalOperationalHandoff>> = new Map();
+  private static handoffReceiptsStore: Map<string, Map<ProposalId, ProposalHandoffReceipt>> = new Map();
   private static counterStore: Map<string, number> = new Map();
   private static documentCounterStore: Map<string, number> = new Map();
   private static idempotencyStore: Map<string, { payloadHash: string; proposal: Proposal }> = new Map();
   private static documentIdempotencyStore: Map<string, { payloadHash: string; document: ProposalCommercialDocument }> = new Map();
   private static followUpIdempotencyStore: Map<string, { payloadHash: string; followUp: ProposalFollowUp }> = new Map();
   private static handoffIdempotencyStore: Map<string, { payloadHash: string; handoff: ProposalOperationalHandoff }> = new Map();
+  private static handoffReceiptIdempotencyStore: Map<string, { payloadHash: string; receipt: ProposalHandoffReceipt }> = new Map();
   private static inFlightOperations: Map<string, { payloadHash: string; promise: Promise<Proposal> }> = new Map();
   private static inFlightDocumentOperations: Map<string, { payloadHash: string; promise: Promise<ProposalCommercialDocument> }> = new Map();
   private static inFlightFollowUpOperations: Map<string, { payloadHash: string; promise: Promise<ProposalFollowUp> }> = new Map();
   private static inFlightHandoffOperations: Map<string, { payloadHash: string; promise: Promise<ProposalOperationalHandoff> }> = new Map();
+  private static inFlightHandoffReceiptOperations: Map<string, { payloadHash: string; promise: Promise<ProposalHandoffReceipt> }> = new Map();
   private static updateLocks: Map<string, Promise<void>> = new Map();
 
   private static isCleanupRegistered = false;
@@ -193,6 +199,13 @@ export class ProposalApplicationService {
     return ProposalApplicationService.handoffsStore.get(orgId)!;
   }
 
+  private static getOrgHandoffReceiptsStore(orgId: string): Map<ProposalId, ProposalHandoffReceipt> {
+    if (!ProposalApplicationService.handoffReceiptsStore.has(orgId)) {
+      ProposalApplicationService.handoffReceiptsStore.set(orgId, new Map());
+    }
+    return ProposalApplicationService.handoffReceiptsStore.get(orgId)!;
+  }
+
   private static getNextNumber(orgId: string, clock: Clock): string {
     const current = ProposalApplicationService.counterStore.get(orgId) || 0;
     const next = current + 1;
@@ -216,16 +229,19 @@ export class ProposalApplicationService {
     ProposalApplicationService.documentsStore.clear();
     ProposalApplicationService.followUpsStore.clear();
     ProposalApplicationService.handoffsStore.clear();
+    ProposalApplicationService.handoffReceiptsStore.clear();
     ProposalApplicationService.counterStore.clear();
     ProposalApplicationService.documentCounterStore.clear();
     ProposalApplicationService.idempotencyStore.clear();
     ProposalApplicationService.documentIdempotencyStore.clear();
     ProposalApplicationService.followUpIdempotencyStore.clear();
     ProposalApplicationService.handoffIdempotencyStore.clear();
+    ProposalApplicationService.handoffReceiptIdempotencyStore.clear();
     ProposalApplicationService.inFlightOperations.clear();
     ProposalApplicationService.inFlightDocumentOperations.clear();
     ProposalApplicationService.inFlightFollowUpOperations.clear();
     ProposalApplicationService.inFlightHandoffOperations.clear();
+    ProposalApplicationService.inFlightHandoffReceiptOperations.clear();
     ProposalApplicationService.updateLocks.clear();
     proposalEventBus.clearAll();
   }
@@ -428,6 +444,46 @@ export class ProposalApplicationService {
       return this.clone(handoff);
     } finally {
       ProposalApplicationService.inFlightHandoffOperations.delete(compositeKey);
+    }
+  }
+
+  private async runIdempotentHandoffReceiptMutation(
+    proposalId: ProposalId,
+    idempotencyKey: string,
+    payload: unknown,
+    ctx: ProposalAppContext,
+    execute: () => Promise<ProposalHandoffReceipt>
+  ): Promise<ProposalHandoffReceipt> {
+    if (!idempotencyKey || idempotencyKey.trim().length < 8) {
+      throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave de idempotência inválida.');
+    }
+    const compositeKey = `${ctx.organizationId}:${proposalId}:acknowledge-handoff:${idempotencyKey.trim()}`;
+    const payloadHash = canonicalJsonStringify(payload);
+    const completed = ProposalApplicationService.handoffReceiptIdempotencyStore.get(compositeKey);
+    if (completed) {
+      if (completed.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave reutilizada com conteúdo divergente.');
+      }
+      return this.clone(completed.receipt);
+    }
+    const inFlight = ProposalApplicationService.inFlightHandoffReceiptOperations.get(compositeKey);
+    if (inFlight) {
+      if (inFlight.payloadHash !== payloadHash) {
+        throw new ProposalDomainError('IDEMPOTENCY_CONFLICT', 'Chave concorrente com conteúdo divergente.');
+      }
+      return this.clone(await inFlight.promise);
+    }
+    const promise = execute();
+    ProposalApplicationService.inFlightHandoffReceiptOperations.set(compositeKey, { payloadHash, promise });
+    try {
+      const receipt = await promise;
+      ProposalApplicationService.handoffReceiptIdempotencyStore.set(compositeKey, {
+        payloadHash,
+        receipt: this.clone(receipt),
+      });
+      return this.clone(receipt);
+    } finally {
+      ProposalApplicationService.inFlightHandoffReceiptOperations.delete(compositeKey);
     }
   }
 
@@ -640,9 +696,10 @@ export class ProposalApplicationService {
     actorUserId: string,
     payload: Record<string, string | number | boolean>,
     clock: Clock,
-    recipientUserIds: readonly string[] = []
+    recipientUserIds: readonly string[] = [],
+    correlationIdOverride?: string
   ): void {
-    const correlationId = this.idGenerator.next('corr');
+    const correlationId = correlationIdOverride ?? this.idGenerator.next('corr');
     proposalEventBus.emit({
       id: this.idGenerator.next('evt'),
       type,
@@ -666,11 +723,15 @@ export class ProposalApplicationService {
         type,
         title: type === 'proposal.handoff.prepared'
           ? 'Encaminhamento operacional preparado'
-          : 'Acompanhamento comercial atualizado',
+          : type === 'proposal.handoff.acknowledged'
+            ? 'Encaminhamento recebido pela área responsável'
+            : 'Acompanhamento comercial atualizado',
         message: type === 'proposal.follow_up.scheduled'
           ? `Novo acompanhamento interno agendado para a proposta ${proposal.proposalNumber}.`
           : type === 'proposal.handoff.prepared'
             ? `A proposta ${proposal.proposalNumber} possui referência operacional pós-aceite.`
+            : type === 'proposal.handoff.acknowledged'
+              ? `O encaminhamento da proposta ${proposal.proposalNumber} foi recebido internamente.`
             : `O acompanhamento interno da proposta ${proposal.proposalNumber} foi atualizado.`,
         createdAt: clock.now().toISOString(),
       });
@@ -714,6 +775,18 @@ export class ProposalApplicationService {
     if (proposal.proposalType === 'credit') return 'credit_operations';
     if (proposal.proposalType === 'appraisal') return 'appraisal_operations';
     return 'technical_operations';
+  }
+
+  private canOperateHandoffDestination(
+    role: OrganizationRole,
+    destination: ProposalOperationalHandoffDestination
+  ): boolean {
+    if (role === 'owner' || role === 'company_admin' || role === 'manager') return true;
+    if (role === 'finance') return destination === 'credit_operations';
+    if (role === 'project_designer') {
+      return destination === 'appraisal_operations' || destination === 'technical_operations';
+    }
+    return false;
   }
 
   // --- 1. CRIAÇÃO DE PROPOSTA ---
@@ -2153,6 +2226,111 @@ export class ProposalApplicationService {
     );
   }
 
+  public async acknowledgeProposalHandoff(
+    command: AcknowledgeProposalHandoffCommand,
+    ctx: ProposalAppContext,
+    clock: Clock = SystemClock
+  ): Promise<ProposalHandoffReceipt> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:acknowledge_handoff');
+    return this.runIdempotentHandoffReceiptMutation(
+      command.proposalId,
+      command.idempotencyKey,
+      command,
+      ctx,
+      async () => {
+        const release = await ProposalApplicationService.acquireLock(
+          `${ctx.organizationId}:${command.proposalId}:handoff-receipt`
+        );
+        try {
+          const proposal = ProposalApplicationService.getOrgStore(ctx.organizationId).get(command.proposalId);
+          if (!proposal) throw new ProposalDomainError('PROPOSAL_NOT_FOUND', 'Proposta não encontrada.');
+          const handoff = ProposalApplicationService.getOrgHandoffsStore(ctx.organizationId).get(command.proposalId);
+          if (!handoff || handoff.id !== command.handoffId) {
+            throw new ProposalDomainError('HANDOFF_NOT_AVAILABLE', 'Encaminhamento não encontrado.');
+          }
+          if (handoff.checksumSha256 !== command.expectedHandoffChecksumSha256) {
+            throw new ProposalDomainError(
+              'HANDOFF_RECEIPT_CONFLICT',
+              'O encaminhamento foi alterado ou a referência de integridade está desatualizada.'
+            );
+          }
+          if (!this.canOperateHandoffDestination(ctx.actor.role, handoff.destination)) {
+            throw new ProposalDomainError(
+              'HANDOFF_DESTINATION_MISMATCH',
+              'Seu perfil não pertence à área de destino deste encaminhamento.'
+            );
+          }
+          const actorMember = await ctx.memberResolver(ctx.actor.userId);
+          if (
+            !actorMember
+            || !actorMember.isActive
+            || actorMember.organizationRole !== ctx.actor.role
+          ) {
+            throw new ProposalDomainError(
+              'HANDOFF_RECEIPT_NOT_ALLOWED',
+              'Vínculo organizacional ativo não pôde ser confirmado.'
+            );
+          }
+          if (proposal.status !== 'accepted' || proposal.decisionRecord?.decision !== 'accepted') {
+            throw new ProposalDomainError(
+              'HANDOFF_RECEIPT_NOT_ALLOWED',
+              'Somente encaminhamento de proposta aceita pode ser recebido.'
+            );
+          }
+          const receipts = ProposalApplicationService.getOrgHandoffReceiptsStore(ctx.organizationId);
+          const existing = receipts.get(proposal.id);
+          if (existing) return this.clone(existing);
+
+          const { checksumSha256: storedChecksum, ...handoffPayload } = handoff;
+          let recalculatedHandoffChecksum: string;
+          try {
+            recalculatedHandoffChecksum = await calculateSha256(canonicalJsonStringify(handoffPayload));
+          } catch {
+            throw new ProposalDomainError('HASH_UNAVAILABLE', 'Não foi possível verificar o SHA-256 do encaminhamento.');
+          }
+          if (recalculatedHandoffChecksum !== storedChecksum) {
+            throw new ProposalDomainError('HANDOFF_INTEGRITY_FAILURE', 'A integridade do encaminhamento não foi comprovada.');
+          }
+
+          const correlationId = this.idGenerator.next('corr');
+          const receiptWithoutChecksum = {
+            id: this.idGenerator.next('handoff-receipt'),
+            organizationId: ctx.organizationId,
+            proposalId: proposal.id,
+            handoffId: handoff.id,
+            handoffChecksumSha256: handoff.checksumSha256,
+            destination: handoff.destination,
+            receivedByUserId: ctx.actor.userId,
+            receivedAt: clock.now().toISOString(),
+            correlationId,
+            disclaimerText: 'Recebimento interno registrado. Não cria contrato, projeto, laudo, operação de crédito, cobrança, assinatura ou obrigação financeira.',
+          } as const;
+          let checksumSha256: string;
+          try {
+            checksumSha256 = await calculateSha256(canonicalJsonStringify(receiptWithoutChecksum));
+          } catch {
+            throw new ProposalDomainError('HASH_UNAVAILABLE', 'Não foi possível calcular o SHA-256 do recebimento.');
+          }
+          const receipt: ProposalHandoffReceipt = { ...receiptWithoutChecksum, checksumSha256 };
+          receipts.set(proposal.id, this.clone(receipt));
+          this.emitCommercialOperation(
+            proposal,
+            'proposal.handoff.acknowledged',
+            ctx.actor.userId,
+            { receiptId: receipt.id, handoffId: handoff.id, destination: handoff.destination },
+            clock,
+            [proposal.capturerUserId, handoff.preparedByUserId],
+            correlationId
+          );
+          return this.clone(receipt);
+        } finally {
+          release();
+        }
+      }
+    );
+  }
+
   // --- CONSULTAS ---
   public async getProposalById(proposalId: ProposalId, ctx: ProposalAppContext): Promise<Proposal | null> {
     this.validateContext(ctx);
@@ -2250,9 +2428,63 @@ export class ProposalApplicationService {
   ): Promise<ProposalOperationalHandoff | null> {
     this.validateContext(ctx);
     this.requirePermission(ctx, 'proposals:view_handoff');
-    await this.getProposalById(proposalId, ctx);
     const handoff = ProposalApplicationService.getOrgHandoffsStore(ctx.organizationId).get(proposalId);
+    if (!handoff) {
+      await this.getProposalById(proposalId, ctx);
+      return null;
+    }
+    const mayUseDestinationQueue = this.hasPermission(ctx, 'proposals:view_handoff_queue')
+      && this.canOperateHandoffDestination(ctx.actor.role, handoff.destination);
+    if (!mayUseDestinationQueue) await this.getProposalById(proposalId, ctx);
     return handoff ? this.clone(handoff) : null;
+  }
+
+  public async getProposalHandoffReceipt(
+    proposalId: ProposalId,
+    ctx: ProposalAppContext
+  ): Promise<ProposalHandoffReceipt | null> {
+    await this.getProposalHandoff(proposalId, ctx);
+    const receipt = ProposalApplicationService.getOrgHandoffReceiptsStore(ctx.organizationId).get(proposalId);
+    return receipt ? this.clone(receipt) : null;
+  }
+
+  public async getProposalHandoffQueue(
+    ctx: ProposalAppContext,
+    clock: Clock = SystemClock
+  ): Promise<ProposalHandoffQueue> {
+    this.validateContext(ctx);
+    this.requirePermission(ctx, 'proposals:view_handoff_queue');
+    if (!['owner', 'company_admin', 'manager', 'finance', 'project_designer'].includes(ctx.actor.role)) {
+      throw new ProposalDomainError('PERMISSION_DENIED', 'Seu perfil não possui fila operacional de encaminhamentos.');
+    }
+    const proposals = ProposalApplicationService.getOrgStore(ctx.organizationId);
+    const receipts = ProposalApplicationService.getOrgHandoffReceiptsStore(ctx.organizationId);
+    const items = Array.from(ProposalApplicationService.getOrgHandoffsStore(ctx.organizationId).values())
+      .filter((handoff) => this.canOperateHandoffDestination(ctx.actor.role, handoff.destination))
+      .map((handoff) => {
+        const proposal = proposals.get(handoff.proposalId);
+        if (!proposal || proposal.organizationId !== ctx.organizationId) return null;
+        return {
+          proposalId: proposal.id,
+          proposalNumber: proposal.proposalNumber,
+          title: proposal.title,
+          clientName: proposal.clientSnapshot.name,
+          destination: handoff.destination,
+          handoff: this.clone(handoff),
+          receipt: receipts.get(proposal.id) ? this.clone(receipts.get(proposal.id)!) : undefined,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => {
+        if (Boolean(a.receipt) !== Boolean(b.receipt)) return a.receipt ? 1 : -1;
+        return new Date(b.handoff.preparedAt).getTime() - new Date(a.handoff.preparedAt).getTime();
+      });
+    return {
+      pendingCount: items.filter((item) => !item.receipt).length,
+      receivedCount: items.filter((item) => Boolean(item.receipt)).length,
+      items,
+      generatedAt: clock.now().toISOString(),
+    };
   }
 
   public async getCommercialDashboard(

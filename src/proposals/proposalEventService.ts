@@ -24,7 +24,8 @@ export type ProposalEventType =
   | 'proposal.follow_up.scheduled'
   | 'proposal.follow_up.completed'
   | 'proposal.follow_up.cancelled'
-  | 'proposal.handoff.prepared';
+  | 'proposal.handoff.prepared'
+  | 'proposal.handoff.acknowledged';
 
 export interface ProposalDomainEvent {
   readonly id: string;

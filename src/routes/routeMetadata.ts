@@ -74,6 +74,10 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Acompanhamento Comercial | AgroCore',
     announcementTitle: 'Acompanhamento comercial de propostas',
   },
+  [ROUTES.PROPOSALS_HANDOFF_QUEUE]: {
+    documentTitle: 'Fila de Encaminhamentos | AgroCore',
+    announcementTitle: 'Fila de encaminhamentos operacionais',
+  },
   [ROUTES.PROPOSALS_EDIT]: {
     documentTitle: 'Editar Proposta | AgroCore',
     announcementTitle: 'Editar proposta',

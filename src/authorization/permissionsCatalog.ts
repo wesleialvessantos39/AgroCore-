@@ -527,6 +527,20 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     name: 'Preparar Encaminhamento Operacional',
     description: 'Preparar a referência interna pós-aceite sem criar contrato ou operação externa.',
   },
+  {
+    id: 'proposals:view_handoff_queue',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Consultar Fila de Encaminhamentos',
+    description: 'Consultar encaminhamentos destinados à área operacional compatível com o perfil.',
+  },
+  {
+    id: 'proposals:acknowledge_handoff',
+    scope: 'proposals',
+    targetScope: 'organization',
+    name: 'Confirmar Recebimento de Encaminhamento',
+    description: 'Registrar de forma imutável o recebimento interno pela área de destino autorizada.',
+  },
 
   // Documentos
   {

@@ -148,6 +148,10 @@ const ProposalHandoffPage = lazy(() =>
   import('../pages/ProposalHandoffPage').then((module) => ({ default: module.ProposalHandoffPage }))
 );
 
+const ProposalHandoffQueuePage = lazy(() =>
+  import('../pages/ProposalHandoffQueuePage').then((module) => ({ default: module.ProposalHandoffQueuePage }))
+);
+
 const MyAccountPage = lazy(() =>
   import('../pages/MyAccountPage').then((module) => ({
     default: module.MyAccountPage,
@@ -452,6 +456,14 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission="proposals:view_commercial_tracking">
                   <ProposalTrackingPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="encaminhamentos"
+              element={
+                <RequirePermission permission="proposals:view_handoff_queue">
+                  <ProposalHandoffQueuePage />
                 </RequirePermission>
               }
             />

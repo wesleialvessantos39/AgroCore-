@@ -60,6 +60,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:manage_follow_up',
     'proposals:view_handoff',
     'proposals:prepare_handoff',
+    'proposals:view_handoff_queue',
+    'proposals:acknowledge_handoff',
     // Outros módulos
     'documents:view',
     'documents:upload',
@@ -119,6 +121,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:manage_follow_up',
     'proposals:view_handoff',
     'proposals:prepare_handoff',
+    'proposals:view_handoff_queue',
+    'proposals:acknowledge_handoff',
     // Outros módulos
     'documents:view',
     'documents:upload',
@@ -172,6 +176,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:manage_follow_up',
     'proposals:view_handoff',
     'proposals:prepare_handoff',
+    'proposals:view_handoff_queue',
+    'proposals:acknowledge_handoff',
     // Outros módulos
     'documents:view',
     'documents:upload',
@@ -215,6 +221,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:review',
     'proposals:view_document',
     'proposals:view_handoff',
+    'proposals:view_handoff_queue',
+    'proposals:acknowledge_handoff',
     // Outros módulos
     'documents:view',
     'documents:upload',
@@ -238,6 +246,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:view_document',
     'proposals:view_commercial_tracking',
     'proposals:view_handoff',
+    'proposals:view_handoff_queue',
+    'proposals:acknowledge_handoff',
     'documents:view',
     'personal_account:view_profile',
     'personal_account:manage_preferences',

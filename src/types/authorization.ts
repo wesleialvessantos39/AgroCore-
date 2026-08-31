@@ -95,6 +95,8 @@ export type Permission =
   | 'proposals:manage_follow_up'
   | 'proposals:view_handoff'
   | 'proposals:prepare_handoff'
+  | 'proposals:view_handoff_queue'
+  | 'proposals:acknowledge_handoff'
 
   // Escopo: Documentos
   | 'documents:view'

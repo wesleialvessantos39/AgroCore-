@@ -174,7 +174,6 @@ export const ProposalTrackingPage: React.FC = () => {
     <div className="space-y-6" id="page-proposal-tracking">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className={`text-sm font-semibold ${PROPOSAL_THEME.textSecondary}`}>OE‑005.005</p>
           <h1 className={`text-2xl font-bold ${PROPOSAL_THEME.textPrimary}`}>Acompanhamento comercial</h1>
           <p className={`mt-1 max-w-3xl text-sm ${PROPOSAL_THEME.textSecondary}`}>
             Funil e compromissos internos. O registro não envia mensagens nem cria evento em agenda externa.

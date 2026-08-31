@@ -222,6 +222,15 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Funil, prazos e acompanhamentos internos das propostas visíveis ao usuário.',
   },
   {
+    path: ROUTES.PROPOSALS_HANDOFF_QUEUE,
+    category: 'authenticated_protected',
+    name: 'Fila de Encaminhamentos',
+    requiresAuth: true,
+    requiredPermissions: 'proposals:view_handoff_queue',
+    scope: 'organization',
+    description: 'Recebimento interno de encaminhamentos conforme a área operacional do usuário.',
+  },
+  {
     path: ROUTES.PROPOSALS_EDIT,
     category: 'authenticated_protected',
     name: 'Editar Proposta',

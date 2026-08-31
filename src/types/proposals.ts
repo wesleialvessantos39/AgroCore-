@@ -262,6 +262,41 @@ export interface ProposalOperationalHandoff {
   readonly disclaimerText: string;
 }
 
+/**
+ * Comprovante imutável de recebimento interno do encaminhamento. O recebimento
+ * não cria contrato, laudo, projeto, operação de crédito ou obrigação financeira.
+ */
+export interface ProposalHandoffReceipt {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly proposalId: ProposalId;
+  readonly handoffId: string;
+  readonly handoffChecksumSha256: string;
+  readonly destination: ProposalOperationalHandoffDestination;
+  readonly receivedByUserId: string;
+  readonly receivedAt: string;
+  readonly correlationId: string;
+  readonly checksumSha256: string;
+  readonly disclaimerText: string;
+}
+
+export interface ProposalHandoffQueueItem {
+  readonly proposalId: ProposalId;
+  readonly proposalNumber: string;
+  readonly title: string;
+  readonly clientName: string;
+  readonly destination: ProposalOperationalHandoffDestination;
+  readonly handoff: ProposalOperationalHandoff;
+  readonly receipt?: ProposalHandoffReceipt;
+}
+
+export interface ProposalHandoffQueue {
+  readonly pendingCount: number;
+  readonly receivedCount: number;
+  readonly items: readonly ProposalHandoffQueueItem[];
+  readonly generatedAt: string;
+}
+
 export interface ProposalCommercialTrackingItem {
   readonly proposalId: ProposalId;
   readonly proposalNumber: string;
@@ -436,6 +471,13 @@ export interface CancelProposalFollowUpCommand {
 
 export type PrepareProposalHandoffCommand = ProposalCommandMetadata;
 
+export interface AcknowledgeProposalHandoffCommand {
+  readonly proposalId: ProposalId;
+  readonly handoffId: string;
+  readonly expectedHandoffChecksumSha256: string;
+  readonly idempotencyKey: string;
+}
+
 export interface RecordProposalDecisionCommand extends ProposalCommandMetadata {
   readonly decision: ProposalClientDecision;
   readonly channel: ProposalPresentationChannel;
@@ -508,6 +550,9 @@ export type ProposalErrorCode =
   | 'FOLLOW_UP_DATE_INVALID'
   | 'HANDOFF_NOT_AVAILABLE'
   | 'HANDOFF_INTEGRITY_FAILURE'
+  | 'HANDOFF_RECEIPT_NOT_ALLOWED'
+  | 'HANDOFF_RECEIPT_CONFLICT'
+  | 'HANDOFF_DESTINATION_MISMATCH'
   | 'SYSTEM_CONTEXT_REQUIRED'
   | 'OPERATION_NOT_ALLOWED';
 

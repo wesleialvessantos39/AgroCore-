@@ -36,6 +36,8 @@
     "test:proposal-pipeline": "node --import tsx scripts/test-proposals-pipeline.ts",
     "test:proposal-documents": "node --import tsx scripts/test-proposal-documents.ts",
     "test:proposal-commercial-tracking": "node --import tsx scripts/test-proposal-commercial-tracking.ts",
+    "test:proposal-handoff-receipts": "node --import tsx scripts/test-proposal-handoff-receipts.ts",
+    "test:ui-copy": "node --import tsx scripts/test-ui-copy.ts",
     "test:proposals-theme": "node scripts/test-proposals-theme.js",
     "test:module-005": "node --import tsx scripts/test-module-005.js",
     "test:rebranding": "node --import tsx scripts/test-rebranding.js",

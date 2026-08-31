@@ -18,6 +18,8 @@ import {
   ProposalId,
   ProposalFollowUp,
   ProposalFollowUpOutcome,
+  ProposalHandoffQueue,
+  ProposalHandoffReceipt,
   ProposalOperationalHandoff,
   ProposalReviewAssignment,
   ProposalStatusHistoryEntry,
@@ -128,6 +130,13 @@ export interface ProposalsContextValue {
   readonly getProposalHandoff: (
     proposalId: ProposalId
   ) => Promise<ProposalOperationalHandoff | null>;
+  readonly acknowledgeProposalHandoff: (
+    handoff: ProposalOperationalHandoff
+  ) => Promise<MutationResult<ProposalHandoffReceipt>>;
+  readonly getProposalHandoffReceipt: (
+    proposalId: ProposalId
+  ) => Promise<ProposalHandoffReceipt | null>;
+  readonly getProposalHandoffQueue: () => Promise<ProposalHandoffQueue | null>;
 }
 
 const ProposalsContext = createContext<ProposalsContextValue | null>(null);
@@ -748,6 +757,45 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
     [appContext, proposalAppService]
   );
 
+  const acknowledgeProposalHandoff = useCallback(
+    async (handoff: ProposalOperationalHandoff): Promise<MutationResult<ProposalHandoffReceipt>> => {
+      if (!appContext) return { success: false, error: 'Vínculo organizacional indisponível.' };
+      try {
+        const receipt = await proposalAppService.acknowledgeProposalHandoff({
+          proposalId: handoff.proposalId,
+          handoffId: handoff.id,
+          expectedHandoffChecksumSha256: handoff.checksumSha256,
+          idempotencyKey: mutationKey('acknowledge-handoff', handoff.id, handoff.acceptedVersionNumber),
+        }, appContext);
+        return { success: true, data: receipt };
+      } catch (err: unknown) {
+        return { success: false, error: err instanceof Error ? err.message : 'Falha ao confirmar recebimento.' };
+      }
+    },
+    [appContext, mutationKey, proposalAppService]
+  );
+
+  const getProposalHandoffReceipt = useCallback(
+    async (proposalId: ProposalId): Promise<ProposalHandoffReceipt | null> => {
+      if (!appContext) return null;
+      try {
+        return await proposalAppService.getProposalHandoffReceipt(proposalId, appContext);
+      } catch {
+        return null;
+      }
+    },
+    [appContext, proposalAppService]
+  );
+
+  const getProposalHandoffQueue = useCallback(async (): Promise<ProposalHandoffQueue | null> => {
+    if (!appContext) return null;
+    try {
+      return await proposalAppService.getProposalHandoffQueue(appContext);
+    } catch {
+      return null;
+    }
+  }, [appContext, proposalAppService]);
+
   const contextValue = useMemo<ProposalsContextValue>(
     () => ({
       status,
@@ -788,6 +836,9 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       getCommercialDashboard,
       prepareProposalHandoff,
       getProposalHandoff,
+      acknowledgeProposalHandoff,
+      getProposalHandoffReceipt,
+      getProposalHandoffQueue,
     }),
     [
       status,
@@ -827,6 +878,9 @@ export const ProposalsProvider: React.FC<ProposalsProviderProps> = ({ children }
       getCommercialDashboard,
       prepareProposalHandoff,
       getProposalHandoff,
+      acknowledgeProposalHandoff,
+      getProposalHandoffReceipt,
+      getProposalHandoffQueue,
     ]
   );
 

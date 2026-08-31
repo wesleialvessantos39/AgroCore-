@@ -20,6 +20,7 @@ export const ROUTES = {
   PROPOSALS_NEW: '/propostas/novo',
   PROPOSALS_QUEUE: '/propostas/fila',
   PROPOSALS_TRACKING: '/propostas/acompanhamento',
+  PROPOSALS_HANDOFF_QUEUE: '/propostas/encaminhamentos',
   PROPOSALS_EDIT: '/propostas/:proposalId/editar',
   PROPOSALS_REVIEW: '/propostas/:proposalId/revisao',
   PROPOSALS_HISTORY: '/propostas/:proposalId/historico',

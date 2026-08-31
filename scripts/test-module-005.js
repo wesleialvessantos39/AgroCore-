@@ -30,7 +30,13 @@ try {
   console.log('\n4. Executando acompanhamento comercial e encaminhamento pós-aceite (OE-005.005)...');
   runScript('scripts/test-proposal-commercial-tracking.ts');
 
-  console.log('\n5. Executando auditoria de tema e conformidade visual...');
+  console.log('\n5. Executando fila e recebimento de encaminhamentos (OE-005.006)...');
+  runScript('scripts/test-proposal-handoff-receipts.ts');
+
+  console.log('\n6. Executando auditoria de textos públicos da interface...');
+  runScript('scripts/test-ui-copy.ts');
+
+  console.log('\n7. Executando auditoria de tema e conformidade visual...');
   runScript('scripts/test-proposals-theme.js');
 
   console.log('\n====================================================');
