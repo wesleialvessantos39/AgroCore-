@@ -294,6 +294,33 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Visualização completa e detalhamento financeiro da proposta.',
   },
   {
+    path: ROUTES.DOCUMENTS,
+    category: 'authenticated_protected',
+    name: 'Gestão Documental',
+    requiresAuth: true,
+    requiredPermissions: 'documents:view',
+    scope: 'organization',
+    description: 'Consulta de referências documentais canônicas e versionadas da organização.',
+  },
+  {
+    path: ROUTES.DOCUMENTS_NEW,
+    category: 'authenticated_protected',
+    name: 'Registrar Referência Documental',
+    requiresAuth: true,
+    requiredPermissions: 'documents:register_reference',
+    scope: 'organization',
+    description: 'Registro exclusivo de metadados documentais vinculados a uma entidade canônica.',
+  },
+  {
+    path: ROUTES.DOCUMENTS_DETAIL,
+    category: 'authenticated_protected',
+    name: 'Detalhes da Referência Documental',
+    requiresAuth: true,
+    requiredPermissions: 'documents:view',
+    scope: 'organization',
+    description: 'Metadados, versão e governança de uma referência documental autorizada.',
+  },
+  {
     path: ROUTES.MY_ACCOUNT,
     category: 'authenticated_protected',
     name: 'Minha Conta',
@@ -368,6 +395,10 @@ export function findRouteDefinition(path: string): RouteDefinition | undefined {
 
   if (/^\/propostas\/[^/]+$/.test(path)) {
     return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.PROPOSALS_DETAIL);
+  }
+
+  if (/^\/documentos\/[^/]+$/.test(path)) {
+    return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.DOCUMENTS_DETAIL);
   }
 
   return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.NOT_FOUND);

@@ -5,6 +5,7 @@ import {
   FileText,
   FileCheck,
   ClipboardList,
+  FolderArchive,
   User,
   Globe,
   type LucideIcon,
@@ -69,6 +70,13 @@ export const SYSTEM_NAV_ITEMS: readonly NavItem[] = [
     path: ROUTES.PROPOSALS,
     icon: ClipboardList,
     requiredPermission: 'proposals:view',
+  },
+  {
+    id: 'nav-item-documents',
+    label: 'Documentos',
+    path: ROUTES.DOCUMENTS,
+    icon: FolderArchive,
+    requiredPermission: 'documents:view',
   },
   {
     id: 'nav-item-my-account',

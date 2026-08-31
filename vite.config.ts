@@ -67,6 +67,13 @@ function stripPreviewPlugin(isProduction: boolean) {
           return '\0virtual:production-proposals-gateway-factory';
         }
         if (
+          normalizedTarget.includes('/documents/documentGatewayFactory') ||
+          id.includes('/documents/documentGatewayFactory') ||
+          (importer && importer.includes('/documents/') && id === './documentGatewayFactory')
+        ) {
+          return '\0virtual:production-documents-gateway-factory';
+        }
+        if (
           normalizedTarget.includes('/properties/geometry/geometryGatewayFactory') ||
           normalizedTarget.includes('geometryGatewayFactory') ||
           id.includes('geometryGatewayFactory')
@@ -118,6 +125,7 @@ function stripPreviewPlugin(isProduction: boolean) {
         /[\\/]src[\\/]properties[\\/]preview[\\/]/.test(id) ||
         /[\\/]src[\\/]appraisals[\\/]preview[\\/]/.test(id) ||
         /[\\/]src[\\/]proposals[\\/]preview[\\/]/.test(id) ||
+        /[\\/]src[\\/]documents[\\/]preview[\\/]/.test(id) ||
         /[\\/]src[\\/]technicalProfessionals[\\/]preview[\\/]/.test(id) ||
         id.includes('/auth/preview') ||
         id.includes('/organization/preview') ||
@@ -125,6 +133,7 @@ function stripPreviewPlugin(isProduction: boolean) {
         id.includes('/properties/preview') ||
         id.includes('/appraisals/preview') ||
         id.includes('/proposals/preview') ||
+        id.includes('/documents/preview') ||
         id.includes('/technicalProfessionals/preview') ||
         id.includes('./preview/')
       ) {
@@ -249,6 +258,16 @@ function stripPreviewPlugin(isProduction: boolean) {
             return new UnavailableProposalGateway();
           }
           export function setProposalGatewayForTesting() {}
+        `;
+      }
+
+      if (id === '\0virtual:production-documents-gateway-factory') {
+        return `
+          import { UnavailableDocumentReferenceGateway } from '/src/documents/unavailableDocumentReferenceGateway.ts';
+          export function getDocumentReferenceGateway() {
+            return new UnavailableDocumentReferenceGateway();
+          }
+          export function setDocumentReferenceGatewayForTesting() {}
         `;
       }
 

@@ -106,6 +106,18 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Renovar Proposta | AgroCore',
     announcementTitle: 'Criar nova proposta vinculada',
   },
+  [ROUTES.DOCUMENTS]: {
+    documentTitle: 'Gestão Documental | AgroCore',
+    announcementTitle: 'Gestão documental',
+  },
+  [ROUTES.DOCUMENTS_NEW]: {
+    documentTitle: 'Registrar Referência Documental | AgroCore',
+    announcementTitle: 'Registrar referência documental',
+  },
+  [ROUTES.DOCUMENTS_DETAIL]: {
+    documentTitle: 'Referência Documental | AgroCore',
+    announcementTitle: 'Detalhes da referência documental',
+  },
   [ROUTES.MY_ACCOUNT]: {
     documentTitle: 'Minha Conta | AgroCore',
     announcementTitle: 'Minha conta',
@@ -182,6 +194,10 @@ export function getRouteMetadata(pathname: string): RouteMetadata {
 
   if (/^\/propostas\/[^/]+$/.test(pathname)) {
     return ROUTE_METADATA_MAP[ROUTES.PROPOSALS_DETAIL];
+  }
+
+  if (/^\/documentos\/[^/]+$/.test(pathname)) {
+    return ROUTE_METADATA_MAP[ROUTES.DOCUMENTS_DETAIL];
   }
 
   // 3. Fallback seguro

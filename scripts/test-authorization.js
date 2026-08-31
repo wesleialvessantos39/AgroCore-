@@ -260,7 +260,7 @@ async function runTests() {
     assert.strictEqual(evaluatePermission('clients:view', context).granted, true);
     assert.strictEqual(evaluatePermission('proposals:view_assigned', context).granted, true);
     assert.strictEqual(evaluatePermission('proposals:review', context).granted, true);
-    assert.strictEqual(evaluatePermission('documents:upload', context).granted, true);
+    assert.strictEqual(evaluatePermission('documents:register_reference', context).granted, true);
     assert.strictEqual(evaluatePermission('surveys_and_visits:schedule', context).granted, true);
     assert.strictEqual(evaluatePermission('schedule:view', context).granted, true);
 
@@ -339,7 +339,7 @@ async function runTests() {
     assert.strictEqual(evaluatePermission('proposals:view', context).granted, true);
     assert.strictEqual(evaluatePermission('proposals:create', context).granted, true);
     assert.strictEqual(evaluatePermission('documents:view', context).granted, true);
-    assert.strictEqual(evaluatePermission('documents:upload', context).granted, true);
+    assert.strictEqual(evaluatePermission('documents:register_reference', context).granted, true);
     assert.strictEqual(evaluatePermission('surveys_and_visits:view', context).granted, true);
 
     // Negadas

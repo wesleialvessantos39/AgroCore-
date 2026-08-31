@@ -156,6 +156,18 @@ const ProposalRenewalPage = lazy(() =>
   import('../pages/ProposalRenewalPage').then((module) => ({ default: module.ProposalRenewalPage }))
 );
 
+const DocumentsPage = lazy(() =>
+  import('../pages/DocumentsPage').then((module) => ({ default: module.DocumentsPage }))
+);
+
+const DocumentReferenceCreatePage = lazy(() =>
+  import('../pages/DocumentReferenceCreatePage').then((module) => ({ default: module.DocumentReferenceCreatePage }))
+);
+
+const DocumentReferenceDetailPage = lazy(() =>
+  import('../pages/DocumentReferenceDetailPage').then((module) => ({ default: module.DocumentReferenceDetailPage }))
+);
+
 const MyAccountPage = lazy(() =>
   import('../pages/MyAccountPage').then((module) => ({
     default: module.MyAccountPage,
@@ -532,6 +544,38 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission={['proposals:view', 'proposals:view_related', 'proposals:view_assigned']}>
                   <ProposalDetailPage />
+                </RequirePermission>
+              }
+            />
+          </Route>
+
+          {/* Gestão Documental Referencial (Módulo 006) */}
+          <Route
+            path={ROUTES.DOCUMENTS}
+            element={
+              <ProtectedRoute>
+                <OrganizationGate>
+                  <RequirePermission permission="documents:view">
+                    <AppShell />
+                  </RequirePermission>
+                </OrganizationGate>
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<DocumentsPage />} />
+            <Route
+              path="novo"
+              element={
+                <RequirePermission permission="documents:register_reference">
+                  <DocumentReferenceCreatePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path=":documentId"
+              element={
+                <RequirePermission permission="documents:view">
+                  <DocumentReferenceDetailPage />
                 </RequirePermission>
               }
             />

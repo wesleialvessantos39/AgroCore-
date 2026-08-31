@@ -101,7 +101,7 @@ export type Permission =
 
   // Escopo: Documentos
   | 'documents:view'
-  | 'documents:upload'
+  | 'documents:register_reference'
   | 'documents:manage'
 
   // Escopo: Vistorias e Visitas

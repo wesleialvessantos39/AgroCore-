@@ -32,7 +32,7 @@ A identidade visual do AgroCore é centralizada nos componentes `BrandLogo.tsx`,
 
 - **Paleta oficial exclusiva:** `#0B3D2E` (verde-escuro), `#78C89A` (verde-claro), `#FFFFFF` (branco) e transparências derivadas dessas cores.
 - **Favicon & PWA Icons:** `public/favicon.svg`, `public/icons/icon-192x192.png`, `public/icons/icon-512x512.png` e variantes maskable.
-- **Tema:** módulos 003, 004 e 005 possuem barreiras automatizadas contra famílias Tailwind externas e variantes `dark:*`.
+- **Tema:** módulos 003, 004, 005 e 006 possuem barreiras automatizadas contra famílias Tailwind externas e variantes `dark:*`.
 - **Tipografia:** Famílias sans-serif corporativas de alta legibilidade, com contraste em conformidade com WCAG AA.
 
 ---
@@ -45,7 +45,7 @@ A identidade visual do AgroCore é centralizada nos componentes `BrandLogo.tsx`,
 | **Proprietário** | `owner` | Organização | Governança integral da empresa/escritório, gestão de filiais, atribuição de papéis, finanças estratégicas e auditoria interna. |
 | **Administrador** | `company_admin` | Organização | Gestão operacional cotidiana, membros, permissões departamentais e configurações da empresa. |
 | **Gerente** | `manager` | Organização | Coordenação de equipes de campo, validação de projetos, aprovação de propostas e logística de frotas. |
-| **Projetista** | `project_designer` | Organização | Elaboração técnica de projetos agropecuários, laudos agronômicos, upload de mapas e documentos técnicos. |
+| **Projetista** | `project_designer` | Organização | Elaboração técnica de projetos agropecuários, laudos agronômicos e registro governado de referências técnicas. |
 | **Financeiro** | `finance` | Organização | Acompanhamento de fluxo de caixa, honorários, faturamento de projetos e controle de inadimplência. |
 | **Captador** | `capturer` | Organização | Prospecção comercial, atendimento inicial ao produtor, pré-cadastro restrito de clientes e propriedades. |
 
@@ -268,10 +268,11 @@ Reconhecendo a rotina pericial e de consultoria agronômica, o sistema permite a
 ---
 
 ### 6.7 Gestão de Documentos e Anexos Técnicos
-- **Repositório Unificado por Referência:** Documentos (certidões de matrícula, recibos do CAR, plantas topográficas, fotografias de vistoria, memoriais descritivos) serão armazenados de forma única na infraestrutura segura e referenciados por identificadores imutáveis (`documentId`).
-- A solicitação, o cadastro do imóvel, a visita técnica e o laudo de avaliação compartilham as mesmas referências autorizadas, evitando tráfego e armazenamento redundante de arquivos.
-- Cada documento conterá metadados de governança: `organizationId`, `logicalOwnerType`, `logicalOwnerId`, `category`, `versionNumber`, `fileSizeBytes`, `mimeType`, `uploadedAt`, `uploadedByUserId` e lista de controle de acesso (ACL).
-- A substituição de um documento gerará uma nova versão versionada, mantendo o histórico anterior inalterado para efeitos periciais.
+- **Fundação Referencial Implementada:** a OE-006.001 registra somente metadados canônicos identificados por `documentId`, vinculados a cliente, imóvel, solicitação, laudo ou proposta existente. Nenhum arquivo integra o agregado atual.
+- Cada referência contém `organizationId`, `logicalOwnerType`, `logicalOwnerId`, `category`, `versionNumber`, `fileSizeBytes` declarado, `mimeType`, escopo de acesso, situação, datas referenciais, checksum SHA-256 dos metadados e autoria organizacional.
+- A substituição cria uma nova referência ativa, preserva a anterior como `superseded` e mantém a cadeia imutável por `predecessorDocumentId`. O arquivamento é versionado e exige motivo operacional.
+- O serviço rejeita em tempo de execução arquivo, `Blob`, buffers, Base64, URLs, credenciais, tokens e payloads incompatíveis, inclusive diante de tentativa de contorno da tipagem.
+- Uma futura infraestrutura segura poderá armazenar o conteúdo físico de modo único e associá-lo aos mesmos identificadores, sem alterar as fontes canônicas nem duplicar arquivos entre módulos.
 - Documentos sensíveis e dados de clientes (CPF, CNPJ, dados bancários) jamais serão registrados em arquivos de log do servidor ou do cliente.
 - É expressamente proibido o armazenamento de arquivos reais de documentos em `localStorage`, `sessionStorage` ou `IndexedDB`.
 - Na ausência de infraestrutura de nuvem configurada para storage de arquivos, a aplicação operará em modo seguro com gateway de indisponibilidade, sem simular uploads em produção.
@@ -411,7 +412,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - `OE-004.003`: Dossiê técnico estruturado (identificação, caracterização física e logística, benfeitorias, conclusão), homogeneização, estatística, métodos avaliatórios, prontidão técnica e fotografia canônica com checksum SHA-256. `AppraisalIssuanceService` exige `appraisals:issue`, responsável designado, perfil verificado, prontidão e estado `ready_to_issue`; versão e status são confirmados por um único `commitIssuedVersion`, sem caminho público de gravação avulsa.
 
 ### MÓDULO 005: PROPOSTAS DE CRÉDITO E PRESTAÇÃO DE SERVIÇOS
-- **Status Geral:** Implementado e homologado localmente até a OE-005.007.
+- **Status Geral:** Concluído e homologado no escopo volátil até a OE-005.007. As seis suítes de domínio, auditoria de texto público e tema totalizam 186 provas comportamentais aprovadas; a indisponibilidade do executor remoto é registrada separadamente como infraestrutura, não como aprovação da CI.
 - **Entregas Concluídas e Homologadas:**
   - `OE-005.001`: Fundação de propostas comerciais e técnicas, com contratos tipados (`Proposal`, snapshots canônicos, valores em centavos, cálculo financeiro e `ProposalStatus`) e armazenamento volátil isolado por organização.
   - `OE-005.002`: Fechamento final e saneamento de segurança e concorrência:
@@ -473,6 +474,19 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
     - **Auditoria e Sessão:** evento `proposal.renewal.created` e notificações carregam somente metadados sanitizados; proposta, vínculos, idempotência, operações em voo, locks, eventos e notificações são eliminados pela limpeza central de logout.
     - **Homologação comportamental:** 28 provas em `scripts/test-proposal-renewals.ts`; o Módulo 005 totaliza 186 provas comportamentais nas seis suítes de domínio, além das auditorias de texto público e tema.
 
+### MÓDULO 006: GESTÃO DOCUMENTAL E ANEXOS TÉCNICOS
+- **Status Geral:** Em desenvolvimento; OE-006.001 implementada e homologada localmente.
+- **Entregas da OE-006.001:**
+  - **Agregado Referencial Canônico:** `DocumentReference` possui organização, entidade lógica, categoria, nome de exibição, MIME permitido, tamanho declarado, escopo de acesso, situação, versão, datas, autoria e checksum SHA-256 dos metadados. `storageState` permanece obrigatoriamente `metadata_only`.
+  - **Fontes Canônicas:** referências aceitam exclusivamente clientes, imóveis, solicitações de laudo, laudos e propostas já existentes na mesma organização. A interface usa seletores derivados dessas fontes e não oferece campo livre para identificadores internos.
+  - **RBAC Granular:** permissões reais `documents:view`, `documents:register_reference` e `documents:manage`. A permissão preliminar `documents:upload` foi removida porque não existe infraestrutura de upload. Proprietário, administrador e gerente governam referências; projetista e captador registram somente em entidades das quais participam; financeiro consulta apenas metadados de escopo organizacional; superadministrador permanece isolado dos dados privados.
+  - **Segurança de Conteúdo:** validadores recusam arquivo, `Blob`, bytes, buffers, Base64, URL, token, credencial e segredo. MIME é limitado a PDF, JPEG, PNG e TIFF; tamanho e datas são validados sem armazenar conteúdo físico.
+  - **Versionamento e Concorrência:** registro, substituição e arquivamento são idempotentes, protegidos por versão e confirmados atomicamente no gateway de preview. Referências equivalentes ativas não são duplicadas e replays concorrentes convergem para o mesmo resultado.
+  - **Gateway Seguro:** `PreviewDocumentReferenceGateway` usa coleção vazia, volátil e isolada por organização; `UnavailableDocumentReferenceGateway` nega leitura e mutação em produção até existir infraestrutura segura. Nenhum dado é persistido em storage do navegador.
+  - **Auditoria e Sessão:** eventos append-only carregam apenas IDs e metadados sanitizados; referências, idempotência e diário de eventos são eliminados pela limpeza central do logout.
+  - **Rotas e Interface:** `/documentos`, `/documentos/novo` e `/documentos/:documentId` usam guards de permissão, builders com `encodeURIComponent`, navegação segura, estados acessíveis e paleta oficial. Não existe `input type="file"`, visualização ou download simulado.
+  - **Homologação Comportamental:** 39 provas em `scripts/test-documents-foundation.ts`, auditoria visual em `scripts/test-documents-theme.js` e agregador `test:module-006`.
+
 ---
 
 ## 7. SUÍTE DE TESTES E VERIFICAÇÃO AUTOMATIZADA
@@ -509,6 +523,9 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:ui-copy` | Audita via AST todas as telas TSX e impede identificadores internos de Ordem de Execução em conteúdo renderizável |
 | `npm run test:proposals-theme` | Audita a paleta oficial e bloqueia famílias externas no Módulo 005 |
 | `npm run test:module-005` | Homologação consolidada da fundação, pipeline, documento comercial, acompanhamento, recebimento, renovação, texto público e tema do Módulo 005 (OE-005.001 a OE-005.007; 186 provas comportamentais) |
+| `npm run test:documents-foundation` | Valida metadados seguros, fontes canônicas, RBAC, IDOR, versionamento, idempotência, concorrência, eventos, rotas e limpeza documental (39 provas) |
+| `npm run test:documents-theme` | Audita a paleta oficial, variantes proibidas e ausência de campo de upload no Módulo 006 |
+| `npm run test:module-006` | Homologação consolidada da fundação referencial do Módulo 006 (OE-006.001) |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -529,4 +546,4 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
 2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.007 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
-3. **Próxima Ordem:** ainda não iniciada; sua execução deve partir do HEAD publicado e de CI aprovado, sem reabrir os contratos homologados desta ordem.
+3. **Módulo 006 — Gestão Documental:** iniciado pela OE-006.001 no modo estritamente referencial. A próxima ordem será a OE-006.002 e deverá ampliar governança, validade e integração operacional sem simular storage, upload ou download enquanto a infraestrutura real não existir.

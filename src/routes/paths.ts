@@ -28,6 +28,9 @@ export const ROUTES = {
   PROPOSALS_HANDOFF: '/propostas/:proposalId/encaminhamento',
   PROPOSALS_RENEW: '/propostas/:proposalId/renovar',
   PROPOSALS_DETAIL: '/propostas/:proposalId',
+  DOCUMENTS: '/documentos',
+  DOCUMENTS_NEW: '/documentos/novo',
+  DOCUMENTS_DETAIL: '/documentos/:documentId',
   MY_ACCOUNT: '/minha-conta',
   ACCESS_DENIED: '/acesso-negado',
   CONFIG_ORGANIZATION: '/configurar-empresa',
@@ -77,6 +80,10 @@ export function getProposalHandoffPath(proposalId: string): string {
 
 export function getProposalRenewalPath(proposalId: string): string {
   return `/propostas/${encodeURIComponent(proposalId)}/renovar`;
+}
+
+export function getDocumentReferencePath(documentId: string): string {
+  return `/documentos/${encodeURIComponent(documentId)}`;
 }
 
 export function getAppraisalDetailPath(appraisalId: string): string {

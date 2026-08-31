@@ -65,7 +65,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:renew',
     // Outros módulos
     'documents:view',
-    'documents:upload',
+    'documents:register_reference',
     'documents:manage',
     'surveys_and_visits:view',
     'surveys_and_visits:schedule',
@@ -127,7 +127,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:renew',
     // Outros módulos
     'documents:view',
-    'documents:upload',
+    'documents:register_reference',
     'documents:manage',
     'surveys_and_visits:view',
     'surveys_and_visits:schedule',
@@ -183,7 +183,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:renew',
     // Outros módulos
     'documents:view',
-    'documents:upload',
+    'documents:register_reference',
     'documents:manage',
     'surveys_and_visits:view',
     'surveys_and_visits:schedule',
@@ -228,7 +228,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:acknowledge_handoff',
     // Outros módulos
     'documents:view',
-    'documents:upload',
+    'documents:register_reference',
     'surveys_and_visits:view',
     'surveys_and_visits:schedule',
     'schedule:view',
@@ -256,7 +256,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'personal_account:manage_preferences',
   ],
 
-  // Captador (Prospecção de produtores, solicitações e upload preliminar)
+  // Captador (Prospecção de produtores e referências documentais preliminares)
   capturer: [
     'organization:view_overview',
     'clients:view',
@@ -289,7 +289,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:renew',
     // Outros módulos
     'documents:view',
-    'documents:upload',
+    'documents:register_reference',
     'surveys_and_visits:view',
     'schedule:view',
     'personal_account:view_profile',

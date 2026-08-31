@@ -12,6 +12,7 @@ import { PropertiesProvider } from './properties/PropertiesContext';
 import { TechnicalProfessionalProvider } from './technicalProfessionals/TechnicalProfessionalContext';
 import { AppraisalsProvider } from './appraisals/AppraisalsContext';
 import { ProposalsProvider } from './proposals/ProposalsContext';
+import { DocumentsProvider } from './documents/DocumentsContext';
 import { AppRoutes } from './routes/AppRoutes';
 
 export default function App() {
@@ -26,11 +27,13 @@ export default function App() {
                   <TechnicalProfessionalProvider>
                     <AppraisalsProvider>
                       <ProposalsProvider>
-                        <ConnectivityNotice />
-                        <UpdateNotice />
-                        <RouteAnnouncer />
-                        <SkipToContent />
-                        <AppRoutes />
+                        <DocumentsProvider>
+                          <ConnectivityNotice />
+                          <UpdateNotice />
+                          <RouteAnnouncer />
+                          <SkipToContent />
+                          <AppRoutes />
+                        </DocumentsProvider>
                       </ProposalsProvider>
                     </AppraisalsProvider>
                   </TechnicalProfessionalProvider>

@@ -66,7 +66,7 @@ export const PERMISSION_SCOPE_GROUPS: readonly PermissionScopeGroup[] = [
   {
     id: 'documents',
     name: 'Documentação Rural',
-    description: 'Envio, conferência e gestão de certidões, matrículas e laudos técnicos.',
+    description: 'Registro referencial, conferência e governança de documentos técnicos.',
     targetScope: 'organization',
   },
   {
@@ -555,21 +555,21 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     scope: 'documents',
     targetScope: 'organization',
     name: 'Consultar Documentos',
-    description: 'Visualizar e conferir certidões, laudos e documentos técnicos anexados.',
+    description: 'Visualizar metadados e referências documentais conforme o escopo autorizado.',
   },
   {
-    id: 'documents:upload',
+    id: 'documents:register_reference',
     scope: 'documents',
     targetScope: 'organization',
-    name: 'Enviar Documentos',
-    description: 'Realizar upload de documentos comprobatórios e arquivos de suporte.',
+    name: 'Registrar Referências Documentais',
+    description: 'Registrar somente metadados referenciais, sem bytes, arquivos ou URLs temporárias.',
   },
   {
     id: 'documents:manage',
     scope: 'documents',
     targetScope: 'organization',
     name: 'Gerenciar Documentos',
-    description: 'Organizar, validar e gerenciar a validade do repositório documental.',
+    description: 'Versionar, substituir e arquivar referências documentais da organização.',
   },
 
   // Vistorias e Visitas
