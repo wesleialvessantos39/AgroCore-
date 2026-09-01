@@ -37,6 +37,14 @@ export class UnavailableDocumentReferenceGateway implements DocumentReferenceGat
     return unavailable();
   }
 
+  async listVersionHistory(
+    _organizationId: string,
+    _logicalDocumentId: string,
+    _signal?: AbortSignal
+  ): Promise<readonly DocumentReference[]> {
+    return unavailable();
+  }
+
   async createReference(_input: CreateDocumentRecord): Promise<DocumentReference> {
     return unavailable();
   }

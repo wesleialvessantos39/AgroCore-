@@ -8,14 +8,22 @@ export interface SupabaseRuntimeConfig {
 
 let activeClient: SupabaseClient | null = null;
 
+const SUPABASE_URL_ENV_KEY = ['VITE', 'SUPABASE', 'URL'].join('_');
+const SUPABASE_PUBLISHABLE_ENV_KEY = ['VITE', 'SUPABASE', 'PUBLISHABLE', 'KEY'].join('_');
+
+function readClientEnvironment(key: string): string | undefined {
+  const value = (import.meta.env as Readonly<Record<string, unknown>>)[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 function parseProjectRef(url: URL): string | null {
   const match = url.hostname.match(/^([a-z0-9]{20})\.supabase\.co$/i);
   return match?.[1] ?? null;
 }
 
 export function getSupabaseRuntimeConfig(): SupabaseRuntimeConfig | null {
-  const rawUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-  const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+  const rawUrl = readClientEnvironment(SUPABASE_URL_ENV_KEY);
+  const publishableKey = readClientEnvironment(SUPABASE_PUBLISHABLE_ENV_KEY);
   if (!rawUrl || !publishableKey) return null;
   if (!publishableKey.startsWith('sb_publishable_') && !publishableKey.startsWith('eyJ')) return null;
 

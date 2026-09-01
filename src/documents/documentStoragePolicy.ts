@@ -32,15 +32,18 @@ export function buildDocumentStoragePath(input: {
   readonly organizationId: string;
   readonly logicalOwnerType: DocumentLogicalOwnerType;
   readonly logicalOwnerId: string;
+  readonly logicalDocumentId?: string;
   readonly documentId: string;
   readonly mimeType: DocumentMimeType;
 }): string {
   assertSafeSegment(input.organizationId, 'Organização');
   assertSafeSegment(input.logicalOwnerId, 'Registro relacionado');
+  const logicalDocumentId = input.logicalDocumentId ?? input.documentId;
+  assertSafeSegment(logicalDocumentId, 'Documento lógico');
   assertSafeSegment(input.documentId, 'Documento');
   const extension = MIME_EXTENSION[input.mimeType];
   if (!extension) throw new DocumentDomainError('INVALID_FILE', 'Formato de arquivo não permitido.');
-  return `${input.organizationId}/${input.logicalOwnerType}/${input.logicalOwnerId}/${input.documentId}/${input.documentId}.${extension}`;
+  return `${input.organizationId}/${input.logicalOwnerType}/${input.logicalOwnerId}/${logicalDocumentId}/${input.documentId}.${extension}`;
 }
 
 export function validateDocumentFile(file: Pick<File, 'name' | 'size' | 'type'>): DocumentMimeType {
@@ -83,6 +86,7 @@ export function assertStoredObjectMatches(input: {
   readonly organizationId: string;
   readonly logicalOwnerType: DocumentLogicalOwnerType;
   readonly logicalOwnerId: string;
+  readonly logicalDocumentId?: string;
   readonly documentId: string;
   readonly mimeType: DocumentMimeType;
   readonly bucket: string;

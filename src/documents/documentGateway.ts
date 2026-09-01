@@ -7,6 +7,8 @@ import type {
 
 export interface CreateDocumentRecord {
   readonly reference: DocumentReference;
+  /** Participantes resolvidos pela camada de domínio; não integra o DTO público da versão. */
+  readonly authorizedUserIds: readonly string[];
   readonly idempotencyKey: string;
   readonly payloadHash: string;
 }
@@ -50,6 +52,11 @@ export interface DocumentReferenceGateway {
     organizationId: string,
     documentId: string
   ): Promise<DocumentReference | null>;
+  listVersionHistory(
+    organizationId: string,
+    logicalDocumentId: string,
+    signal?: AbortSignal
+  ): Promise<readonly DocumentReference[]>;
   createReference(input: CreateDocumentRecord): Promise<DocumentReference>;
   replaceReference(input: ReplaceDocumentRecord): Promise<DocumentReference>;
   archiveReference(input: ArchiveDocumentRecord): Promise<DocumentReference>;

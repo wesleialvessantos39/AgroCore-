@@ -5,6 +5,7 @@ import {
   type DocumentApplicationContext,
   type DocumentFileContent,
   type DocumentReference,
+  type ReplaceStoredDocumentCommandInput,
   type DocumentUploadMetadataInput,
   type DocumentUploadProgress,
 } from '../types/documents';
@@ -21,6 +22,13 @@ import {
 export interface UploadDocumentCommand {
   readonly file: File;
   readonly metadata: DocumentUploadMetadataInput;
+  readonly idempotencyKey: string;
+  readonly signal: AbortSignal;
+  readonly onProgress: (progress: DocumentUploadProgress) => void;
+}
+
+export interface ReplaceStoredDocumentCommand extends ReplaceStoredDocumentCommandInput {
+  readonly file: File;
   readonly idempotencyKey: string;
   readonly signal: AbortSignal;
   readonly onProgress: (progress: DocumentUploadProgress) => void;
@@ -104,6 +112,74 @@ export class DocumentUploadService {
       throw error instanceof DocumentDomainError
         ? error
         : new DocumentDomainError('STORAGE_UPLOAD_FAILED', 'Não foi possível concluir o envio.');
+    }
+  }
+
+  async replaceStoredDocument(
+    context: DocumentApplicationContext,
+    command: ReplaceStoredDocumentCommand
+  ): Promise<DocumentReference> {
+    const mimeType = validateDocumentFile(command.file);
+    const authorizationInput = {
+      previousDocumentId: command.previousDocumentId,
+      expectedVersion: command.expectedVersion,
+      displayName: command.displayName,
+      mimeType,
+      fileSizeBytes: command.file.size,
+      issuedOn: command.issuedOn,
+      expiresOn: command.expiresOn,
+      notes: command.notes,
+      versionNote: command.versionNote,
+      idempotencyKey: command.idempotencyKey,
+    };
+    const previous = await this.applicationService.authorizeStoredVersionUpload(
+      context,
+      authorizationInput
+    );
+    await verifyDocumentFileSignature(command.file);
+    if (command.signal.aborted) {
+      throw new DocumentDomainError('UPLOAD_CANCELLED', 'Envio cancelado.');
+    }
+
+    const documentId = this.idGenerator.generate();
+    const objectPath = buildDocumentStoragePath({
+      organizationId: context.organizationId,
+      logicalOwnerType: previous.logicalOwnerType,
+      logicalOwnerId: previous.logicalOwnerId,
+      logicalDocumentId: previous.logicalDocumentId,
+      documentId,
+      mimeType,
+    });
+
+    try {
+      const storedObject = await this.storageGateway.upload({
+        bucket: DOCUMENT_STORAGE_BUCKET,
+        objectPath,
+        file: command.file,
+        mimeType,
+        signal: command.signal,
+        onProgress: command.onProgress,
+      });
+      return await this.applicationService.registerStoredDocumentVersion(context, {
+        ...authorizationInput,
+        documentId,
+        storedObject,
+      });
+    } catch (error) {
+      if (error instanceof DocumentDomainError && error.code === 'STORAGE_COMPENSATION_FAILED') {
+        throw error;
+      }
+      try {
+        await this.compensate(objectPath);
+      } catch (compensationError) {
+        throw compensationError;
+      }
+      if (command.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+        throw new DocumentDomainError('UPLOAD_CANCELLED', 'Envio cancelado.');
+      }
+      throw error instanceof DocumentDomainError
+        ? error
+        : new DocumentDomainError('STORAGE_UPLOAD_FAILED', 'Não foi possível concluir a nova versão.');
     }
   }
 

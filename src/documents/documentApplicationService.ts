@@ -20,9 +20,11 @@ import {
   type FulfillDocumentRequirementInput,
   type RegisterDocumentReferenceInput,
   type RegisterStoredDocumentInput,
+  type RegisterStoredDocumentVersionInput,
   type ReplaceDocumentReferenceInput,
   type ResolveDocumentRequirementInput,
 } from '../types/documents';
+import { sortDocumentVersionHistory } from './documentVersioning';
 import { assertStoredObjectMatches } from './documentStoragePolicy';
 import {
   calculateDocumentSha256,
@@ -356,8 +358,34 @@ function parseReplaceInput(value: unknown): ReplaceDocumentReferenceInput {
     issuedOn,
     expiresOn,
     notes: optionalText(value.notes, 'Observação', 500),
+    versionNote: compactText(value.versionNote, 'Motivo da nova versão', 3, 500),
     idempotencyKey: parseIdempotencyKey(value.idempotencyKey),
   };
+}
+
+function parseStoredVersionInput(value: unknown): RegisterStoredDocumentVersionInput {
+  const replacement = parseReplaceInput(value);
+  if (!isRecord(value) || !isRecord(value.storedObject)) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Confirmação da nova versão armazenada inválida.');
+  }
+  const uploadedAt = compactText(value.storedObject.uploadedAt, 'Data do envio', 20, 40);
+  if (Number.isNaN(new Date(uploadedAt).getTime())) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Data do envio da nova versão inválida.');
+  }
+  return {
+    ...replacement,
+    documentId: compactText(value.documentId, 'Nova versão', 1, 160),
+    storedObject: {
+      bucket: compactText(value.storedObject.bucket, 'Área privada', 1, 80) as RegisterStoredDocumentVersionInput['storedObject']['bucket'],
+      objectPath: compactText(value.storedObject.objectPath, 'Localização privada', 1, 600),
+      uploadedAt,
+    },
+  };
+}
+
+function actorDisplayName(context: DocumentApplicationContext): string {
+  const value = context.actor.displayName?.replace(/\s+/g, ' ').trim();
+  return value && value.length >= 3 && value.length <= 120 ? value : 'Integrante da equipe';
 }
 
 function parseArchiveInput(value: unknown): ArchiveDocumentReferenceInput {
@@ -548,6 +576,37 @@ export class DocumentApplicationService {
     return cloneReference(reference);
   }
 
+  async listVersionHistory(
+    context: DocumentApplicationContext,
+    documentId: string,
+    signal?: AbortSignal
+  ): Promise<readonly DocumentReference[]> {
+    this.assertPermission(context, 'documents:view');
+    const anchor = await this.getReferenceById(context, documentId);
+    if (!anchor) {
+      throw new DocumentDomainError('REFERENCE_NOT_FOUND', 'Referência documental não encontrada.');
+    }
+    const versions = await this.gateway.listVersionHistory(
+      context.organizationId,
+      anchor.logicalDocumentId,
+      signal
+    );
+    const visible: DocumentReference[] = [];
+    for (const version of versions) {
+      if (
+        version.organizationId !== context.organizationId ||
+        version.logicalDocumentId !== anchor.logicalDocumentId ||
+        version.logicalOwnerType !== anchor.logicalOwnerType ||
+        version.logicalOwnerId !== anchor.logicalOwnerId ||
+        version.accessScope !== anchor.accessScope
+      ) {
+        continue;
+      }
+      visible.push(cloneReference(version));
+    }
+    return sortDocumentVersionHistory(visible);
+  }
+
   async authorizeStoredUpload(
     context: DocumentApplicationContext,
     command: unknown
@@ -602,10 +661,12 @@ export class DocumentApplicationService {
       storageBucket: input.storedObject.bucket,
       storageObjectPath: input.storedObject.objectPath,
       versionNumber: 1,
+      versionNote: 'Versão inicial',
     };
     const payloadHash = await calculateDocumentSha256(canonicalDocumentJson(checksumPayload));
     const reference: DocumentReference = {
       id: input.documentId,
+      logicalDocumentId: input.documentId,
       organizationId: context.organizationId,
       logicalOwnerType: input.logicalOwnerType,
       logicalOwnerId: input.logicalOwnerId,
@@ -615,7 +676,9 @@ export class DocumentApplicationService {
       fileSizeBytes: input.fileSizeBytes,
       accessScope: input.accessScope,
       status: 'active',
+      isCurrent: true,
       versionNumber: 1,
+      versionNote: 'Versão inicial',
       issuedOn: input.issuedOn,
       expiresOn: input.expiresOn,
       notes: input.notes,
@@ -625,11 +688,13 @@ export class DocumentApplicationService {
       storageUploadedAt: input.storedObject.uploadedAt,
       metadataChecksumSha256: payloadHash,
       createdByUserId: context.actor.userId,
+      createdByDisplayName: actorDisplayName(context),
       createdAt: now,
       updatedAt: now,
     };
     const result = await this.gateway.createReference({
       reference,
+      authorizedUserIds: owner.authorizedUserIds,
       idempotencyKey: input.idempotencyKey,
       payloadHash,
     });
@@ -677,10 +742,13 @@ export class DocumentApplicationService {
       expiresOn: input.expiresOn,
       notes: input.notes,
       versionNumber: 1,
+      versionNote: 'Versão inicial',
     };
     const payloadHash = await calculateDocumentSha256(canonicalDocumentJson(checksumPayload));
+    const documentId = this.idGenerator.generate();
     const reference: DocumentReference = {
-      id: this.idGenerator.generate(),
+      id: documentId,
+      logicalDocumentId: documentId,
       organizationId: context.organizationId,
       logicalOwnerType: input.logicalOwnerType,
       logicalOwnerId: input.logicalOwnerId,
@@ -690,19 +758,23 @@ export class DocumentApplicationService {
       fileSizeBytes: input.fileSizeBytes,
       accessScope: input.accessScope,
       status: 'active',
+      isCurrent: true,
       versionNumber: 1,
+      versionNote: 'Versão inicial',
       issuedOn: input.issuedOn,
       expiresOn: input.expiresOn,
       notes: input.notes,
       storageState: 'metadata_only',
       metadataChecksumSha256: payloadHash,
       createdByUserId: context.actor.userId,
+      createdByDisplayName: actorDisplayName(context),
       createdAt: now,
       updatedAt: now,
     };
 
     const result = await this.gateway.createReference({
       reference,
+      authorizedUserIds: owner.authorizedUserIds,
       idempotencyKey: input.idempotencyKey,
       payloadHash,
     });
@@ -727,7 +799,7 @@ export class DocumentApplicationService {
     context: DocumentApplicationContext,
     command: unknown
   ): Promise<DocumentReference> {
-    this.assertPermission(context, 'documents:register_reference');
+    this.assertPermission(context, 'documents:manage');
     const input = parseReplaceInput(command);
     const previous = await this.gateway.getReferenceById(context.organizationId, input.previousDocumentId);
     if (!previous) {
@@ -742,6 +814,7 @@ export class DocumentApplicationService {
     const now = this.clock.now().toISOString();
     const checksumPayload = {
       organizationId: context.organizationId,
+      logicalDocumentId: previous.logicalDocumentId,
       logicalOwnerType: previous.logicalOwnerType,
       logicalOwnerId: previous.logicalOwnerId,
       category: previous.category,
@@ -754,10 +827,12 @@ export class DocumentApplicationService {
       notes: input.notes,
       versionNumber: previous.versionNumber + 1,
       predecessorDocumentId: previous.id,
+      versionNote: input.versionNote,
     };
     const payloadHash = await calculateDocumentSha256(canonicalDocumentJson(checksumPayload));
     const replacement: DocumentReference = {
       id: this.idGenerator.generate(),
+      logicalDocumentId: previous.logicalDocumentId,
       organizationId: context.organizationId,
       logicalOwnerType: previous.logicalOwnerType,
       logicalOwnerId: previous.logicalOwnerId,
@@ -767,19 +842,23 @@ export class DocumentApplicationService {
       fileSizeBytes: input.fileSizeBytes,
       accessScope: previous.accessScope,
       status: 'active',
+      isCurrent: true,
       versionNumber: previous.versionNumber + 1,
       predecessorDocumentId: previous.id,
+      versionNote: input.versionNote,
       issuedOn: input.issuedOn,
       expiresOn: input.expiresOn,
       notes: input.notes,
       storageState: 'metadata_only',
       metadataChecksumSha256: payloadHash,
       createdByUserId: context.actor.userId,
+      createdByDisplayName: actorDisplayName(context),
       createdAt: now,
       updatedAt: now,
     };
     const result = await this.gateway.replaceReference({
       reference: replacement,
+      authorizedUserIds: owner.authorizedUserIds,
       previousDocumentId: previous.id,
       expectedVersion: input.expectedVersion,
       idempotencyKey: input.idempotencyKey,
@@ -798,6 +877,154 @@ export class DocumentApplicationService {
       idempotencyKey: input.idempotencyKey,
       occurredAt: result.createdAt,
       metadata: Object.freeze({ versionNumber: result.versionNumber, predecessorDocumentId: previous.id }),
+    });
+    return cloneReference(result);
+  }
+
+  async authorizeStoredVersionUpload(
+    context: DocumentApplicationContext,
+    command: unknown
+  ): Promise<DocumentReference> {
+    this.assertPermission(context, 'documents:upload');
+    this.assertPermission(context, 'documents:manage');
+    const input = parseReplaceInput(command);
+    const previous = await this.gateway.getReferenceById(
+      context.organizationId,
+      input.previousDocumentId
+    );
+    if (!previous) {
+      throw new DocumentDomainError('REFERENCE_NOT_FOUND', 'Referência documental não encontrada.');
+    }
+    if (
+      !previous.isCurrent ||
+      previous.status !== 'active' ||
+      previous.versionNumber !== input.expectedVersion
+    ) {
+      throw new DocumentDomainError('VERSION_CONFLICT', 'O documento recebeu outra atualização.');
+    }
+    const owner = await this.resolveAndValidateOwner(
+      context,
+      previous.logicalOwnerType,
+      previous.logicalOwnerId
+    );
+    this.assertCanMutateOwner(context, owner, previous.accessScope);
+    return cloneReference(previous);
+  }
+
+  async registerStoredDocumentVersion(
+    context: DocumentApplicationContext,
+    command: unknown
+  ): Promise<DocumentReference> {
+    this.assertPermission(context, 'documents:upload');
+    this.assertPermission(context, 'documents:manage');
+    const input = parseStoredVersionInput(command);
+    const previous = await this.gateway.getReferenceById(
+      context.organizationId,
+      input.previousDocumentId
+    );
+    if (!previous) {
+      throw new DocumentDomainError('REFERENCE_NOT_FOUND', 'Referência documental não encontrada.');
+    }
+    if (
+      !previous.isCurrent ||
+      previous.status !== 'active' ||
+      previous.versionNumber !== input.expectedVersion
+    ) {
+      throw new DocumentDomainError('VERSION_CONFLICT', 'O documento recebeu outra atualização.');
+    }
+    const owner = await this.resolveAndValidateOwner(
+      context,
+      previous.logicalOwnerType,
+      previous.logicalOwnerId
+    );
+    this.assertCanMutateOwner(context, owner, previous.accessScope);
+    assertStoredObjectMatches({
+      organizationId: context.organizationId,
+      logicalOwnerType: previous.logicalOwnerType,
+      logicalOwnerId: previous.logicalOwnerId,
+      logicalDocumentId: previous.logicalDocumentId,
+      documentId: input.documentId,
+      mimeType: input.mimeType,
+      bucket: input.storedObject.bucket,
+      objectPath: input.storedObject.objectPath,
+    });
+
+    const now = this.clock.now().toISOString();
+    const versionNumber = previous.versionNumber + 1;
+    const checksumPayload = {
+      organizationId: context.organizationId,
+      logicalDocumentId: previous.logicalDocumentId,
+      logicalOwnerType: previous.logicalOwnerType,
+      logicalOwnerId: previous.logicalOwnerId,
+      category: previous.category,
+      displayName: input.displayName,
+      mimeType: input.mimeType,
+      fileSizeBytes: input.fileSizeBytes,
+      accessScope: previous.accessScope,
+      issuedOn: input.issuedOn,
+      expiresOn: input.expiresOn,
+      notes: input.notes,
+      storageBucket: input.storedObject.bucket,
+      storageObjectPath: input.storedObject.objectPath,
+      versionNumber,
+      predecessorDocumentId: previous.id,
+      versionNote: input.versionNote,
+    };
+    const payloadHash = await calculateDocumentSha256(canonicalDocumentJson(checksumPayload));
+    const replacement: DocumentReference = {
+      id: input.documentId,
+      logicalDocumentId: previous.logicalDocumentId,
+      organizationId: context.organizationId,
+      logicalOwnerType: previous.logicalOwnerType,
+      logicalOwnerId: previous.logicalOwnerId,
+      category: previous.category,
+      displayName: input.displayName,
+      mimeType: input.mimeType,
+      fileSizeBytes: input.fileSizeBytes,
+      accessScope: previous.accessScope,
+      status: 'active',
+      isCurrent: true,
+      versionNumber,
+      predecessorDocumentId: previous.id,
+      versionNote: input.versionNote,
+      issuedOn: input.issuedOn,
+      expiresOn: input.expiresOn,
+      notes: input.notes,
+      storageState: 'stored',
+      storageBucket: input.storedObject.bucket,
+      storageObjectPath: input.storedObject.objectPath,
+      storageUploadedAt: input.storedObject.uploadedAt,
+      metadataChecksumSha256: payloadHash,
+      createdByUserId: context.actor.userId,
+      createdByDisplayName: actorDisplayName(context),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const result = await this.gateway.replaceReference({
+      reference: replacement,
+      authorizedUserIds: owner.authorizedUserIds,
+      previousDocumentId: previous.id,
+      expectedVersion: input.expectedVersion,
+      idempotencyKey: input.idempotencyKey,
+      payloadHash,
+    });
+    documentEventJournal.record({
+      id: this.idGenerator.generate(),
+      organizationId: context.organizationId,
+      actorUserId: context.actor.userId,
+      eventType: 'document.reference.replaced',
+      documentId: result.id,
+      logicalOwnerType: result.logicalOwnerType,
+      logicalOwnerId: result.logicalOwnerId,
+      category: result.category,
+      correlationId: input.idempotencyKey,
+      idempotencyKey: input.idempotencyKey,
+      occurredAt: result.createdAt,
+      metadata: Object.freeze({
+        versionNumber: result.versionNumber,
+        predecessorDocumentId: previous.id,
+        storageState: result.storageState,
+      }),
     });
     return cloneReference(result);
   }

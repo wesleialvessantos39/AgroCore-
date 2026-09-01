@@ -478,7 +478,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
     - **Homologação comportamental:** 28 provas em `scripts/test-proposal-renewals.ts`; o Módulo 005 totaliza 186 provas comportamentais nas seis suítes de domínio, além das auditorias de texto público e tema.
 
 ### MÓDULO 006: GESTÃO DOCUMENTAL E ANEXOS TÉCNICOS
-- **Status Geral:** Em desenvolvimento; OE-006.001, OE-006.002 e OE-006.003 implementadas e homologadas no código. A migração de Storage está versionada e deverá ser aplicada somente ao projeto Supabase próprio do AgroCore.
+- **Status Geral:** Em desenvolvimento; OE-006.001, OE-006.002, OE-006.003 e OE-006.004 implementadas e homologadas localmente no código. As migrações de Storage e versionamento estão versionadas e deverão ser aplicadas somente ao projeto Supabase próprio do AgroCore.
 - **Entregas da OE-006.001:**
   - **Agregado Referencial Canônico:** `DocumentReference` possui organização, entidade lógica, categoria, nome de exibição, MIME permitido, tamanho opcional, escopo de acesso, situação, versão, datas, autoria e checksum SHA-256 interno. Referências legadas podem permanecer `metadata_only`; envios confirmados usam `stored`.
   - **Fontes Canônicas:** referências aceitam exclusivamente clientes, imóveis, solicitações de laudo, laudos e propostas já existentes na mesma organização. A interface usa seletores derivados dessas fontes e não oferece campo livre para identificadores internos.
@@ -504,6 +504,15 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - **Abertura Protegida:** formatos suportados são visualizados por `Blob` temporário após autorização; baixar exige ação explícita e não expõe URL pública ou assinada no agregado.
   - **Sessão:** arquivos do modo de desenvolvimento ficam apenas em memória e são eliminados no logout; produção permanece fechada quando Supabase não está configurado.
   - **Homologação Comportamental:** 7 provas em `scripts/test-document-upload.ts`. Com as 39 provas da fundação, 32 antecipadas de governança e 8 de Storage, o módulo totaliza 86 provas comportamentais, além das auditorias de texto e tema.
+- **Entregas da OE-006.004:**
+  - **Identidade e Linhagem:** cada documento possui identidade lógica estável, versões numeradas, predecessor, responsável autenticado, data definida pelo banco e motivo obrigatório. A versão anterior e seu arquivo permanecem preservados.
+  - **Troca Atômica:** a migração `20260901115546_oe_006_004_document_versions.sql` usa lock transacional da linha, índice parcial exclusivo para uma única versão atual e recibos idempotentes vinculados ao ator. Atualizações simultâneas têm um único vencedor.
+  - **Persistência Fechada:** escrita direta em `document_versions` é revogada; criação, substituição e arquivamento passam por RPCs validadas. A exposição à Data API possui `GRANT` explícito somente de leitura e RLS habilitada.
+  - **Isolamento de Participantes:** vínculos autorizados ficam em tabela privada, fora do contrato público. Gestão acessa a organização, financeiro somente o escopo organizacional e projetista/captador somente documentos relacionados.
+  - **Imutabilidade do Arquivo:** o banco confere o caminho privado contra organização, registro relacionado, documento lógico, versão e formato. Após a referência ser registrada, o objeto não pode ser sobrescrito nem removido pelas políticas do cliente; compensação continua permitida apenas para envio próprio ainda órfão.
+  - **Gateway Real e Interface:** `SupabaseDocumentReferenceGateway` consulta histórico e executa as RPCs quando a configuração pública de produção existe. A tela apresenta versão atual/histórica, autoria, motivo, linha do tempo, comparação exclusivamente descritiva, substituição de arquivo com progresso/cancelamento e acesso protegido a versões anteriores.
+  - **Ambiente e CI sem Chaves:** `.env.example` não declara campos preenchíveis e o workflow não referencia secrets. `test:environment-contract` impede a reintrodução dessas dependências; as chaves públicas do Supabase pertencem somente ao ambiente de hospedagem de produção.
+  - **Homologação:** 6 provas específicas em `scripts/test-document-versioning.ts`, incluindo concorrência real e compensação. O Módulo 006 totaliza 92 provas comportamentais, além das auditorias de texto e tema. A matriz integral dos Módulos 001–006 passou localmente. O GitHub Actions permanece sem executar etapas enquanto a conta estiver bloqueada por cobrança; esse estado externo não é registrado como aprovação de CI.
 
 ---
 
@@ -545,9 +554,11 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:document-governance` | Valida pendências, validade, RBAC, isolamento, associação documental, concorrência, idempotência, eventos, rotas e limpeza (32 provas) |
 | `npm run test:document-storage` | Valida bucket privado, caminhos, formatos, tamanho, cancelamento e as quatro políticas de Storage (8 provas) |
 | `npm run test:document-upload` | Valida progresso, confirmação, compensação, RBAC, conteúdo, cancelamento e isolamento do upload (7 provas) |
+| `npm run test:document-versioning` | Valida linhagem, autoria, histórico, versão atual única, concorrência, compensação, comparação segura e estrutura da migração (6 provas) |
+| `npm run test:environment-contract` | Impede campos de chaves no exemplo de ambiente e dependência de secrets no AgroCore CI |
 | `npm run test:documents-ui-copy` | Impede linguagem interna e códigos de ordem nas páginas públicas do Módulo 006 |
 | `npm run test:documents-theme` | Audita a paleta oficial, variantes proibidas e seleção controlada de arquivos no Módulo 006 |
-| `npm run test:module-006` | Homologação consolidada do Módulo 006 até OE-006.003 (86 provas comportamentais, texto público e tema) |
+| `npm run test:module-006` | Homologação consolidada do Módulo 006 até OE-006.004 (92 provas comportamentais, texto público e tema) |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -568,4 +579,4 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
 2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.007 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
-3. **Módulo 006 — Gestão Documental:** concluído até OE-006.003 no código. A próxima execução é a OE-006.004 — versões e histórico, preservando arquivos atuais, autoria, observações e troca atômica da versão vigente. A migração de Storage deve ser aplicada apenas quando o projeto Supabase específico do AgroCore estiver conectado.
+3. **Módulo 006 — Gestão Documental:** concluído até OE-006.004 no código. A próxima execução é a OE-006.005 — checklists por proposta, requisitos documentais e estados de análise com histórico. As migrações de Storage e versionamento devem ser aplicadas apenas quando o projeto Supabase específico do AgroCore estiver conectado.

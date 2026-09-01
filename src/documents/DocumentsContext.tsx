@@ -31,6 +31,7 @@ import type {
   FulfillDocumentRequirementInput,
   RegisterDocumentReferenceInput,
   ReplaceDocumentReferenceInput,
+  ReplaceStoredDocumentCommandInput,
   ResolveDocumentRequirementInput,
 } from '../types/documents';
 import { DocumentDomainError } from '../types/documents';
@@ -66,6 +67,10 @@ export interface DocumentsContextValue {
   readonly refresh: () => Promise<void>;
   readonly refreshGovernance: () => Promise<void>;
   readonly getReferenceById: (documentId: string) => Promise<DocumentReference | null>;
+  readonly listVersionHistory: (
+    documentId: string,
+    signal?: AbortSignal
+  ) => Promise<readonly DocumentReference[]>;
   readonly registerReference: (
     input: Omit<RegisterDocumentReferenceInput, 'idempotencyKey'>
   ) => Promise<DocumentMutationResult>;
@@ -81,6 +86,12 @@ export interface DocumentsContextValue {
     onProgress: (progress: DocumentUploadProgress) => void,
     signal: AbortSignal,
     idempotencyKey: string
+  ) => Promise<DocumentReference>;
+  readonly replaceStoredDocument: (
+    file: File,
+    input: ReplaceStoredDocumentCommandInput,
+    onProgress: (progress: DocumentUploadProgress) => void,
+    signal: AbortSignal
   ) => Promise<DocumentReference>;
   readonly getDocumentContent: (
     documentId: string,
@@ -218,6 +229,7 @@ export function DocumentsProvider({ children }: { readonly children: React.React
       organizationId: activeOrganization.id,
       actor: {
         userId: session.user.id,
+        displayName: session.user.name,
         role: activeMembership.organizationRole,
         isActive: activeMembership.status === 'active',
         permissions: [...activePermissions],
@@ -341,6 +353,12 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     [buildContext, service]
   );
 
+  const listVersionHistory = useCallback(
+    (documentId: string, signal?: AbortSignal) =>
+      service.listVersionHistory(buildContext(), documentId, signal),
+    [buildContext, service]
+  );
+
   const executeMutation = useCallback(
     async <T,>(operation: () => Promise<T>): Promise<DocumentMutationResult<T>> => {
       try {
@@ -417,6 +435,26 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     [buildContext, uploadService]
   );
 
+  const replaceStoredDocument = useCallback(
+    async (
+      file: File,
+      input: ReplaceStoredDocumentCommandInput,
+      onProgress: (progress: DocumentUploadProgress) => void,
+      signal: AbortSignal
+    ) => {
+      const result = await uploadService.replaceStoredDocument(buildContext(), {
+        ...input,
+        file,
+        onProgress,
+        signal,
+        idempotencyKey: createMutationKey('document-version-upload'),
+      });
+      await Promise.all([refresh(), refreshGovernance()]);
+      return result;
+    },
+    [buildContext, refresh, refreshGovernance, uploadService]
+  );
+
   const createRequirement = useCallback(
     (input: Omit<CreateDocumentRequirementInput, 'idempotencyKey'>) =>
       executeMutation(() =>
@@ -475,17 +513,19 @@ export function DocumentsProvider({ children }: { readonly children: React.React
       refresh,
       refreshGovernance,
       getReferenceById,
+      listVersionHistory,
       registerReference,
       replaceReference,
       archiveReference,
       uploadDocument,
+      replaceStoredDocument,
       getDocumentContent,
       createRequirement,
       fulfillRequirement,
       waiveRequirement,
       cancelRequirement,
     }),
-    [archiveReference, cancelRequirement, createRequirement, errorMessage, filters, fulfillRequirement, getDocumentContent, getReferenceById, governance, governanceErrorMessage, governanceStatus, references, refresh, refreshGovernance, registerReference, replaceReference, status, uploadDocument, waiveRequirement]
+    [archiveReference, cancelRequirement, createRequirement, errorMessage, filters, fulfillRequirement, getDocumentContent, getReferenceById, governance, governanceErrorMessage, governanceStatus, listVersionHistory, references, refresh, refreshGovernance, registerReference, replaceReference, replaceStoredDocument, status, uploadDocument, waiveRequirement]
   );
 
   return <DocumentsContext.Provider value={value}>{children}</DocumentsContext.Provider>;

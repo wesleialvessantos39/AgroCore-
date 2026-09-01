@@ -337,6 +337,7 @@ await test('Substituição cria versão nova e preserva a anterior', async () =>
     issuedOn: '2026-09-01',
     expiresOn: '2027-01-01',
     notes: 'Nova referência de metadados.',
+    versionNote: 'Atualização da certidão registral.',
     idempotencyKey: 'replace-base-0001',
   });
   replacementId = replacement.id;
@@ -356,6 +357,7 @@ await test('Replay da substituição não cria outra versão', async () => {
     issuedOn: '2026-09-01',
     expiresOn: '2027-01-01',
     notes: 'Nova referência de metadados.',
+    versionNote: 'Atualização da certidão registral.',
     idempotencyKey: 'replace-base-0001',
   });
   assert.equal(replay.id, replacementId);
@@ -368,6 +370,7 @@ await test('Versão obsoleta é recusada na substituição', async () => {
     displayName: 'Versão obsoleta',
     mimeType: 'application/pdf',
     fileSizeBytes: 140_000,
+    versionNote: 'Tentativa com versão obsoleta.',
     idempotencyKey: 'replace-stale-0001',
   }));
 });
@@ -444,7 +447,7 @@ await test('Gestor arquiva referência com controle de versão', async () => {
     idempotencyKey: 'archive-replacement',
   });
   assert.equal(archived.status, 'archived');
-  assert.equal(archived.versionNumber, 3);
+  assert.equal(archived.versionNumber, 2);
   assert.equal(archived.archivedByUserId, 'manager-a');
 });
 

@@ -130,7 +130,8 @@ export class PreviewDocumentReferenceGateway implements DocumentReferenceGateway
     signal?: AbortSignal
   ): Promise<readonly DocumentReference[]> {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const references = [...this.getOrganizationStore(query.organizationId).values()];
+    const references = [...this.getOrganizationStore(query.organizationId).values()]
+      .filter((reference) => reference.isCurrent);
     const search = query.search?.trim().toLocaleLowerCase('pt-BR') ?? '';
     const filtered = references.filter((reference) => {
       if (query.ownerType && query.ownerType !== 'all' && reference.logicalOwnerType !== query.ownerType) return false;
@@ -152,6 +153,22 @@ export class PreviewDocumentReferenceGateway implements DocumentReferenceGateway
     return reference ? cloneReference(reference) : null;
   }
 
+  async listVersionHistory(
+    organizationId: string,
+    logicalDocumentId: string,
+    signal?: AbortSignal
+  ): Promise<readonly DocumentReference[]> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const versions = [...this.getOrganizationStore(organizationId).values()]
+      .filter((reference) => reference.logicalDocumentId === logicalDocumentId)
+      .sort(
+        (left, right) =>
+          right.versionNumber - left.versionNumber || left.id.localeCompare(right.id)
+      );
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    return versions.map(cloneReference);
+  }
+
   async createReference(input: CreateDocumentRecord): Promise<DocumentReference> {
     const { reference } = input;
     const replay = this.replay(
@@ -162,9 +179,19 @@ export class PreviewDocumentReferenceGateway implements DocumentReferenceGateway
     );
     if (replay) return replay;
 
+    if (
+      reference.id !== reference.logicalDocumentId ||
+      reference.versionNumber !== 1 ||
+      !reference.isCurrent ||
+      reference.predecessorDocumentId
+    ) {
+      throw new DocumentDomainError('INVALID_STATE', 'A versão inicial do documento é inválida.');
+    }
+
     const store = this.getOrganizationStore(reference.organizationId);
     const duplicate = [...store.values()].find(
       (candidate) =>
+        candidate.isCurrent &&
         candidate.status === 'active' &&
         candidate.logicalOwnerType === reference.logicalOwnerType &&
         candidate.logicalOwnerId === reference.logicalOwnerId &&
@@ -201,13 +228,31 @@ export class PreviewDocumentReferenceGateway implements DocumentReferenceGateway
     if (previous.versionNumber !== input.expectedVersion) {
       throw new DocumentDomainError('VERSION_CONFLICT', 'A referência foi alterada por outra operação.');
     }
-    if (previous.status !== 'active') {
-      throw new DocumentDomainError('INVALID_STATE', 'Somente referência ativa pode ser substituída.');
+    if (previous.status !== 'active' || !previous.isCurrent) {
+      throw new DocumentDomainError('VERSION_CONFLICT', 'Somente a versão atual pode ser substituída.');
+    }
+    if (
+      reference.logicalDocumentId !== previous.logicalDocumentId ||
+      reference.predecessorDocumentId !== previous.id ||
+      reference.versionNumber !== previous.versionNumber + 1 ||
+      !reference.isCurrent
+    ) {
+      throw new DocumentDomainError('INVALID_STATE', 'A sequência da nova versão é inválida.');
+    }
+    const competingCurrent = [...store.values()].find(
+      (candidate) =>
+        candidate.logicalDocumentId === previous.logicalDocumentId &&
+        candidate.isCurrent &&
+        candidate.id !== previous.id
+    );
+    if (competingCurrent) {
+      throw new DocumentDomainError('VERSION_CONFLICT', 'Já existe outra versão atual do documento.');
     }
 
     const superseded: DocumentReference = {
       ...previous,
       status: 'superseded',
+      isCurrent: false,
       updatedAt: reference.createdAt,
     };
     store.set(previous.id, Object.freeze(cloneReference(superseded)));
@@ -230,7 +275,7 @@ export class PreviewDocumentReferenceGateway implements DocumentReferenceGateway
     if (!current) {
       throw new DocumentDomainError('REFERENCE_NOT_FOUND', 'Referência documental não encontrada.');
     }
-    if (current.versionNumber !== input.expectedVersion) {
+    if (current.versionNumber !== input.expectedVersion || !current.isCurrent) {
       throw new DocumentDomainError('VERSION_CONFLICT', 'A referência foi alterada por outra operação.');
     }
     if (current.status === 'archived') {
@@ -240,7 +285,6 @@ export class PreviewDocumentReferenceGateway implements DocumentReferenceGateway
     const archived: DocumentReference = {
       ...current,
       status: 'archived',
-      versionNumber: current.versionNumber + 1,
       updatedAt: input.archivedAt,
       archivedAt: input.archivedAt,
       archivedByUserId: input.archivedByUserId,

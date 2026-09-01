@@ -36,6 +36,8 @@ export interface StoredDocumentDescriptor {
 
 export interface DocumentReference {
   readonly id: DocumentReferenceId;
+  /** Identidade estável compartilhada por todas as versões do mesmo documento. */
+  readonly logicalDocumentId: DocumentReferenceId;
   readonly organizationId: string;
   readonly logicalOwnerType: DocumentLogicalOwnerType;
   readonly logicalOwnerId: string;
@@ -45,8 +47,10 @@ export interface DocumentReference {
   readonly fileSizeBytes?: number;
   readonly accessScope: DocumentAccessScope;
   readonly status: DocumentReferenceStatus;
+  readonly isCurrent: boolean;
   readonly versionNumber: number;
   readonly predecessorDocumentId?: DocumentReferenceId;
+  readonly versionNote: string;
   readonly issuedOn?: string;
   readonly expiresOn?: string;
   readonly notes?: string;
@@ -56,6 +60,7 @@ export interface DocumentReference {
   readonly storageUploadedAt?: string;
   readonly metadataChecksumSha256: string;
   readonly createdByUserId: string;
+  readonly createdByDisplayName: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly archivedAt?: string;
@@ -128,7 +133,38 @@ export interface ReplaceDocumentReferenceInput {
   readonly issuedOn?: string;
   readonly expiresOn?: string;
   readonly notes?: string;
+  readonly versionNote: string;
   readonly idempotencyKey: string;
+}
+
+export interface RegisterStoredDocumentVersionInput extends ReplaceDocumentReferenceInput {
+  readonly documentId: DocumentReferenceId;
+  readonly storedObject: StoredDocumentDescriptor;
+}
+
+export interface ReplaceStoredDocumentCommandInput {
+  readonly previousDocumentId: DocumentReferenceId;
+  readonly expectedVersion: number;
+  readonly displayName: string;
+  readonly issuedOn?: string;
+  readonly expiresOn?: string;
+  readonly notes?: string;
+  readonly versionNote: string;
+}
+
+export type DocumentVersionComparableField =
+  | 'displayName'
+  | 'mimeType'
+  | 'fileSizeBytes'
+  | 'issuedOn'
+  | 'expiresOn'
+  | 'notes';
+
+export interface DocumentVersionMetadataChange {
+  readonly field: DocumentVersionComparableField;
+  readonly label: string;
+  readonly previousValue: string;
+  readonly currentValue: string;
 }
 
 export interface ArchiveDocumentReferenceInput {
@@ -252,6 +288,7 @@ export interface DocumentApplicationContext {
   readonly organizationId: string;
   readonly actor: {
     readonly userId: string;
+    readonly displayName?: string;
     readonly role: OrganizationRole;
     readonly isActive: boolean;
     readonly permissions: readonly Permission[];
