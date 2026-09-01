@@ -1,6 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, AlertCircle, ArrowRight, ShieldCheck, Clock } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, AlertCircle, ArrowRight, ArrowLeft, ShieldCheck, Clock } from 'lucide-react';
 import { useAuth } from '../auth/useAuth';
 import { Logo } from '../components/Logo';
 import { Button } from '../components/ui/Button';
@@ -91,9 +91,29 @@ export function SignInPage() {
       className="min-h-screen bg-[#F8FAF9] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 selection:bg-[#78C89A] selection:text-[#07261D]"
     >
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {/* Botão Adaptado de Retorno à Página Principal */}
+        <div className="mb-4 flex items-center justify-start">
+          <Link
+            id="btn-back-to-home"
+            to={ROUTES.HOME}
+            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-[#0B3D2E] hover:text-[#07261D] bg-white hover:bg-slate-50 border border-[#E2E8F0] shadow-2xs rounded-xl px-3.5 py-2 min-h-[44px] transition-all focus:outline-none focus:ring-2 focus:ring-[#78C89A] cursor-pointer"
+            aria-label="Voltar para a página principal"
+          >
+            <ArrowLeft className="w-4 h-4 text-[#0B3D2E]" aria-hidden="true" />
+            <span>Voltar à página principal</span>
+          </Link>
+        </div>
+
         {/* Marca AgroCore */}
         <div className="flex justify-center mb-6">
-          <Logo variant="on-light" size="lg" />
+          <Link
+            to={ROUTES.HOME}
+            id="signin-brand-logo-link"
+            className="focus-visible:ring-2 focus-visible:ring-[#78C89A] rounded-lg p-1 -m-1 transition-transform cursor-pointer"
+            aria-label="AgroCore — Página Principal"
+          >
+            <Logo variant="on-light" size="lg" />
+          </Link>
         </div>
 
         {/* Card do Formulário de Entrada */}
@@ -271,6 +291,19 @@ export function SignInPage() {
               />
             </Suspense>
           )}
+
+          {/* Link: Voltar para a página principal */}
+          <div className="mt-6 pt-4 border-t border-[#F1F5F9] text-center">
+            <Link
+              id="link-back-to-home"
+              to={ROUTES.HOME}
+              className="inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold text-[#0B3D2E] hover:text-[#07261D] hover:underline focus:outline-none focus:ring-2 focus:ring-[#78C89A] rounded-lg p-2 min-h-[44px] transition-colors cursor-pointer"
+              aria-label="Voltar para a página principal"
+            >
+              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+              <span>Voltar para a página principal</span>
+            </Link>
+          </div>
         </div>
       </div>
     </div>

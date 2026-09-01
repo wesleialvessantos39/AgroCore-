@@ -5,7 +5,7 @@ import { ROUTES } from '../routes/paths';
 export function Footer() {
   const currentYear = new Date().getFullYear();
   const location = useLocation();
-  const isPresentationPage = location.pathname === ROUTES.PRESENTATION;
+  const isPresentationPage = location.pathname === ROUTES.PRESENTATION || location.pathname === ROUTES.HOME;
 
   return (
     <footer 
@@ -23,10 +23,10 @@ export function Footer() {
           {/* Identidade no Rodapé */}
           <div className="max-w-md">
             <Link 
-              to={ROUTES.PRESENTATION} 
+              to={ROUTES.HOME} 
               id="footer-brand-link" 
               className="inline-block focus-visible:ring-2 focus-visible:ring-[#78C89A] rounded-lg p-1 -m-1 cursor-pointer"
-              aria-label="AgroCore — Apresentação Institucional"
+              aria-label="AgroCore — Página Principal"
             >
               <Logo variant="on-dark" size="md" />
             </Link>
@@ -38,19 +38,19 @@ export function Footer() {
           {/* Links e Navegação do Rodapé */}
           <nav aria-label="Navegação do Rodapé" className="flex flex-wrap items-center gap-6 text-xs text-slate-300">
             <Link 
-              to={ROUTES.PRESENTATION} 
+              to={ROUTES.HOME} 
               className="hover:text-[#78C89A] transition-colors focus-visible:text-[#78C89A] cursor-pointer"
             >
               Início
             </Link>
             <a 
-              href={isPresentationPage ? "#agrocore-beneficios" : `${ROUTES.PRESENTATION}#agrocore-beneficios`}
+              href={isPresentationPage ? "#agrocore-beneficios" : `${ROUTES.HOME}#agrocore-beneficios`}
               className="hover:text-[#78C89A] transition-colors focus-visible:text-[#78C89A]"
             >
               Recursos
             </a>
             <a 
-              href={isPresentationPage ? "#agrocore-proposito" : `${ROUTES.PRESENTATION}#agrocore-proposito`}
+              href={isPresentationPage ? "#agrocore-proposito" : `${ROUTES.HOME}#agrocore-proposito`}
               className="hover:text-[#78C89A] transition-colors focus-visible:text-[#78C89A]"
             >
               Propósito

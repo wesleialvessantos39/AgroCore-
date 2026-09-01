@@ -5,7 +5,7 @@ import { ROUTES } from '../routes/paths';
 
 export function Header() {
   const location = useLocation();
-  const isPresentationPage = location.pathname === ROUTES.PRESENTATION;
+  const isPresentationPage = location.pathname === ROUTES.PRESENTATION || location.pathname === ROUTES.HOME;
 
   return (
     <header 
@@ -19,12 +19,12 @@ export function Header() {
       }}
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Marca AgroCore com Link para a Apresentação Institucional */}
+        {/* Marca AgroCore com Link para a Página Principal */}
         <Link 
-          to={ROUTES.PRESENTATION} 
+          to={ROUTES.HOME} 
           id="header-brand-link"
           className="focus-visible:ring-2 focus-visible:ring-[#78C89A] rounded-lg p-1 -m-1 transition-transform shrink-0 cursor-pointer"
-          aria-label="AgroCore — Apresentação Institucional"
+          aria-label="AgroCore — Página Principal"
         >
           <div className="hidden sm:block">
             <Logo variant="on-dark" size="md" />
@@ -37,13 +37,13 @@ export function Header() {
         {/* Navegação Institucional e Acesso ao Sistema */}
         <nav aria-label="Navegação Principal" className="flex items-center gap-2 sm:gap-6">
           <a 
-            href={isPresentationPage ? "#agrocore-beneficios" : `${ROUTES.PRESENTATION}#agrocore-beneficios`}
+            href={isPresentationPage ? "#agrocore-beneficios" : `${ROUTES.HOME}#agrocore-beneficios`}
             className="text-xs sm:text-sm font-medium text-slate-200 hover:text-[#78C89A] transition-colors focus-visible:text-[#78C89A] px-1 py-1"
           >
             Recursos
           </a>
           <a 
-            href={isPresentationPage ? "#agrocore-proposito" : `${ROUTES.PRESENTATION}#agrocore-proposito`}
+            href={isPresentationPage ? "#agrocore-proposito" : `${ROUTES.HOME}#agrocore-proposito`}
             className="hidden md:inline-block text-xs sm:text-sm font-medium text-slate-200 hover:text-[#78C89A] transition-colors focus-visible:text-[#78C89A] px-1 py-1"
           >
             Propósito

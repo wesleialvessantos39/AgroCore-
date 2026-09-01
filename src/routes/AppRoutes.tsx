@@ -241,8 +241,8 @@ export function AppRoutes() {
       <ScrollAndFocusManager />
       <Suspense fallback={<RouteLoadingScreen />}>
         <Routes>
-          {/* Redirecionamento Imediato da Raiz para a Área do Sistema (protegida) */}
-          <Route path={ROUTES.HOME} element={<Navigate to={ROUTES.SYSTEM} replace />} />
+          {/* Rota Principal do Sistema / Apresentação Institucional */}
+          <Route path={ROUTES.HOME} element={<InstitutionalPage />} />
 
           {/* Rotas Públicas Exclusivas para Visitantes (Autenticados são direcionados) */}
           <Route

@@ -6,6 +6,10 @@ export interface RouteMetadata {
 }
 
 export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
+  [ROUTES.HOME]: {
+    documentTitle: 'AgroCore — Plataforma de Gestão Cadastral e Territorial',
+    announcementTitle: 'Página principal AgroCore',
+  },
   [ROUTES.SIGN_IN]: {
     documentTitle: 'Acessar o AgroCore | AgroCore',
     announcementTitle: 'Acessar o AgroCore',
