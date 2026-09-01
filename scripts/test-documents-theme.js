@@ -50,17 +50,15 @@ function walk(target) {
 console.log('Auditando tema e interface do Módulo 006...');
 TARGETS.forEach(walk);
 
-for (const page of TARGETS.filter((target) => target.endsWith('.tsx'))) {
-  const source = fs.readFileSync(page, 'utf8');
-  if (/type=["']file["']/.test(source)) {
-    console.error(`[SEGURANÇA] ${page} não pode oferecer input de arquivo.`);
-    violations += 1;
-  }
-}
-
 if (violations > 0) {
   console.error(`❌ Módulo 006 contém ${violations} violação(ões).`);
   process.exit(1);
 }
 
-console.log('✅ Módulo 006 usa exclusivamente a identidade AgroCore e não oferece upload de arquivo.');
+const uploadPage = fs.readFileSync('src/pages/DocumentReferenceCreatePage.tsx', 'utf8');
+if (!/type=["']file["']/.test(uploadPage) || !/multiple/.test(uploadPage) || !/accept=/.test(uploadPage)) {
+  console.error('[SEGURANÇA] A seleção controlada de arquivos não está configurada.');
+  process.exit(1);
+}
+
+console.log('✅ Módulo 006 usa exclusivamente a identidade AgroCore e seleção controlada de arquivos.');

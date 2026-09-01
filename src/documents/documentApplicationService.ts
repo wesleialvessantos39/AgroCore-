@@ -19,9 +19,11 @@ import {
   type DocumentValidityState,
   type FulfillDocumentRequirementInput,
   type RegisterDocumentReferenceInput,
+  type RegisterStoredDocumentInput,
   type ReplaceDocumentReferenceInput,
   type ResolveDocumentRequirementInput,
 } from '../types/documents';
+import { assertStoredObjectMatches } from './documentStoragePolicy';
 import {
   calculateDocumentSha256,
   canonicalDocumentJson,
@@ -309,6 +311,26 @@ function parseRegisterInput(value: unknown): RegisterDocumentReferenceInput {
   };
 }
 
+function parseRegisterStoredInput(value: unknown): RegisterStoredDocumentInput {
+  const reference = parseRegisterInput(value);
+  if (!isRecord(value) || !isRecord(value.storedObject)) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Confirmação de armazenamento inválida.');
+  }
+  const uploadedAt = compactText(value.storedObject.uploadedAt, 'Data do envio', 20, 40);
+  if (Number.isNaN(new Date(uploadedAt).getTime())) {
+    throw new DocumentDomainError('INVALID_INPUT', 'Data do envio inválida.');
+  }
+  return {
+    ...reference,
+    documentId: compactText(value.documentId, 'Documento', 1, 160),
+    storedObject: {
+      bucket: compactText(value.storedObject.bucket, 'Área privada', 1, 80) as RegisterStoredDocumentInput['storedObject']['bucket'],
+      objectPath: compactText(value.storedObject.objectPath, 'Localização privada', 1, 600),
+      uploadedAt,
+    },
+  };
+}
+
 function parseReplaceInput(value: unknown): ReplaceDocumentReferenceInput {
   ensureNoForbiddenPayload(value);
   if (!isRecord(value)) {
@@ -524,6 +546,108 @@ export class DocumentApplicationService {
       throw new DocumentDomainError('FORBIDDEN', 'Referência documental fora do escopo autorizado.');
     }
     return cloneReference(reference);
+  }
+
+  async authorizeStoredUpload(
+    context: DocumentApplicationContext,
+    command: unknown
+  ): Promise<void> {
+    this.assertPermission(context, 'documents:upload');
+    this.assertPermission(context, 'documents:register_reference');
+    const input = parseRegisterInput(command);
+    const owner = await this.resolveAndValidateOwner(
+      context,
+      input.logicalOwnerType,
+      input.logicalOwnerId
+    );
+    this.assertCanMutateOwner(context, owner, input.accessScope);
+  }
+
+  async registerStoredDocument(
+    context: DocumentApplicationContext,
+    command: unknown
+  ): Promise<DocumentReference> {
+    this.assertPermission(context, 'documents:upload');
+    this.assertPermission(context, 'documents:register_reference');
+    const input = parseRegisterStoredInput(command);
+    const owner = await this.resolveAndValidateOwner(
+      context,
+      input.logicalOwnerType,
+      input.logicalOwnerId
+    );
+    this.assertCanMutateOwner(context, owner, input.accessScope);
+    assertStoredObjectMatches({
+      organizationId: context.organizationId,
+      logicalOwnerType: input.logicalOwnerType,
+      logicalOwnerId: input.logicalOwnerId,
+      documentId: input.documentId,
+      mimeType: input.mimeType,
+      bucket: input.storedObject.bucket,
+      objectPath: input.storedObject.objectPath,
+    });
+
+    const now = this.clock.now().toISOString();
+    const checksumPayload = {
+      organizationId: context.organizationId,
+      logicalOwnerType: input.logicalOwnerType,
+      logicalOwnerId: input.logicalOwnerId,
+      category: input.category,
+      displayName: input.displayName,
+      mimeType: input.mimeType,
+      fileSizeBytes: input.fileSizeBytes,
+      accessScope: input.accessScope,
+      issuedOn: input.issuedOn,
+      expiresOn: input.expiresOn,
+      notes: input.notes,
+      storageBucket: input.storedObject.bucket,
+      storageObjectPath: input.storedObject.objectPath,
+      versionNumber: 1,
+    };
+    const payloadHash = await calculateDocumentSha256(canonicalDocumentJson(checksumPayload));
+    const reference: DocumentReference = {
+      id: input.documentId,
+      organizationId: context.organizationId,
+      logicalOwnerType: input.logicalOwnerType,
+      logicalOwnerId: input.logicalOwnerId,
+      category: input.category,
+      displayName: input.displayName,
+      mimeType: input.mimeType,
+      fileSizeBytes: input.fileSizeBytes,
+      accessScope: input.accessScope,
+      status: 'active',
+      versionNumber: 1,
+      issuedOn: input.issuedOn,
+      expiresOn: input.expiresOn,
+      notes: input.notes,
+      storageState: 'stored',
+      storageBucket: input.storedObject.bucket,
+      storageObjectPath: input.storedObject.objectPath,
+      storageUploadedAt: input.storedObject.uploadedAt,
+      metadataChecksumSha256: payloadHash,
+      createdByUserId: context.actor.userId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const result = await this.gateway.createReference({
+      reference,
+      idempotencyKey: input.idempotencyKey,
+      payloadHash,
+    });
+    documentEventJournal.record({
+      id: this.idGenerator.generate(),
+      organizationId: context.organizationId,
+      actorUserId: context.actor.userId,
+      eventType: 'document.file.stored',
+      documentId: result.id,
+      logicalOwnerType: result.logicalOwnerType,
+      logicalOwnerId: result.logicalOwnerId,
+      category: result.category,
+      correlationId: input.idempotencyKey,
+      idempotencyKey: input.idempotencyKey,
+      occurredAt: result.createdAt,
+      metadata: Object.freeze({ versionNumber: result.versionNumber, storageState: result.storageState }),
+    });
+    return cloneReference(result);
   }
 
   async registerReference(

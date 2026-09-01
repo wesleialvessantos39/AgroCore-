@@ -101,6 +101,8 @@ export type Permission =
 
   // Escopo: Documentos
   | 'documents:view'
+  | 'documents:upload'
+  | 'documents:download'
   | 'documents:register_reference'
   | 'documents:manage'
   | 'documents:view_requirements'

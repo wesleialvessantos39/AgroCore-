@@ -43,6 +43,8 @@
     "test:module-005": "node --import tsx scripts/test-module-005.js",
     "test:documents-foundation": "node --import tsx scripts/test-documents-foundation.ts",
     "test:document-governance": "node --import tsx scripts/test-document-governance.ts",
+    "test:document-storage": "node --import tsx scripts/test-document-storage.ts",
+    "test:document-upload": "node --import tsx scripts/test-document-upload.ts",
     "test:documents-ui-copy": "node --import tsx scripts/test-documents-ui-copy.ts",
     "test:documents-theme": "node scripts/test-documents-theme.js",
     "test:module-006": "node --import tsx scripts/test-module-006.js",
@@ -53,6 +55,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@supabase/supabase-js": "2.112.4",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
@@ -62,6 +65,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-router-dom": "^7.18.2",
+    "tus-js-client": "4.3.1",
     "vite": "^6.2.3"
   },
   "devDependencies": {

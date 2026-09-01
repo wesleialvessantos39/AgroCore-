@@ -133,7 +133,7 @@ function harness() {
 }
 
 console.log('=============================================================');
-console.log('Suíte comportamental OE-006.002 — Pendências e Validade');
+console.log('Suíte complementar do Módulo 006 — Pendências e Validade Antecipadas');
 console.log('=============================================================');
 
 console.log('\n--- Contratos, permissões e validade determinística ---');
@@ -602,7 +602,7 @@ await test('Logout limpa documentos, pendências, operações e eventos', async 
 });
 
 console.log('\n=============================================================');
-console.log(`Resultado OE-006.002: ${passed} passaram, ${failed} falharam`);
+console.log(`Resultado complementar: ${passed} passaram, ${failed} falharam`);
 console.log('=============================================================');
 
 if (failed > 0) process.exit(1);

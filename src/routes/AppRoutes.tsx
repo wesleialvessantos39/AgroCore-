@@ -590,7 +590,7 @@ export function AppRoutes() {
             <Route
               path="novo"
               element={
-                <RequirePermission permission="documents:register_reference">
+                <RequirePermission permission="documents:upload">
                   <DocumentReferenceCreatePage />
                 </RequirePermission>
               }

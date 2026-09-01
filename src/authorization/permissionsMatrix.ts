@@ -65,6 +65,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:renew',
     // Outros módulos
     'documents:view',
+    'documents:upload',
+    'documents:download',
     'documents:register_reference',
     'documents:manage',
     'documents:view_requirements',
@@ -130,6 +132,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:renew',
     // Outros módulos
     'documents:view',
+    'documents:upload',
+    'documents:download',
     'documents:register_reference',
     'documents:manage',
     'documents:view_requirements',
@@ -189,6 +193,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:renew',
     // Outros módulos
     'documents:view',
+    'documents:upload',
+    'documents:download',
     'documents:register_reference',
     'documents:manage',
     'documents:view_requirements',
@@ -237,6 +243,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:acknowledge_handoff',
     // Outros módulos
     'documents:view',
+    'documents:upload',
+    'documents:download',
     'documents:register_reference',
     'documents:view_requirements',
     'documents:fulfill_requirements',
@@ -263,6 +271,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:view_handoff_queue',
     'proposals:acknowledge_handoff',
     'documents:view',
+    'documents:download',
     'personal_account:view_profile',
     'personal_account:manage_preferences',
   ],
@@ -300,6 +309,8 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'proposals:renew',
     // Outros módulos
     'documents:view',
+    'documents:upload',
+    'documents:download',
     'documents:register_reference',
     'documents:view_requirements',
     'documents:fulfill_requirements',

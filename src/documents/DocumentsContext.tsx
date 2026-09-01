@@ -20,10 +20,13 @@ import type {
   CreateDocumentRequirementInput,
   DocumentApplicationContext,
   DocumentGovernanceDashboard,
+  DocumentFileContent,
   DocumentLogicalOwnerType,
   DocumentOwnerResolution,
   DocumentReference,
   DocumentReferenceFilters,
+  DocumentUploadMetadataInput,
+  DocumentUploadProgress,
   DocumentRequirement,
   FulfillDocumentRequirementInput,
   RegisterDocumentReferenceInput,
@@ -32,6 +35,7 @@ import type {
 } from '../types/documents';
 import { DocumentDomainError } from '../types/documents';
 import { DocumentApplicationService } from './documentApplicationService';
+import { DocumentUploadService } from './documentUploadService';
 
 export type DocumentsContextStatus =
   | 'idle'
@@ -71,6 +75,17 @@ export interface DocumentsContextValue {
   readonly archiveReference: (
     input: Omit<ArchiveDocumentReferenceInput, 'idempotencyKey'>
   ) => Promise<DocumentMutationResult>;
+  readonly uploadDocument: (
+    file: File,
+    metadata: DocumentUploadMetadataInput,
+    onProgress: (progress: DocumentUploadProgress) => void,
+    signal: AbortSignal,
+    idempotencyKey: string
+  ) => Promise<DocumentReference>;
+  readonly getDocumentContent: (
+    documentId: string,
+    signal?: AbortSignal
+  ) => Promise<DocumentFileContent>;
   readonly createRequirement: (
     input: Omit<CreateDocumentRequirementInput, 'idempotencyKey'>
   ) => Promise<DocumentMutationResult<DocumentRequirement>>;
@@ -116,6 +131,7 @@ export function DocumentsProvider({ children }: { readonly children: React.React
   const governanceAbortController = useRef<AbortController | null>(null);
   const activeOrganizationId = activeOrganization?.id ?? null;
   const service = useMemo(() => new DocumentApplicationService(), []);
+  const uploadService = useMemo(() => new DocumentUploadService(service), [service]);
   const canViewGovernance = activePermissions.has('documents:view_requirements');
 
   const resolveOwner = useCallback(
@@ -374,6 +390,33 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     [buildContext, executeMutation, service]
   );
 
+  const uploadDocument = useCallback(
+    async (
+      file: File,
+      metadata: DocumentUploadMetadataInput,
+      onProgress: (progress: DocumentUploadProgress) => void,
+      signal: AbortSignal,
+      idempotencyKey: string
+    ) => {
+      const result = await uploadService.uploadDocument(buildContext(), {
+        file,
+        metadata,
+        onProgress,
+        signal,
+        idempotencyKey,
+      });
+      await Promise.all([refresh(), refreshGovernance()]);
+      return result;
+    },
+    [buildContext, refresh, refreshGovernance, uploadService]
+  );
+
+  const getDocumentContent = useCallback(
+    (documentId: string, signal?: AbortSignal) =>
+      uploadService.getDocumentContent(buildContext(), documentId, signal),
+    [buildContext, uploadService]
+  );
+
   const createRequirement = useCallback(
     (input: Omit<CreateDocumentRequirementInput, 'idempotencyKey'>) =>
       executeMutation(() =>
@@ -435,12 +478,14 @@ export function DocumentsProvider({ children }: { readonly children: React.React
       registerReference,
       replaceReference,
       archiveReference,
+      uploadDocument,
+      getDocumentContent,
       createRequirement,
       fulfillRequirement,
       waiveRequirement,
       cancelRequirement,
     }),
-    [archiveReference, cancelRequirement, createRequirement, errorMessage, filters, fulfillRequirement, getReferenceById, governance, governanceErrorMessage, governanceStatus, references, refresh, refreshGovernance, registerReference, replaceReference, status, waiveRequirement]
+    [archiveReference, cancelRequirement, createRequirement, errorMessage, filters, fulfillRequirement, getDocumentContent, getReferenceById, governance, governanceErrorMessage, governanceStatus, references, refresh, refreshGovernance, registerReference, replaceReference, status, uploadDocument, waiveRequirement]
   );
 
   return <DocumentsContext.Provider value={value}>{children}</DocumentsContext.Provider>;

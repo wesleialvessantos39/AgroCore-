@@ -463,7 +463,7 @@ await test('Builder de rota codifica identificador não confiável', () => {
 });
 
 await test('Matriz reconhece rotas documentais e bloqueia open redirect', () => {
-  assert.equal(findRouteDefinition(ROUTES.DOCUMENTS_NEW)?.requiredPermissions, 'documents:register_reference');
+  assert.equal(findRouteDefinition(ROUTES.DOCUMENTS_NEW)?.requiredPermissions, 'documents:upload');
   assert.equal(findRouteDefinition('/documentos/doc%20seguro')?.path, ROUTES.DOCUMENTS_DETAIL);
   assert.equal(getSafeRedirectUrl('/documentos/doc-seguro'), '/documentos/doc-seguro');
   assert.equal(getSafeRedirectUrl('//evil.test/documentos'), ROUTES.SYSTEM);

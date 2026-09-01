@@ -56,14 +56,14 @@ export function DocumentsPage() {
               Pendências e prazos
             </button>
           )}
-          {can('documents:register_reference') && (
+          {can('documents:upload') && (
             <button
               type="button"
               className={DOCUMENT_THEME.buttonPrimary}
               onClick={() => navigate(ROUTES.DOCUMENTS_NEW)}
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
-              Adicionar documento
+              Enviar documentos
             </button>
           )}
         </div>
@@ -73,8 +73,7 @@ export function DocumentsPage() {
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0B3D2E]" aria-hidden="true" />
           <p className="text-sm leading-relaxed text-[#0B3D2E]">
-            Nesta etapa, salve apenas as informações do documento. O arquivo não será enviado nem ficará
-            disponível para abrir ou baixar.
+            Os arquivos são protegidos por empresa e só podem ser abertos ou baixados por pessoas autorizadas.
           </p>
         </div>
       </section>

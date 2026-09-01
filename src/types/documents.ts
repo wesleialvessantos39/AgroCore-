@@ -1,12 +1,7 @@
 import type { OrganizationRole } from './auth';
 import type { Permission } from './authorization';
 
-/**
- * Contratos canônicos do Módulo 006 — Gestão Documental.
- *
- * Nesta fundação o AgroCore registra somente metadados e referências. Nenhum
- * byte, Blob, Base64, arquivo bruto ou URL de download integra o agregado.
- */
+/** Contratos canônicos do Módulo 006 — Gestão Documental. */
 export type DocumentReferenceId = string;
 
 export type DocumentLogicalOwnerType =
@@ -29,6 +24,15 @@ export type DocumentCategory =
 
 export type DocumentAccessScope = 'organization' | 'participants' | 'management';
 export type DocumentReferenceStatus = 'active' | 'superseded' | 'archived';
+export type DocumentStorageState = 'metadata_only' | 'stored';
+
+export const DOCUMENT_STORAGE_BUCKET = 'organization-documents' as const;
+
+export interface StoredDocumentDescriptor {
+  readonly bucket: typeof DOCUMENT_STORAGE_BUCKET;
+  readonly objectPath: string;
+  readonly uploadedAt: string;
+}
 
 export interface DocumentReference {
   readonly id: DocumentReferenceId;
@@ -46,7 +50,10 @@ export interface DocumentReference {
   readonly issuedOn?: string;
   readonly expiresOn?: string;
   readonly notes?: string;
-  readonly storageState: 'metadata_only';
+  readonly storageState: DocumentStorageState;
+  readonly storageBucket?: typeof DOCUMENT_STORAGE_BUCKET;
+  readonly storageObjectPath?: string;
+  readonly storageUploadedAt?: string;
   readonly metadataChecksumSha256: string;
   readonly createdByUserId: string;
   readonly createdAt: string;
@@ -73,6 +80,43 @@ export interface RegisterDocumentReferenceInput {
   readonly expiresOn?: string;
   readonly notes?: string;
   readonly idempotencyKey: string;
+}
+
+export interface RegisterStoredDocumentInput extends RegisterDocumentReferenceInput {
+  readonly documentId: DocumentReferenceId;
+  readonly storedObject: StoredDocumentDescriptor;
+}
+
+export type DocumentUploadMetadataInput = Omit<
+  RegisterDocumentReferenceInput,
+  'mimeType' | 'fileSizeBytes' | 'idempotencyKey'
+>;
+
+export type DocumentUploadState =
+  | 'queued'
+  | 'uploading'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface DocumentUploadProgress {
+  readonly bytesUploaded: number;
+  readonly bytesTotal: number;
+  readonly percentage: number;
+}
+
+export interface DocumentUploadQueueItem extends DocumentUploadProgress {
+  readonly id: string;
+  readonly fileName: string;
+  readonly state: DocumentUploadState;
+  readonly error?: string;
+  readonly documentId?: DocumentReferenceId;
+}
+
+export interface DocumentFileContent {
+  readonly blob: Blob;
+  readonly displayName: string;
+  readonly mimeType: DocumentMimeType;
 }
 
 export interface ReplaceDocumentReferenceInput {
@@ -220,6 +264,8 @@ export interface DocumentApplicationContext {
 
 export type DocumentDomainEventType =
   | 'document.reference.registered'
+  | 'document.file.stored'
+  | 'document.file.removed'
   | 'document.reference.replaced'
   | 'document.reference.archived'
   | 'document.requirement.created'
@@ -260,6 +306,12 @@ export type DocumentDomainErrorCode =
   | 'REQUIREMENT_MISMATCH'
   | 'REQUIREMENT_ALREADY_RESOLVED'
   | 'DOCUMENT_EXPIRED'
+  | 'INVALID_FILE'
+  | 'STORAGE_NOT_CONFIGURED'
+  | 'STORAGE_UPLOAD_FAILED'
+  | 'STORAGE_DOWNLOAD_FAILED'
+  | 'STORAGE_COMPENSATION_FAILED'
+  | 'UPLOAD_CANCELLED'
   | 'INVALID_STATE'
   | 'SERVICE_UNAVAILABLE';
 

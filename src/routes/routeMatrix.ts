@@ -305,9 +305,9 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
   {
     path: ROUTES.DOCUMENTS_NEW,
     category: 'authenticated_protected',
-    name: 'Adicionar Documento',
+    name: 'Enviar Documentos',
     requiresAuth: true,
-    requiredPermissions: 'documents:register_reference',
+    requiredPermissions: 'documents:upload',
     scope: 'organization',
     description: 'Registro das informações básicas de um documento relacionado a um atendimento.',
   },

@@ -272,10 +272,10 @@ Reconhecendo a rotina pericial e de consultoria agronômica, o sistema permite a
 - Cada referência contém `organizationId`, `logicalOwnerType`, `logicalOwnerId`, `category`, `versionNumber`, `mimeType`, escopo de acesso, situação, datas referenciais, checksum SHA-256 interno e autoria organizacional. `fileSizeBytes` é opcional e não é solicitado na interface enquanto não existir arquivo real.
 - A substituição cria uma nova referência ativa, preserva a anterior como `superseded` e mantém a cadeia imutável por `predecessorDocumentId`. O arquivamento é versionado e exige motivo operacional.
 - O serviço rejeita em tempo de execução arquivo, `Blob`, buffers, Base64, URLs, credenciais, tokens e payloads incompatíveis, inclusive diante de tentativa de contorno da tipagem.
-- **Governança e Validade Implementadas:** a OE-006.002 introduz `DocumentRequirement`, prazos, estados aberto/atendido/dispensado/cancelado, associação governada a documento compatível e projeções determinísticas de pendência vencida, documento próximo do vencimento, vencido ou indisponível.
+- **Governança e Validade Antecipadas:** `DocumentRequirement`, prazos, estados aberto/atendido/dispensado/cancelado e projeções de validade foram preservados como entregas antecipadas das ordens dedicadas a checklists e alertas; não substituem o escopo oficial da OE-006.002.
 - Somente `owner`, `company_admin` e `manager` criam, dispensam ou cancelam pendências; projetista e captador consultam e atendem apenas pendências dos próprios atendimentos; financeiro e superadministrador de plataforma não recebem acesso implícito.
 - As rotas `/documentos/pendencias` e `/documentos/pendencias/nova` apresentam painel, indicadores e ações conforme as permissões. A linguagem pública não expõe códigos de ordem, IDs de implementação, checksum, hash, metadado, snapshot ou termos equivalentes.
-- Uma futura infraestrutura segura poderá armazenar o conteúdo físico de modo único e associá-lo aos mesmos identificadores, sem alterar as fontes canônicas nem duplicar arquivos entre módulos.
+- A infraestrutura de arquivos usa bucket privado, caminho opaco por organização e entidade, upload retomável e associação ao mesmo identificador documental somente após confirmação do armazenamento.
 - Documentos sensíveis e dados de clientes (CPF, CNPJ, dados bancários) jamais serão registrados em arquivos de log do servidor ou do cliente.
 - É expressamente proibido o armazenamento de arquivos reais de documentos em `localStorage`, `sessionStorage` ou `IndexedDB`.
 - Na ausência de infraestrutura de nuvem configurada para storage de arquivos, a aplicação operará em modo seguro com gateway de indisponibilidade, sem simular uploads em produção.
@@ -478,27 +478,32 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
     - **Homologação comportamental:** 28 provas em `scripts/test-proposal-renewals.ts`; o Módulo 005 totaliza 186 provas comportamentais nas seis suítes de domínio, além das auditorias de texto público e tema.
 
 ### MÓDULO 006: GESTÃO DOCUMENTAL E ANEXOS TÉCNICOS
-- **Status Geral:** Em desenvolvimento; OE-006.001 e OE-006.002 implementadas e homologadas no escopo volátil.
+- **Status Geral:** Em desenvolvimento; OE-006.001, OE-006.002 e OE-006.003 implementadas e homologadas no código. A migração de Storage está versionada e deverá ser aplicada somente ao projeto Supabase próprio do AgroCore.
 - **Entregas da OE-006.001:**
-  - **Agregado Referencial Canônico:** `DocumentReference` possui organização, entidade lógica, categoria, nome de exibição, MIME permitido, tamanho opcional, escopo de acesso, situação, versão, datas, autoria e checksum SHA-256 interno. `storageState` permanece obrigatoriamente `metadata_only`.
+  - **Agregado Referencial Canônico:** `DocumentReference` possui organização, entidade lógica, categoria, nome de exibição, MIME permitido, tamanho opcional, escopo de acesso, situação, versão, datas, autoria e checksum SHA-256 interno. Referências legadas podem permanecer `metadata_only`; envios confirmados usam `stored`.
   - **Fontes Canônicas:** referências aceitam exclusivamente clientes, imóveis, solicitações de laudo, laudos e propostas já existentes na mesma organização. A interface usa seletores derivados dessas fontes e não oferece campo livre para identificadores internos.
-  - **RBAC Granular:** permissões reais `documents:view`, `documents:register_reference` e `documents:manage`. A permissão preliminar `documents:upload` foi removida porque não existe infraestrutura de upload. Proprietário, administrador e gerente governam referências; projetista e captador registram somente em entidades das quais participam; financeiro consulta apenas metadados de escopo organizacional; superadministrador permanece isolado dos dados privados.
+  - **RBAC Granular:** permissões `documents:view`, `documents:upload`, `documents:download`, `documents:register_reference` e `documents:manage`. Proprietário, administrador, gerente, projetista e captador enviam dentro do próprio escopo; financeiro permanece em consulta; superadministrador continua isolado dos documentos privados.
   - **Segurança de Conteúdo:** validadores recusam arquivo, `Blob`, bytes, buffers, Base64, URL, token, credencial e segredo. MIME é limitado a PDF, JPEG, PNG e TIFF; tamanho e datas são validados sem armazenar conteúdo físico.
   - **Versionamento e Concorrência:** registro, substituição e arquivamento são idempotentes, protegidos por versão e confirmados atomicamente no gateway de preview. Referências equivalentes ativas não são duplicadas e replays concorrentes convergem para o mesmo resultado.
   - **Gateway Seguro:** `PreviewDocumentReferenceGateway` usa coleção vazia, volátil e isolada por organização; `UnavailableDocumentReferenceGateway` nega leitura e mutação em produção até existir infraestrutura segura. Nenhum dado é persistido em storage do navegador.
   - **Auditoria e Sessão:** eventos append-only carregam apenas IDs e metadados sanitizados; referências, idempotência e diário de eventos são eliminados pela limpeza central do logout.
-  - **Rotas e Interface:** `/documentos`, `/documentos/novo` e `/documentos/:documentId` usam guards de permissão, builders com `encodeURIComponent`, navegação segura, estados acessíveis e paleta oficial. Não existe `input type="file"`, visualização ou download simulado.
+  - **Rotas e Interface:** `/documentos`, `/documentos/novo` e `/documentos/:documentId` usam guards de permissão, builders com `encodeURIComponent`, navegação segura, estados acessíveis e paleta oficial.
   - **Homologação Comportamental:** 39 provas em `scripts/test-documents-foundation.ts`, auditoria visual em `scripts/test-documents-theme.js` e agregador `test:module-006`.
 - **Entregas da OE-006.002:**
-  - **Pendências Governadas:** `DocumentRequirement` relaciona categoria, atendimento, prazo, acesso, situação, versão, autoria e integridade. Duplicidades abertas equivalentes são recusadas.
-  - **Validade Determinística:** `evaluateDocumentValidity` classifica documentos sem vencimento, vigentes, próximos do vencimento e vencidos usando relógio injetável e datas UTC. Documento vencido não atende pendência.
-  - **Atendimento Seguro:** somente documento ativo da mesma organização, atendimento e categoria pode atender uma pendência. Dispensa e cancelamento exigem motivo e permissão administrativa.
-  - **Concorrência e Idempotência:** criação e encerramento usam versão esperada, chave idempotente e armazenamento volátil autoritativo; operações concorrentes incompatíveis produzem um único vencedor.
-  - **RBAC Granular:** permissões `documents:view_requirements`, `documents:fulfill_requirements` e `documents:manage_requirements` aplicadas no serviço, contexto, rotas e interface.
-  - **Painel Operacional:** `/documentos/pendencias` reúne pendências, atrasos e validades; `/documentos/pendencias/nova` permite criação administrativa sem digitação de IDs internos.
-  - **Linguagem Pública:** textos técnicos foram removidos das telas documentais e das exposições residuais em propostas e laudos. `test:ui-copy` bloqueia termos internos em todo `src/**/*.tsx`; `test:documents-ui-copy` reforça a cobertura do Módulo 006.
-  - **Sessão e Limites:** pendências, documentos, operações idempotentes e eventos são limpos no logout. Upload, download, storage real, Base64 e links temporários continuam inexistentes.
-  - **Homologação Comportamental:** 32 provas em `scripts/test-document-governance.ts`; o Módulo 006 totaliza 71 provas comportamentais, além das auditorias de texto público e tema.
+  - **Bucket Privado:** `organization-documents` permanece não público, com limite de 50 MB e somente PDF, JPEG, PNG e TIFF.
+  - **Caminho Opaco:** organização, tipo de vínculo, registro relacionado e documento compõem a chave; o nome original do arquivo não é gravado no caminho.
+  - **Políticas Separadas:** `SELECT`, `INSERT`, `UPDATE` e `DELETE` possuem políticas próprias em `storage.objects`, vínculo organizacional ativo, perfil permitido e validação integral do caminho.
+  - **Menor Privilégio:** financeiro não envia; exclusão é limitada à gestão ou ao próprio responsável pelo envio; superadministrador da plataforma não atravessa o isolamento das organizações.
+  - **Barreiras de Acesso:** bucket público, troca de organização no caminho, segmentos manipulados e formatos fora da lista são recusados por banco e aplicação.
+  - **Homologação Comportamental:** 8 provas em `scripts/test-document-storage.ts`, incluindo inspeção estrutural da migração versionada.
+- **Entregas da OE-006.003:**
+  - **Upload Retomável:** adaptador Supabase usa TUS no host direto de Storage, partes de 6 MB, repetição automática de falhas transitórias e retomada de envio interrompido.
+  - **Fila Controlada:** seleção de até dez arquivos, no máximo dois envios simultâneos, progresso real por arquivo, cancelamento e tentativa novamente.
+  - **Validação em Camadas:** nome, tamanho, MIME e assinatura inicial do conteúdo são conferidos antes do armazenamento; caminhos usam identificadores opacos.
+  - **Confirmação e Compensação:** a referência é criada somente após confirmação do arquivo. Falha posterior aciona remoção compensatória com repetição, impedindo registro sem arquivo.
+  - **Abertura Protegida:** formatos suportados são visualizados por `Blob` temporário após autorização; baixar exige ação explícita e não expõe URL pública ou assinada no agregado.
+  - **Sessão:** arquivos do modo de desenvolvimento ficam apenas em memória e são eliminados no logout; produção permanece fechada quando Supabase não está configurado.
+  - **Homologação Comportamental:** 7 provas em `scripts/test-document-upload.ts`. Com as 39 provas da fundação, 32 antecipadas de governança e 8 de Storage, o módulo totaliza 86 provas comportamentais, além das auditorias de texto e tema.
 
 ---
 
@@ -538,9 +543,11 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:module-005` | Homologação consolidada da fundação, pipeline, documento comercial, acompanhamento, recebimento, renovação, texto público e tema do Módulo 005 (OE-005.001 a OE-005.007; 186 provas comportamentais) |
 | `npm run test:documents-foundation` | Valida metadados seguros, fontes canônicas, RBAC, IDOR, versionamento, idempotência, concorrência, eventos, rotas e limpeza documental (39 provas) |
 | `npm run test:document-governance` | Valida pendências, validade, RBAC, isolamento, associação documental, concorrência, idempotência, eventos, rotas e limpeza (32 provas) |
+| `npm run test:document-storage` | Valida bucket privado, caminhos, formatos, tamanho, cancelamento e as quatro políticas de Storage (8 provas) |
+| `npm run test:document-upload` | Valida progresso, confirmação, compensação, RBAC, conteúdo, cancelamento e isolamento do upload (7 provas) |
 | `npm run test:documents-ui-copy` | Impede linguagem interna e códigos de ordem nas páginas públicas do Módulo 006 |
-| `npm run test:documents-theme` | Audita a paleta oficial, variantes proibidas e ausência de campo de upload no Módulo 006 |
-| `npm run test:module-006` | Homologação consolidada do Módulo 006 até OE-006.002 (71 provas comportamentais, texto público e tema) |
+| `npm run test:documents-theme` | Audita a paleta oficial, variantes proibidas e seleção controlada de arquivos no Módulo 006 |
+| `npm run test:module-006` | Homologação consolidada do Módulo 006 até OE-006.003 (86 provas comportamentais, texto público e tema) |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -561,4 +568,4 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
 2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.007 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
-3. **Módulo 006 — Gestão Documental:** concluído até OE-006.002 no modo estritamente referencial, com pendências e validade operacionais sem storage, upload ou download. A OE-006.003 ainda não foi iniciada e deverá preservar esses limites até existir infraestrutura real formalmente autorizada.
+3. **Módulo 006 — Gestão Documental:** concluído até OE-006.003 no código. A próxima execução é a OE-006.004 — versões e histórico, preservando arquivos atuais, autoria, observações e troca atômica da versão vigente. A migração de Storage deve ser aplicada apenas quando o projeto Supabase específico do AgroCore estiver conectado.

@@ -111,8 +111,8 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     announcementTitle: 'Documentos',
   },
   [ROUTES.DOCUMENTS_NEW]: {
-    documentTitle: 'Adicionar Documento | AgroCore',
-    announcementTitle: 'Adicionar documento',
+    documentTitle: 'Enviar Documentos | AgroCore',
+    announcementTitle: 'Enviar documentos',
   },
   [ROUTES.DOCUMENT_REQUIREMENTS]: {
     documentTitle: 'Pendências e Prazos | AgroCore',
