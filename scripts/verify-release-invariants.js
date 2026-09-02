@@ -22,6 +22,7 @@ const fieldPreparationPanel = read('src/fieldVisits/VisitPreparationPanel.tsx');
 const fieldFormPanel = read('src/fieldVisits/VisitFieldFormPanel.tsx');
 const fieldVisitTypes = read('src/types/technicalVisit.ts');
 const fieldPreparationService = read('src/fieldVisits/preparationService.ts');
+const viteConfig = read('vite.config.ts');
 const packageJson = JSON.parse(read('package.json'));
 
 assert(manifest.id === '/', 'O PWA AgroCore deve possuir id raiz /.');
@@ -64,6 +65,12 @@ assert(
     fieldPreparationPanel.includes('Checklist prévio') &&
     fieldPreparationPanel.includes('Autorizar exceção e salvar'),
   'A preparação operacional da OE-007.002 deve permanecer integrada à interface.'
+);
+assert(
+  viteConfig.includes('production-field-form-gateway-factory') &&
+    viteConfig.includes('SupabaseTechnicalVisitFieldFormGateway') &&
+    viteConfig.includes('UnavailableTechnicalVisitFieldFormGateway'),
+  'O build de produção da OE-007.003 deve usar o factory seguro do formulário de campo sem depender do preview.'
 );
 assert(
   fieldFormPanel.includes('Formulário de campo') &&
