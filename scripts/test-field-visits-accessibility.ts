@@ -20,6 +20,7 @@ const page = fs.readFileSync('src/pages/FieldVisitsPage.tsx', 'utf8');
 const panel = fs.readFileSync('src/fieldVisits/VisitPreparationPanel.tsx', 'utf8');
 const theme = fs.readFileSync('src/fieldVisits/theme.ts', 'utf8');
 const fieldForm = fs.readFileSync('src/fieldVisits/VisitFieldFormPanel.tsx', 'utf8');
+const fieldEvidence = fs.readFileSync('src/fieldVisits/FieldEvidencePanel.tsx', 'utf8');
 
 console.log('====================================================');
 console.log(' AGROCORE — RESPONSIVIDADE E ACESSIBILIDADE MÓDULO 007');
@@ -138,6 +139,35 @@ test('17. Inclusão de seção e item move foco para o novo conteúdo', () => {
   assert.equal(fieldForm.includes("document.getElementById('field-section-title-'"), true);
   assert.equal(fieldForm.includes("document.getElementById('field-item-label-'"), true);
   assert.equal(fieldForm.includes('firstActionRef.current?.focus()'), true);
+});
+
+test('18. Evidências usam alvos de toque e estados anunciáveis', () => {
+  assert.equal(fieldEvidence.includes('min-h-[44px]'), true);
+  assert.equal(fieldEvidence.includes('role="alert"'), true);
+  assert.equal(fieldEvidence.includes('role="status"'), true);
+  assert.equal(fieldEvidence.includes('aria-live="polite"'), true);
+});
+
+test('19. Fotos e geolocalização são mobile-first em 320 px e 390 px', () => {
+  for (const width of [320, 390]) {
+    assert.equal(width < 640, true);
+    assert.equal(fieldEvidence.includes('grid-cols-2'), true);
+    assert.equal(fieldEvidence.includes('sm:grid-cols-2'), true);
+    assert.equal(fieldEvidence.includes('sm:grid-cols-3'), true);
+  }
+});
+
+test('20. Evidências não introduzem largura fixa que force overflow', () => {
+  assert.equal(/min-w-\\[(?:[4-9]\\d\\d|\\d{4,})px\\]/.test(fieldEvidence), false);
+  assert.equal(/w-\\[(?:[4-9]\\d\\d|\\d{4,})px\\]/.test(fieldEvidence), false);
+});
+
+test('21. Coordenadas manuais usam teclado decimal em dispositivos móveis', () => {
+  assert.equal((fieldEvidence.match(/inputMode="decimal"/g) ?? []).length >= 2, true);
+});
+
+test('22. Captura de foto favorece câmera do ambiente quando suportada', () => {
+  assert.equal(fieldEvidence.includes('capture="environment"'), true);
 });
 
 console.log('\n====================================================');

@@ -130,6 +130,13 @@ function stripPreviewPlugin(isProduction: boolean) {
           return '\0virtual:production-auth-gateway-factory';
         }
         if (
+          normalizedTarget.includes('/fieldVisits/fieldEvidenceGatewayFactory') ||
+          id.includes('/fieldVisits/fieldEvidenceGatewayFactory') ||
+          (importer && importer.includes('/fieldVisits/') && id === './fieldEvidenceGatewayFactory')
+        ) {
+          return '\0virtual:production-field-evidence-gateway-factory';
+        }
+        if (
           normalizedTarget.includes('/fieldVisits/fieldFormGatewayFactory') ||
           id.includes('/fieldVisits/fieldFormGatewayFactory') ||
           (importer && importer.includes('/fieldVisits/') && id === './fieldFormGatewayFactory')
@@ -382,6 +389,26 @@ function stripPreviewPlugin(isProduction: boolean) {
             return activeGateway;
           }
           export function setDocumentComplianceGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
+        `;
+      }
+
+      if (id === '\0virtual:production-field-evidence-gateway-factory') {
+        return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseFieldEvidenceGateway } from '/src/fieldVisits/supabaseFieldEvidenceGateway.ts';
+          import { UnavailableFieldEvidenceGateway } from '/src/fieldVisits/unavailableFieldEvidenceGateway.ts';
+          let activeGateway = null;
+          export function getFieldEvidenceGateway() {
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseFieldEvidenceGateway(supabase)
+              : new UnavailableFieldEvidenceGateway();
+            return activeGateway;
+          }
+          export function setFieldEvidenceGatewayForTesting(gateway) {
             activeGateway = gateway ?? null;
           }
         `;

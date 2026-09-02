@@ -7,6 +7,10 @@ import { useFieldVisits } from '../fieldVisits/useFieldVisits';
 import { FIELD_VISIT_THEME } from '../fieldVisits/theme';
 import { VisitPreparationPanel } from '../fieldVisits/VisitPreparationPanel';
 import { VisitFieldFormPanel } from '../fieldVisits/VisitFieldFormPanel';
+import {
+  FieldEvidencePanel,
+  appraisalEvidenceSnapshot,
+} from '../fieldVisits/FieldEvidencePanel';
 import { useProperties } from '../properties/useProperties';
 import { useProposals } from '../proposals/useProposals';
 import { useAppraisals } from '../appraisals/useAppraisals';
@@ -438,6 +442,17 @@ export const FieldVisitsPage: React.FC = () => {
         <div className="grid gap-4">
           {visits.map((visit) => {
             const isResponsible = session?.user?.id === visit.responsibleUserId;
+            const canAccessFieldEvidence = [
+              'owner',
+              'company_admin',
+              'manager',
+              'project_designer',
+            ].includes(session?.organizationRole ?? '');
+            const canEditFieldEvidence =
+              canAccessFieldEvidence &&
+              canExecute &&
+              isResponsible &&
+              (visit.status === 'confirmed' || visit.status === 'in_progress');
             const pendingRequiredChecklist =
               visit.preparation?.checklist.filter(
                 (item) => item.required && !item.completed
@@ -565,6 +580,31 @@ export const FieldVisitsPage: React.FC = () => {
                     );
                   }}
                 />
+
+                {canAccessFieldEvidence && (
+                  <div className="mt-4">
+                    <FieldEvidencePanel
+                      mode="visit"
+                      visit={visit}
+                      canEdit={canEditFieldEvidence}
+                      onEvidenceChange={async (nextEvidence) => {
+                        if (!visit.appraisalId || !session?.user?.id) return;
+                        try {
+                          const currentDossier =
+                            await appraisals.getTechnicalDossier(visit.appraisalId);
+                          await appraisals.saveTechnicalDossier({
+                            ...currentDossier,
+                            fieldEvidence: appraisalEvidenceSnapshot(nextEvidence),
+                            updatedAt: new Date().toISOString(),
+                            updatedByUserId: session.user.id,
+                          });
+                        } catch {
+                          // A evidência compartilhada continua sendo a fonte consultada pelo laudo.
+                        }
+                      }}
+                    />
+                  </div>
+                )}
 
                 {visit.status === 'confirmed' && isResponsible && !preparationReady && (
                   <p

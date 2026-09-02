@@ -17,9 +17,13 @@ const hero = read('src/components/Hero.tsx');
 const fieldTests = read('scripts/test-field-visits-foundation.ts');
 const fieldPreparationTests = read('scripts/test-field-visits-preparation.ts');
 const fieldFormTests = read('scripts/test-field-visits-field-form.ts');
+const fieldEvidenceTests = read('scripts/test-field-visits-evidence.ts');
 const fieldAccessibilityTests = read('scripts/test-field-visits-accessibility.ts');
 const fieldPreparationPanel = read('src/fieldVisits/VisitPreparationPanel.tsx');
 const fieldFormPanel = read('src/fieldVisits/VisitFieldFormPanel.tsx');
+const fieldEvidencePanel = read('src/fieldVisits/FieldEvidencePanel.tsx');
+const appraisalWorkspace = read('src/components/appraisals/AppraisalDossierWorkspace.tsx');
+const appraisalDossierTypes = read('src/types/appraisalDossier.ts');
 const fieldVisitTypes = read('src/types/technicalVisit.ts');
 const fieldPreparationService = read('src/fieldVisits/preparationService.ts');
 const viteConfig = read('vite.config.ts');
@@ -61,6 +65,10 @@ assert(
   'A suíte da OE-007.003 não pode conter interrupções de diagnóstico.'
 );
 assert(
+  !fieldEvidenceTests.includes('process.exit(0)'),
+  'A suíte da OE-007.004 não pode conter interrupções de diagnóstico.'
+);
+assert(
   fieldPreparationPanel.includes('Fuso horário') &&
     fieldPreparationPanel.includes('Checklist prévio') &&
     fieldPreparationPanel.includes('Autorizar exceção e salvar'),
@@ -71,6 +79,20 @@ assert(
     viteConfig.includes('SupabaseTechnicalVisitFieldFormGateway') &&
     viteConfig.includes('UnavailableTechnicalVisitFieldFormGateway'),
   'O build de produção da OE-007.003 deve usar o factory seguro do formulário de campo sem depender do preview.'
+);
+assert(
+  viteConfig.includes('production-field-evidence-gateway-factory') &&
+    viteConfig.includes('SupabaseFieldEvidenceGateway') &&
+    viteConfig.includes('UnavailableFieldEvidenceGateway'),
+  'O build de produção da OE-007.004 deve usar o serviço seguro de fotos e localização sem depender do preview.'
+);
+assert(
+  fieldEvidencePanel.includes('Fotos e geolocalização') &&
+    fieldEvidencePanel.includes('Usar localização do dispositivo') &&
+    fieldEvidencePanel.includes('Adicionar fotos') &&
+    appraisalWorkspace.includes('8. Fotos e localização') &&
+    appraisalDossierTypes.includes('fieldEvidence?:'),
+  'Fotos e localização da OE-007.004 devem permanecer sincronizadas entre visita e laudo.'
 );
 assert(
   fieldFormPanel.includes('Formulário de campo') &&
@@ -104,4 +126,4 @@ assert(
   'O gate de produção deve executar as homologações de código dos Módulos 001, 002, 003, 006 e 007.'
 );
 
-console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e Módulo 007 integrado até OE-007.003.');
+console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e Módulo 007 integrado até OE-007.004.');

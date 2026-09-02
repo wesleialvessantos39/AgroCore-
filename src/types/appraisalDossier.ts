@@ -5,6 +5,7 @@
  */
 
 import { AppraisalId, AppraisalDocumentReference } from './appraisal';
+import type { AppraisalFieldEvidenceSnapshot } from './fieldEvidence';
 
 export type DossierSectionKey =
   | 'identification'
@@ -17,6 +18,7 @@ export type DossierSectionKey =
   | 'normative_and_degree'
   | 'conclusion'
   | 'review'
+  | 'field_evidence'
   | 'annexes';
 
 export type DossierSectionStatus =
@@ -185,6 +187,7 @@ export interface AppraisalTechnicalDossier {
   readonly characterization: AppraisalCharacterizationSection;
   readonly improvements: AppraisalImprovementsSection;
   readonly conclusion: AppraisalConclusionSection;
+  readonly fieldEvidence?: AppraisalFieldEvidenceSnapshot;
   readonly documentReferences: readonly AppraisalDocumentReference[];
   readonly updatedAt: string;
   readonly updatedByUserId: string;

@@ -3,7 +3,7 @@
  * Módulo 004 — Laudos de Avaliação de Imóveis Rurais e Urbanos
  * AgroCore — Plataforma de Gestão Cadastral e Territorial
  *
- * Integração completa das 9 seções do laudo:
+ * Integração completa das 10 seções do laudo:
  * 1. Identificação e Finalidade
  * 2. Caracterização Física e Territorial
  * 3. Benfeitorias e Custo de Reprodução
@@ -11,8 +11,9 @@
  * 5. Métodos Avaliatórios e Cálculos (MCDDM / Evolutivo)
  * 6. Enquadramento e Graus NBR 14653
  * 7. Síntese Avaliatória e Conclusão
- * 8. Documentos e Anexos Consultados
- * 9. Emissão Formal, Prontidão e Versionamento Canônico
+ * 8. Fotos e Geolocalização
+ * 9. Documentos e Anexos Consultados
+ * 10. Emissão Formal, Prontidão e Versionamento
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -30,6 +31,7 @@ import {
   Save,
   RefreshCw,
   Sparkles,
+  Camera,
 } from 'lucide-react';
 import {
   Appraisal,
@@ -52,6 +54,10 @@ import { AppraisalHomogenizationTable } from './AppraisalHomogenizationTable';
 import { AppraisalImprovementsEditor } from './AppraisalImprovementsEditor';
 import { AppraisalIssuancePanel } from './AppraisalIssuancePanel';
 import { ValuationMethodEngine } from '../../appraisals/valuationMethods';
+import {
+  FieldEvidencePanel,
+  appraisalEvidenceSnapshot,
+} from '../../fieldVisits/FieldEvidencePanel';
 
 export interface AppraisalDossierWorkspaceProps {
   readonly appraisal: Appraisal;
@@ -313,8 +319,9 @@ export function AppraisalDossierWorkspace({
     { key: 'methods_and_calculations', label: '5. Métodos & Cálculos', icon: <Calculator className="w-4 h-4" /> },
     { key: 'normative_and_degree', label: '6. Enquadramento NBR', icon: <ShieldCheck className="w-4 h-4" /> },
     { key: 'conclusion', label: '7. Síntese Avaliatória', icon: <Award className="w-4 h-4" /> },
-    { key: 'annexes', label: '8. Anexos / Docs', icon: <Paperclip className="w-4 h-4" /> },
-    { key: 'issuance', label: '9. Emissão Formal', icon: <CheckSquare className="w-4 h-4" /> },
+    { key: 'field_evidence', label: '8. Fotos e localização', icon: <Camera className="w-4 h-4" /> },
+    { key: 'annexes', label: '9. Anexos / Docs', icon: <Paperclip className="w-4 h-4" /> },
+    { key: 'issuance', label: '10. Emissão Formal', icon: <CheckSquare className="w-4 h-4" /> },
   ];
 
   if (isLoading || !dossier || !calculation || !normative) {
@@ -328,6 +335,12 @@ export function AppraisalDossierWorkspace({
   }
 
   const ruralChar = dossier.characterization.propertyType === 'rural' ? (dossier.characterization as RuralCharacterizationSection) : null;
+  const canEditFieldEvidence = [
+    'owner',
+    'company_admin',
+    'manager',
+    'project_designer',
+  ].includes(currentUserRole);
 
   return (
     <div className="space-y-6" id="appraisal-dossier-workspace">
@@ -373,7 +386,7 @@ export function AppraisalDossierWorkspace({
         </div>
       </div>
 
-      {/* Barra de Navegação das 9 Seções do Dossiê */}
+      {/* Barra de Navegação das 10 Seções do Dossiê */}
       <div className="overflow-x-auto pb-1">
         <div className="flex items-center gap-1.5 min-w-max border-b border-[#0B3D2E]/15 pb-2">
           {navSections.map((sec) => {
@@ -881,12 +894,38 @@ export function AppraisalDossierWorkspace({
           </div>
         )}
 
-        {/* SEÇÃO 8: DOCUMENTOS E ANEXOS */}
+        {/* SEÇÃO 8: FOTOS E GEOLOCALIZAÇÃO */}
+        {activeSection === 'field_evidence' && (
+          <FieldEvidencePanel
+            mode="appraisal"
+            appraisal={appraisal}
+            canEdit={canEditFieldEvidence}
+            onEvidenceChange={async (nextEvidence) => {
+              const synchronizedDossier: AppraisalTechnicalDossier = {
+                ...dossier,
+                fieldEvidence: appraisalEvidenceSnapshot(nextEvidence),
+                updatedAt: new Date().toISOString(),
+                updatedByUserId: currentUserId,
+              };
+              setDossier(synchronizedDossier);
+              try {
+                const saved = await saveTechnicalDossier(synchronizedDossier);
+                setDossier(saved);
+              } catch {
+                setSaveSuccessNotice(
+                  'Fotos e localização sincronizadas. Use Salvar Alterações para concluir o dossiê.'
+                );
+              }
+            }}
+          />
+        )}
+
+        {/* SEÇÃO 9: DOCUMENTOS E ANEXOS */}
         {activeSection === 'annexes' && (
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-[#0B3D2E] uppercase tracking-wide flex items-center gap-2">
               <Paperclip className="w-4 h-4 text-[#0B3D2E]" />
-              8. Documentos Periciais Consultados e Anexos
+              9. Documentos Periciais Consultados e Anexos
             </h3>
 
             <div className="space-y-2">
@@ -909,7 +948,7 @@ export function AppraisalDossierWorkspace({
           </div>
         )}
 
-        {/* SEÇÃO 9: EMISSÃO FORMAL E HISTÓRICO DE VERSÕES */}
+        {/* SEÇÃO 10: EMISSÃO FORMAL E HISTÓRICO DE VERSÕES */}
         {activeSection === 'issuance' && (
           <AppraisalIssuancePanel
             appraisal={appraisal}
