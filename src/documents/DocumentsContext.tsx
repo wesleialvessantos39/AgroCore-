@@ -44,7 +44,20 @@ import type {
   ProposalDocumentChecklist,
   TransitionProposalChecklistItemInput,
 } from '../types/proposalChecklists';
+import type {
+  ConfigureDocumentAlertPolicyInput,
+  CreateDocumentBatchExportInput,
+  CreateDocumentShareInput,
+  CreateDocumentShareResult,
+  DocumentAlertPolicy,
+  DocumentBatchExportResult,
+  DocumentComplianceDashboard,
+  DocumentShareGrant,
+  RedeemedDocumentShare,
+  RevokeDocumentShareInput,
+} from '../types/documentCompliance';
 import { DocumentApplicationService } from './documentApplicationService';
+import { DocumentComplianceApplicationService } from './documentComplianceApplicationService';
 import { DocumentUploadService } from './documentUploadService';
 import { ProposalChecklistApplicationService } from './proposalChecklistApplicationService';
 
@@ -75,11 +88,15 @@ export interface DocumentsContextValue {
   readonly checklistStatus: DocumentsContextStatus;
   readonly checklistDashboard: ProposalChecklistDashboard | null;
   readonly checklistErrorMessage: string | null;
+  readonly complianceStatus: DocumentsContextStatus;
+  readonly complianceDashboard: DocumentComplianceDashboard | null;
+  readonly complianceErrorMessage: string | null;
   readonly isLoading: boolean;
   readonly setFilters: (filters: DocumentReferenceFilters) => void;
   readonly refresh: () => Promise<void>;
   readonly refreshGovernance: () => Promise<void>;
   readonly refreshChecklistDashboard: () => Promise<void>;
+  readonly refreshComplianceDashboard: () => Promise<void>;
   readonly getReferenceById: (documentId: string) => Promise<DocumentReference | null>;
   readonly listDocumentsForProposal: (
     proposalId: string,
@@ -136,6 +153,23 @@ export interface DocumentsContextValue {
   readonly transitionProposalChecklistItem: (
     input: Omit<TransitionProposalChecklistItemInput, 'idempotencyKey'>
   ) => Promise<DocumentMutationResult<ProposalDocumentChecklist>>;
+  readonly configureDocumentAlertPolicy: (
+    input: Omit<ConfigureDocumentAlertPolicyInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<DocumentAlertPolicy>>;
+  readonly createDocumentShare: (
+    input: Omit<CreateDocumentShareInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<CreateDocumentShareResult>>;
+  readonly revokeDocumentShare: (
+    input: Omit<RevokeDocumentShareInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<DocumentShareGrant>>;
+  readonly exportDocuments: (
+    input: Omit<CreateDocumentBatchExportInput, 'idempotencyKey'>,
+    signal?: AbortSignal
+  ) => Promise<DocumentMutationResult<DocumentBatchExportResult>>;
+  readonly redeemSharedDocument: (
+    token: string,
+    signal?: AbortSignal
+  ) => Promise<RedeemedDocumentShare>;
 }
 
 const DocumentsContext = createContext<DocumentsContextValue | null>(null);
@@ -166,16 +200,25 @@ export function DocumentsProvider({ children }: { readonly children: React.React
   const [checklistStatus, setChecklistStatus] = useState<DocumentsContextStatus>('idle');
   const [checklistDashboard, setChecklistDashboard] = useState<ProposalChecklistDashboard | null>(null);
   const [checklistErrorMessage, setChecklistErrorMessage] = useState<string | null>(null);
+  const [complianceStatus, setComplianceStatus] = useState<DocumentsContextStatus>('idle');
+  const [complianceDashboard, setComplianceDashboard] = useState<DocumentComplianceDashboard | null>(null);
+  const [complianceErrorMessage, setComplianceErrorMessage] = useState<string | null>(null);
   const requestSequence = useRef(0);
   const governanceRequestSequence = useRef(0);
   const checklistRequestSequence = useRef(0);
+  const complianceRequestSequence = useRef(0);
   const abortController = useRef<AbortController | null>(null);
   const governanceAbortController = useRef<AbortController | null>(null);
   const checklistAbortController = useRef<AbortController | null>(null);
+  const complianceAbortController = useRef<AbortController | null>(null);
   const activeOrganizationId = activeOrganization?.id ?? null;
+  const activeDocumentContextKey = `${activeOrganizationId ?? ''}:${session?.user.id ?? ''}`;
+  const activeDocumentContextKeyRef = useRef(activeDocumentContextKey);
+  activeDocumentContextKeyRef.current = activeDocumentContextKey;
   const service = useMemo(() => new DocumentApplicationService(), []);
   const uploadService = useMemo(() => new DocumentUploadService(service), [service]);
   const checklistService = useMemo(() => new ProposalChecklistApplicationService(), []);
+  const complianceService = useMemo(() => new DocumentComplianceApplicationService(), []);
   const canViewGovernance = activePermissions.has('documents:view_requirements');
 
   const resolveProposalChecklistSource = useCallback(
@@ -355,7 +398,12 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     setGovernanceStatus('loading');
     setGovernanceErrorMessage(null);
     try {
-      const result = await service.getGovernanceDashboard(buildContext(), 30, controller.signal);
+      const policy = await complianceService.getAlertPolicy(buildContext(), controller.signal);
+      const result = await service.getGovernanceDashboard(
+        buildContext(),
+        policy.warningDays,
+        controller.signal
+      );
       if (controller.signal.aborted || sequence !== governanceRequestSequence.current) return;
       setGovernance(result);
       setGovernanceStatus(
@@ -382,7 +430,7 @@ export function DocumentsProvider({ children }: { readonly children: React.React
         setGovernanceStatus('error');
       }
     }
-  }, [activeMembership, activeOrganizationId, authStatus, buildContext, canViewGovernance, organizationStatus, service, session]);
+  }, [activeMembership, activeOrganizationId, authStatus, buildContext, canViewGovernance, complianceService, organizationStatus, service, session]);
 
   const refreshChecklistDashboard = useCallback(async () => {
     if (
@@ -430,6 +478,53 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     }
   }, [activeMembership, activeOrganizationId, authStatus, buildContext, canViewGovernance, checklistService, organizationStatus, session]);
 
+  const refreshComplianceDashboard = useCallback(async () => {
+    if (
+      authStatus !== 'authenticated' ||
+      organizationStatus !== 'active' ||
+      !activeOrganizationId ||
+      !session ||
+      !activeMembership
+    ) {
+      setComplianceDashboard(null);
+      setComplianceStatus('idle');
+      setComplianceErrorMessage(null);
+      return;
+    }
+    complianceAbortController.current?.abort();
+    const controller = new AbortController();
+    complianceAbortController.current = controller;
+    const sequence = ++complianceRequestSequence.current;
+    setComplianceStatus('loading');
+    setComplianceErrorMessage(null);
+    try {
+      const result = await complianceService.getDashboard(buildContext(), controller.signal);
+      if (controller.signal.aborted || sequence !== complianceRequestSequence.current) return;
+      setComplianceDashboard(result);
+      setComplianceStatus(
+        result.alerts.length > 0 || result.shares.length > 0 || result.exports.length > 0
+          ? 'ready'
+          : 'empty'
+      );
+    } catch (error) {
+      if (controller.signal.aborted || sequence !== complianceRequestSequence.current) return;
+      setComplianceDashboard(null);
+      if (error instanceof DocumentDomainError) {
+        setComplianceErrorMessage(error.message);
+        setComplianceStatus(
+          error.code === 'SERVICE_UNAVAILABLE'
+            ? 'unavailable'
+            : error.code === 'FORBIDDEN'
+              ? 'forbidden'
+              : 'error'
+        );
+      } else {
+        setComplianceErrorMessage('Não foi possível consultar validades e saídas documentais.');
+        setComplianceStatus('error');
+      }
+    }
+  }, [activeMembership, activeOrganizationId, authStatus, buildContext, complianceService, organizationStatus, session]);
+
   useEffect(() => {
     void refresh();
     return () => abortController.current?.abort();
@@ -446,18 +541,27 @@ export function DocumentsProvider({ children }: { readonly children: React.React
   }, [refreshChecklistDashboard]);
 
   useEffect(() => {
+    void refreshComplianceDashboard();
+    return () => complianceAbortController.current?.abort();
+  }, [refreshComplianceDashboard]);
+
+  useEffect(() => {
     requestSequence.current += 1;
     abortController.current?.abort();
     governanceRequestSequence.current += 1;
     governanceAbortController.current?.abort();
     checklistRequestSequence.current += 1;
     checklistAbortController.current?.abort();
+    complianceRequestSequence.current += 1;
+    complianceAbortController.current?.abort();
     setReferences([]);
     setGovernance(null);
     setChecklistDashboard(null);
+    setComplianceDashboard(null);
     setErrorMessage(null);
     setGovernanceErrorMessage(null);
     setChecklistErrorMessage(null);
+    setComplianceErrorMessage(null);
   }, [activeOrganizationId, session?.user.id]);
 
   const getReferenceById = useCallback(
@@ -487,9 +591,12 @@ export function DocumentsProvider({ children }: { readonly children: React.React
 
   const executeMutation = useCallback(
     async <T,>(operation: () => Promise<T>): Promise<DocumentMutationResult<T>> => {
+      const mutationContextKey = activeDocumentContextKeyRef.current;
       try {
         const data = await operation();
-        await Promise.all([refresh(), refreshGovernance()]);
+        if (mutationContextKey === activeDocumentContextKeyRef.current) {
+          await Promise.all([refresh(), refreshGovernance()]);
+        }
         return { success: true, data };
       } catch (error) {
         if (error instanceof DocumentDomainError) {
@@ -542,6 +649,7 @@ export function DocumentsProvider({ children }: { readonly children: React.React
       signal: AbortSignal,
       idempotencyKey: string
     ) => {
+      const mutationContextKey = activeDocumentContextKeyRef.current;
       const result = await uploadService.uploadDocument(buildContext(), {
         file,
         metadata,
@@ -549,7 +657,9 @@ export function DocumentsProvider({ children }: { readonly children: React.React
         signal,
         idempotencyKey,
       });
-      await Promise.all([refresh(), refreshGovernance()]);
+      if (mutationContextKey === activeDocumentContextKeyRef.current) {
+        await Promise.all([refresh(), refreshGovernance()]);
+      }
       return result;
     },
     [buildContext, refresh, refreshGovernance, uploadService]
@@ -568,6 +678,7 @@ export function DocumentsProvider({ children }: { readonly children: React.React
       onProgress: (progress: DocumentUploadProgress) => void,
       signal: AbortSignal
     ) => {
+      const mutationContextKey = activeDocumentContextKeyRef.current;
       const result = await uploadService.replaceStoredDocument(buildContext(), {
         ...input,
         file,
@@ -575,7 +686,9 @@ export function DocumentsProvider({ children }: { readonly children: React.React
         signal,
         idempotencyKey: createMutationKey('document-version-upload'),
       });
-      await Promise.all([refresh(), refreshGovernance()]);
+      if (mutationContextKey === activeDocumentContextKeyRef.current) {
+        await Promise.all([refresh(), refreshGovernance()]);
+      }
       return result;
     },
     [buildContext, refresh, refreshGovernance, uploadService]
@@ -627,9 +740,12 @@ export function DocumentsProvider({ children }: { readonly children: React.React
 
   const executeChecklistMutation = useCallback(
     async <T,>(operation: () => Promise<T>): Promise<DocumentMutationResult<T>> => {
+      const mutationContextKey = activeDocumentContextKeyRef.current;
       try {
         const data = await operation();
-        await refreshChecklistDashboard();
+        if (mutationContextKey === activeDocumentContextKeyRef.current) {
+          await refreshChecklistDashboard();
+        }
         return { success: true, data };
       } catch (error) {
         if (error instanceof DocumentDomainError) {
@@ -674,6 +790,84 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     [buildContext, checklistService, executeChecklistMutation]
   );
 
+  const executeComplianceMutation = useCallback(
+    async <T,>(operation: () => Promise<T>): Promise<DocumentMutationResult<T>> => {
+      const mutationContextKey = activeDocumentContextKeyRef.current;
+      try {
+        const data = await operation();
+        if (mutationContextKey === activeDocumentContextKeyRef.current) {
+          await Promise.all([refreshComplianceDashboard(), refreshGovernance()]);
+        }
+        return { success: true, data };
+      } catch (error) {
+        if (error instanceof DocumentDomainError) {
+          return { success: false, error: error.message, errorCode: error.code };
+        }
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return { success: false, error: 'Operação cancelada.', errorCode: 'UPLOAD_CANCELLED' };
+        }
+        return { success: false, error: 'Não foi possível concluir a saída documental.' };
+      }
+    },
+    [refreshComplianceDashboard, refreshGovernance]
+  );
+
+  const configureDocumentAlertPolicy = useCallback(
+    (input: Omit<ConfigureDocumentAlertPolicyInput, 'idempotencyKey'>) =>
+      executeComplianceMutation(() =>
+        complianceService.configureAlertPolicy(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('document-alert-policy'),
+        })
+      ),
+    [buildContext, complianceService, executeComplianceMutation]
+  );
+
+  const createDocumentShare = useCallback(
+    (input: Omit<CreateDocumentShareInput, 'idempotencyKey'>) =>
+      executeComplianceMutation(() =>
+        complianceService.createShare(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('document-share'),
+        })
+      ),
+    [buildContext, complianceService, executeComplianceMutation]
+  );
+
+  const revokeDocumentShare = useCallback(
+    (input: Omit<RevokeDocumentShareInput, 'idempotencyKey'>) =>
+      executeComplianceMutation(() =>
+        complianceService.revokeShare(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('document-share-revoke'),
+        })
+      ),
+    [buildContext, complianceService, executeComplianceMutation]
+  );
+
+  const exportDocuments = useCallback(
+    (
+      input: Omit<CreateDocumentBatchExportInput, 'idempotencyKey'>,
+      signal?: AbortSignal
+    ) =>
+      executeComplianceMutation(() =>
+        complianceService.createBatchExport(
+          buildContext(),
+          {
+            ...input,
+            idempotencyKey: createMutationKey('document-export'),
+          },
+          signal
+        )
+      ),
+    [buildContext, complianceService, executeComplianceMutation]
+  );
+
+  const redeemSharedDocument = useCallback(
+    (token: string, signal?: AbortSignal) => complianceService.redeemShareToken(token, signal),
+    [complianceService]
+  );
+
   const value = useMemo<DocumentsContextValue>(
     () => ({
       status,
@@ -686,11 +880,15 @@ export function DocumentsProvider({ children }: { readonly children: React.React
       checklistStatus,
       checklistDashboard,
       checklistErrorMessage,
+      complianceStatus,
+      complianceDashboard,
+      complianceErrorMessage,
       isLoading: status === 'loading',
       setFilters,
       refresh,
       refreshGovernance,
       refreshChecklistDashboard,
+      refreshComplianceDashboard,
       getReferenceById,
       listDocumentsForProposal,
       listVersionHistory,
@@ -707,8 +905,13 @@ export function DocumentsProvider({ children }: { readonly children: React.React
       configureChecklistTemplate,
       applyProposalChecklist,
       transitionProposalChecklistItem,
+      configureDocumentAlertPolicy,
+      createDocumentShare,
+      revokeDocumentShare,
+      exportDocuments,
+      redeemSharedDocument,
     }),
-    [applyProposalChecklist, archiveReference, cancelRequirement, checklistDashboard, checklistErrorMessage, checklistStatus, configureChecklistTemplate, createRequirement, errorMessage, filters, fulfillRequirement, getDocumentContent, getReferenceById, governance, governanceErrorMessage, governanceStatus, listDocumentsForProposal, listVersionHistory, references, refresh, refreshChecklistDashboard, refreshGovernance, registerReference, replaceReference, replaceStoredDocument, status, transitionProposalChecklistItem, uploadDocument, waiveRequirement]
+    [applyProposalChecklist, archiveReference, cancelRequirement, checklistDashboard, checklistErrorMessage, checklistStatus, complianceDashboard, complianceErrorMessage, complianceStatus, configureChecklistTemplate, configureDocumentAlertPolicy, createDocumentShare, createRequirement, errorMessage, exportDocuments, filters, fulfillRequirement, getDocumentContent, getReferenceById, governance, governanceErrorMessage, governanceStatus, listDocumentsForProposal, listVersionHistory, redeemSharedDocument, references, refresh, refreshChecklistDashboard, refreshComplianceDashboard, refreshGovernance, registerReference, replaceReference, replaceStoredDocument, revokeDocumentShare, status, transitionProposalChecklistItem, uploadDocument, waiveRequirement]
   );
 
   return <DocumentsContext.Provider value={value}>{children}</DocumentsContext.Provider>;

@@ -130,6 +130,14 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Checklists de Propostas | AgroCore',
     announcementTitle: 'Checklists de propostas',
   },
+  [ROUTES.DOCUMENT_COMPLIANCE]: {
+    documentTitle: 'Validades e Saídas | AgroCore',
+    announcementTitle: 'Validades e saídas documentais',
+  },
+  [ROUTES.DOCUMENT_SHARE]: {
+    documentTitle: 'Documento Protegido | AgroCore',
+    announcementTitle: 'Documento protegido',
+  },
   [ROUTES.DOCUMENTS_DETAIL]: {
     documentTitle: 'Documento | AgroCore',
     announcementTitle: 'Detalhes do documento',

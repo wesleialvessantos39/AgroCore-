@@ -1,0 +1,3 @@
+[functions.document-share]
+# A autorização é o token AgroCore de 256 bits validado e consumido pela própria função.
+verify_jwt = false

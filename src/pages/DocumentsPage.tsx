@@ -1,4 +1,4 @@
-import { Archive, ClipboardCheck, ClipboardList, FileCheck2, Plus, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Archive, CalendarClock, ClipboardCheck, ClipboardList, FileCheck2, Plus, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthorization } from '../authorization/useAuthorization';
 import { DOCUMENT_THEME } from '../documents/theme';
@@ -66,6 +66,14 @@ export function DocumentsPage() {
               </button>
             </>
           )}
+          <button
+            type="button"
+            className={DOCUMENT_THEME.buttonSecondary}
+            onClick={() => navigate(ROUTES.DOCUMENT_COMPLIANCE)}
+          >
+            <CalendarClock className="h-4 w-4" aria-hidden="true" />
+            Validades e saídas
+          </button>
           {can('documents:upload') && (
             <button
               type="button"

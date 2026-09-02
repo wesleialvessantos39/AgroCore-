@@ -380,7 +380,7 @@ export class ProposalChecklistApplicationService {
         source: await context.resolveProposalChecklistSource(checklist.proposalId),
       }))
     );
-    const checklists = visibility.flatMap(({ checklist, source }) => {
+    const visibleChecklists = visibility.flatMap(({ checklist, source }) => {
       if (
         !source.exists ||
         source.organizationId !== context.organizationId ||
@@ -394,12 +394,56 @@ export class ProposalChecklistApplicationService {
     });
     const now = this.clock.now();
     const today = todayUtc(now);
+    const linkedDocumentIds = [...new Set(
+      visibleChecklists.flatMap((checklist) =>
+        checklist.items.flatMap((item) => item.linkedDocumentId ? [item.linkedDocumentId] : [])
+      )
+    )];
+    const linkedDocuments = await Promise.all(
+      linkedDocumentIds.map((documentId) =>
+        this.documentGateway.getReferenceById(context.organizationId, documentId)
+      )
+    );
+    const documentById = new Map(
+      linkedDocuments.flatMap((document) => document ? [[document.id, document] as const] : [])
+    );
+    const checklists = visibleChecklists.map((checklist) => {
+      const items = checklist.items.map((item) => {
+        const document = item.linkedDocumentId
+          ? documentById.get(item.linkedDocumentId)
+          : undefined;
+        if (
+          item.state !== 'expired' &&
+          document?.expiresOn &&
+          document.expiresOn < today
+        ) {
+          return {
+            ...item,
+            effectiveState: 'expired' as const,
+            effectiveStateReason: 'A validade do documento vinculado terminou.',
+          };
+        }
+        return structuredClone(item);
+      });
+      const required = items.filter((item) => item.required);
+      return {
+        ...checklist,
+        items,
+        status:
+          required.length > 0 &&
+          required.every((item) => (item.effectiveState ?? item.state) === 'approved')
+            ? 'completed' as const
+            : 'active' as const,
+      };
+    });
     const agendaEntries: ProposalChecklistAgendaEntry[] = [];
     for (const checklist of checklists) {
       for (const item of checklist.items) {
         if (
           item.dueOn &&
-          ['pending', 'received', 'in_review', 'rejected', 'expired'].includes(item.state)
+          ['pending', 'received', 'in_review', 'rejected', 'expired'].includes(
+            item.effectiveState ?? item.state
+          )
         ) {
           agendaEntries.push({
             id: `document-checklist:${checklist.id}:${item.id}`,
@@ -410,7 +454,7 @@ export class ProposalChecklistApplicationService {
             proposalTitle: checklist.proposalTitle,
             itemTitle: item.title,
             dueOn: item.dueOn,
-            state: item.state,
+            state: item.effectiveState ?? item.state,
             isOverdue: item.dueOn < today,
           });
         }
@@ -421,7 +465,7 @@ export class ProposalChecklistApplicationService {
     );
     const items = checklists.flatMap((checklist) => checklist.items);
     const count = (state: ProposalChecklistItemState) =>
-      items.filter((item) => item.state === state).length;
+      items.filter((item) => (item.effectiveState ?? item.state) === state).length;
     return {
       generatedAt: now.toISOString(),
       templates: templates.map(cloneTemplate),

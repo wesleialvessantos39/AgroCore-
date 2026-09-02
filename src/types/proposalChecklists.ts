@@ -79,6 +79,9 @@ export interface ProposalChecklistItem {
   readonly position: number;
   readonly dueOn?: string;
   readonly state: ProposalChecklistItemState;
+  /** Situação calculada sem alterar a decisão histórica persistida. */
+  readonly effectiveState?: ProposalChecklistItemState;
+  readonly effectiveStateReason?: string;
   readonly linkedDocumentId?: DocumentReferenceId;
   readonly receivedAt?: string;
   readonly reviewedAt?: string;

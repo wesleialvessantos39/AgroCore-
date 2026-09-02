@@ -462,6 +462,55 @@ await test('Fluxo completo registra análise, aprovação, ator e horário do se
   assert.equal(approved.history.at(-1)?.actorUserId, 'designer-a');
 });
 
+await test('Aprovação preserva o histórico, mas deixa de concluir o checklist quando o arquivo vence', async () => {
+  const { checklists, documents, checklist, clock } = await configuredHarness();
+  const document = await registerProposalDocument(documents, {
+    expiresOn: '2026-09-20',
+    idempotencySuffix: 'approved-expiry',
+  });
+  const received = await checklists.transitionItem(checklistContext('capturer', 'capturer-a'), {
+    checklistId: checklist.id,
+    itemId: checklist.items[0].id,
+    expectedVersion: 1,
+    targetState: 'received',
+    documentId: document.id,
+    idempotencyKey: 'transition-effective-received',
+  });
+  const review = await checklists.transitionItem(checklistContext('manager', 'manager-a'), {
+    checklistId: checklist.id,
+    itemId: received.items[0].id,
+    expectedVersion: 2,
+    targetState: 'in_review',
+    idempotencyKey: 'transition-effective-review',
+  });
+  const approved = await checklists.transitionItem(checklistContext('manager', 'manager-a'), {
+    checklistId: checklist.id,
+    itemId: review.items[0].id,
+    expectedVersion: 3,
+    targetState: 'approved',
+    reason: 'Documento válido na data da análise.',
+    idempotencyKey: 'transition-effective-approved',
+  });
+  clock.set('2026-09-21T00:00:00.000Z');
+  const dashboard = await checklists.getDashboard(checklistContext('manager', 'manager-a'));
+  const projected = dashboard.checklists[0];
+  assert.equal(projected.items[0].state, 'approved');
+  assert.equal(projected.items[0].effectiveState, 'expired');
+  assert.equal(projected.status, 'active');
+  assert.equal(projected.history.at(-1)?.toState, 'approved');
+  assert.equal(dashboard.totals.approved, 0);
+  assert.equal(dashboard.totals.expired, 1);
+  const expired = await checklists.transitionItem(checklistContext('manager', 'manager-a'), {
+    checklistId: checklist.id,
+    itemId: approved.items[0].id,
+    expectedVersion: approved.items[0].versionNumber,
+    targetState: 'expired',
+    idempotencyKey: 'transition-effective-expired',
+  });
+  assert.equal(expired.items[0].state, 'expired');
+  assert.deepEqual(expired.history.slice(-2).map((entry) => entry.toState), ['approved', 'expired']);
+});
+
 await test('Recusa exige motivo e reenvio reinicia os dados de análise', async () => {
   const { checklists, documents, checklist } = await configuredHarness();
   const document = await registerProposalDocument(documents);

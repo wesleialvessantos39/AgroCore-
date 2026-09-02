@@ -109,6 +109,9 @@ export type Permission =
   | 'documents:fulfill_requirements'
   | 'documents:review_requirements'
   | 'documents:manage_requirements'
+  | 'documents:manage_validity'
+  | 'documents:share'
+  | 'documents:export'
 
   // Escopo: Vistorias e Visitas
   | 'surveys_and_visits:view'

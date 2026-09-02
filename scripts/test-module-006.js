@@ -16,9 +16,10 @@ try {
   run('scripts/test-document-upload.ts');
   run('scripts/test-document-versioning.ts');
   run('scripts/test-proposal-checklists.ts');
+  run('scripts/test-document-compliance.ts');
   run('scripts/test-documents-ui-copy.ts');
   run('scripts/test-documents-theme.js');
-  console.log('\n✅ MÓDULO 006 — OE-006.001 A OE-006.005 APROVADAS');
+  console.log('\n✅ MÓDULO 006 — OE-006.001 A OE-006.006 APROVADAS');
 } catch (error) {
   console.error('\n❌ Falha na homologação do Módulo 006.');
   process.exit(1);

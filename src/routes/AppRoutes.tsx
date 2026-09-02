@@ -175,6 +175,14 @@ const ProposalChecklistsPage = lazy(() =>
   import('../pages/ProposalChecklistsPage').then((module) => ({ default: module.ProposalChecklistsPage }))
 );
 
+const DocumentCompliancePage = lazy(() =>
+  import('../pages/DocumentCompliancePage').then((module) => ({ default: module.DocumentCompliancePage }))
+);
+
+const SharedDocumentPage = lazy(() =>
+  import('../pages/SharedDocumentPage').then((module) => ({ default: module.SharedDocumentPage }))
+);
+
 const DocumentReferenceDetailPage = lazy(() =>
   import('../pages/DocumentReferenceDetailPage').then((module) => ({ default: module.DocumentReferenceDetailPage }))
 );
@@ -218,7 +226,7 @@ function ScrollAndFocusManager() {
     document.title = metadata.documentTitle;
 
     // 2. Tratamento de âncora (ex: #agrocore-beneficios)
-    if (hash) {
+    if (hash && pathname !== ROUTES.DOCUMENT_SHARE) {
       const element = document.getElementById(hash.replace('#', ''));
       if (element) {
         element.scrollIntoView({ behavior: 'smooth' });
@@ -277,6 +285,9 @@ export function AppRoutes() {
 
           {/* Rota de Acesso Negado */}
           <Route path={ROUTES.ACCESS_DENIED} element={<AccessDeniedPage />} />
+
+          {/* Acesso público restrito por token temporário e não por sessão do sistema. */}
+          <Route path={ROUTES.DOCUMENT_SHARE} element={<SharedDocumentPage />} />
 
           {/* Rotas Autenticadas de Transição e Contexto Organizacional */}
           <Route
@@ -603,6 +614,14 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission="documents:view_requirements">
                   <ProposalChecklistsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="validades"
+              element={
+                <RequirePermission permission="documents:view">
+                  <DocumentCompliancePage />
                 </RequirePermission>
               }
             />

@@ -67,6 +67,13 @@ function stripPreviewPlugin(isProduction: boolean) {
           return '\0virtual:production-proposals-gateway-factory';
         }
         if (
+          normalizedTarget.includes('/documents/documentComplianceGatewayFactory') ||
+          id.includes('/documents/documentComplianceGatewayFactory') ||
+          (importer && importer.includes('/documents/') && id === './documentComplianceGatewayFactory')
+        ) {
+          return '\0virtual:production-document-compliance-gateway-factory';
+        }
+        if (
           normalizedTarget.includes('/documents/proposalChecklistGatewayFactory') ||
           id.includes('/documents/proposalChecklistGatewayFactory') ||
           (importer && importer.includes('/documents/') && id === './proposalChecklistGatewayFactory')
@@ -285,6 +292,26 @@ function stripPreviewPlugin(isProduction: boolean) {
             return new UnavailableProposalChecklistGateway();
           }
           export function setProposalChecklistGatewayForTesting() {}
+        `;
+      }
+
+      if (id === '\0virtual:production-document-compliance-gateway-factory') {
+        return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseDocumentComplianceGateway } from '/src/documents/supabaseDocumentComplianceGateway.ts';
+          import { UnavailableDocumentComplianceGateway } from '/src/documents/unavailableDocumentComplianceGateway.ts';
+          let activeGateway = null;
+          export function getDocumentComplianceGateway() {
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseDocumentComplianceGateway(supabase)
+              : new UnavailableDocumentComplianceGateway();
+            return activeGateway;
+          }
+          export function setDocumentComplianceGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
         `;
       }
 

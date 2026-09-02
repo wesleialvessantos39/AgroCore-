@@ -613,6 +613,27 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     name: 'Gerenciar Pendências Documentais',
     description: 'Criar, dispensar e cancelar pendências documentais da organização.',
   },
+  {
+    id: 'documents:manage_validity',
+    scope: 'documents',
+    targetScope: 'organization',
+    name: 'Configurar Alertas de Validade',
+    description: 'Definir as janelas de aviso e criticidade para documentos próximos do vencimento.',
+  },
+  {
+    id: 'documents:share',
+    scope: 'documents',
+    targetScope: 'organization',
+    name: 'Compartilhar Documentos',
+    description: 'Criar e revogar acessos temporários aos arquivos do próprio escopo autorizado.',
+  },
+  {
+    id: 'documents:export',
+    scope: 'documents',
+    targetScope: 'organization',
+    name: 'Exportar Documentos',
+    description: 'Gerar exportações em lote auditadas somente com documentos autorizados.',
+  },
 
   // Vistorias e Visitas
   {

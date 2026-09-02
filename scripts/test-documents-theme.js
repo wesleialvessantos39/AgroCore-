@@ -9,6 +9,8 @@ const TARGETS = [
   'src/pages/DocumentGovernancePage.tsx',
   'src/pages/DocumentRequirementCreatePage.tsx',
   'src/pages/ProposalChecklistsPage.tsx',
+  'src/pages/DocumentCompliancePage.tsx',
+  'src/pages/SharedDocumentPage.tsx',
 ];
 
 const FORBIDDEN = [
