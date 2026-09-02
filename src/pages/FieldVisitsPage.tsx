@@ -8,6 +8,7 @@ import { FIELD_VISIT_THEME } from '../fieldVisits/theme';
 import { useProperties } from '../properties/useProperties';
 import { useProposals } from '../proposals/useProposals';
 import { useAppraisals } from '../appraisals/useAppraisals';
+import type { Client } from '../types/client';
 import type {
   TechnicalVisit,
   TechnicalVisitActivityType,
@@ -30,6 +31,12 @@ const ACTIVITY_LABEL: Readonly<Record<TechnicalVisitActivityType, string>> = {
   document_collection: 'Coleta documental',
   other: 'Outra atividade',
 };
+
+function getClientDisplayName(client: Client): string {
+  return client.personType === 'individual'
+    ? client.name
+    : client.tradeName?.trim() || client.companyName;
+}
 
 function toLocalInputValue(date: Date): string {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -108,8 +115,10 @@ export const FieldVisitsPage: React.FC = () => {
     [appraisals.appraisals, clientId, propertyId]
   );
 
-  const clientName = (id: string) =>
-    clients.clients.find((client) => client.id === id)?.name ?? 'Cliente';
+  const clientName = (id: string) => {
+    const client = clients.clients.find((item) => item.id === id);
+    return client ? getClientDisplayName(client) : 'Cliente';
+  };
 
   const propertyName = (id: string | null) =>
     id ? properties.properties.find((property) => property.id === id)?.name ?? 'Imóvel' : null;
@@ -248,7 +257,7 @@ export const FieldVisitsPage: React.FC = () => {
               >
                 <option value="">Selecione</option>
                 {activeClients.map((client) => (
-                  <option key={client.id} value={client.id}>{client.name}</option>
+                  <option key={client.id} value={client.id}>{getClientDisplayName(client)}</option>
                 ))}
               </select>
             </label>
