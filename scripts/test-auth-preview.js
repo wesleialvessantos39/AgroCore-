@@ -21,6 +21,7 @@ import {
 } from '../src/auth/recoveryService.ts';
 
 // Mock de ambiente de navegador para testes
+process.env.NODE_ENV = 'development';
 const memoryStorage = new Map();
 globalThis.sessionStorage = {
   getItem: (key) => memoryStorage.get(key) || null,

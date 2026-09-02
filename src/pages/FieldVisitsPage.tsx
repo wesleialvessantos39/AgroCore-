@@ -378,12 +378,13 @@ export const FieldVisitsPage: React.FC = () => {
         </form>
       )}
 
-      <section className={FIELD_VISIT_THEME.surface + ' p-4 sm:p-5'}>
+      <section id="field-visits-filter-section" className={FIELD_VISIT_THEME.surface + ' p-4 sm:p-5'}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <label className="w-full max-w-xs space-y-1.5 text-sm font-medium">
-            <span>Situação</span>
+          <label htmlFor="field-visits-filter-status" className="w-full flex-1 space-y-1.5 text-sm font-medium">
+            <span className="block">Situação</span>
             <select
-              className={FIELD_VISIT_THEME.input}
+              id="field-visits-filter-status"
+              className={FIELD_VISIT_THEME.input + ' cursor-pointer'}
               value={filters.status ?? 'all'}
               onChange={(event) =>
                 setFilters({ status: event.target.value as TechnicalVisitStatus | 'all' })
@@ -397,8 +398,9 @@ export const FieldVisitsPage: React.FC = () => {
           </label>
           {filters.status && filters.status !== 'all' && (
             <button
+              id="field-visits-clear-filters"
               type="button"
-              className={FIELD_VISIT_THEME.buttonSecondary}
+              className={FIELD_VISIT_THEME.buttonSecondary + ' w-full sm:w-auto shrink-0'}
               onClick={clearFilters}
             >
               Limpar filtro

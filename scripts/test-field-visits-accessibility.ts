@@ -124,8 +124,8 @@ test('14. Formulário é mobile-first nos viewports 320 px e 390 px', () => {
 });
 
 test('15. Formulário não introduz largura fixa que force overflow', () => {
-  assert.equal(/min-w-\\[(?:[4-9]\\d\\d|\\d{4,})px\\]/.test(fieldForm), false);
-  assert.equal(/w-\\[(?:[4-9]\\d\\d|\\d{4,})px\\]/.test(fieldForm), false);
+  assert.equal(/min-w-\[(?:[4-9]\d\d|\d{4,})px\]/.test(fieldForm), false);
+  assert.equal(/w-\[(?:[4-9]\d\d|\d{4,})px\]/.test(fieldForm), false);
 });
 
 test('16. Tipos numéricos, data e horário usam controles adequados ao teclado móvel', () => {

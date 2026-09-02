@@ -126,16 +126,15 @@ export class SupabaseTechnicalVisitFieldFormGateway
     visitId: string,
     signal?: AbortSignal
   ): Promise<TechnicalVisitFieldForm | null> {
-    let request = this.client
+    let query = this.client
       .from('technical_visit_field_forms')
       .select(
         'id,organization_id,visit_id,status,version,payload,created_by_user_id,created_at,updated_by_user_id,updated_at,submitted_by_user_id,submitted_at'
       )
       .eq('organization_id', organizationId)
-      .eq('visit_id', visitId)
-      .maybeSingle();
-    if (signal) request = request.abortSignal(signal);
-    const { data, error } = await request;
+      .eq('visit_id', visitId);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error } = await query.maybeSingle();
     if (error) throw mapError(error);
     return data ? mapForm(data as unknown as FieldFormRow) : null;
   }
