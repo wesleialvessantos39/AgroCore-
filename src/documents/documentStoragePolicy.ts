@@ -47,7 +47,13 @@ export function buildDocumentStoragePath(input: {
 }
 
 export function validateDocumentFile(file: Pick<File, 'name' | 'size' | 'type'>): DocumentMimeType {
-  if (!file.name || /[\u0000-\u001f\u007f]/.test(file.name)) {
+  if (
+    !file.name ||
+    file.name.length > 255 ||
+    /[\u0000-\u001f\u007f]/.test(file.name) ||
+    /[/\\]/.test(file.name) ||
+    file.name.includes('..')
+  ) {
     throw new DocumentDomainError('INVALID_FILE', 'O arquivo possui nome inválido.');
   }
   if (!Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
@@ -56,11 +62,28 @@ export function validateDocumentFile(file: Pick<File, 'name' | 'size' | 'type'>)
   if (!isDocumentMimeType(file.type)) {
     throw new DocumentDomainError('INVALID_FILE', 'Use arquivos PDF, JPEG, PNG ou TIFF.');
   }
+  const extMatch = file.name.match(/\.([A-Za-z0-9]+)$/);
+  if (!extMatch) {
+    throw new DocumentDomainError('INVALID_FILE', 'O arquivo possui nome inválido.');
+  }
+  const ext = extMatch[1].toLowerCase();
+  const allowedExtensions: Record<DocumentMimeType, readonly string[]> = {
+    'application/pdf': ['pdf'],
+    'image/jpeg': ['jpg', 'jpeg'],
+    'image/png': ['png'],
+    'image/tiff': ['tif', 'tiff'],
+  };
+  if (!allowedExtensions[file.type]?.includes(ext)) {
+    throw new DocumentDomainError('INVALID_FILE', 'A extensão do arquivo não corresponde ao formato informado.');
+  }
   return file.type;
 }
 
 export async function verifyDocumentFileSignature(file: File): Promise<void> {
   const mimeType = validateDocumentFile(file);
+  if (file.size < 8) {
+    throw new DocumentDomainError('INVALID_FILE', 'O arquivo não possui tamanho suficiente para validação.');
+  }
   const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
   const matches =
     (mimeType === 'application/pdf' && header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46 && header[4] === 0x2d) ||
