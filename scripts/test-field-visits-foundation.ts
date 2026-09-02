@@ -412,7 +412,7 @@ await test('20. Alteração sensível exige motivo e versão esperada', async ()
   const visit = await service.createVisit(ctx, validInput());
   await assert.rejects(
     () => service.updateVisit(ctx, visit.id, {
-      scheduledFor: '2026-09-06T12:00:00.000Z',
+      purpose: 'Finalidade ajustada',
       expectedVersion: visit.version,
       changeReason: '',
     }),
@@ -421,9 +421,9 @@ await test('20. Alteração sensível exige motivo e versão esperada', async ()
   );
   await assert.rejects(
     () => service.updateVisit(ctx, visit.id, {
-      scheduledFor: '2026-09-06T12:00:00.000Z',
+      purpose: 'Finalidade ajustada',
       expectedVersion: 999,
-      changeReason: 'Remarcação autorizada',
+      changeReason: 'Ajuste autorizado',
     }),
     (error: unknown) =>
       error instanceof TechnicalVisitDomainError && error.code === 'CONCURRENCY_CONFLICT'
@@ -435,17 +435,17 @@ await test('21. Alteração de planejamento incrementa versão e preserva audito
   const ctx = context();
   const visit = await service.createVisit(ctx, validInput());
   const updated = await service.updateVisit(ctx, visit.id, {
-    scheduledFor: '2026-09-06T12:00:00.000Z',
+    purpose: 'Finalidade atualizada após alinhamento',
     expectedVersion: visit.version,
     changeReason: 'Ajuste solicitado pelo cliente',
   });
   assert.equal(updated.version, 2);
-  assert.equal(updated.scheduledFor, '2026-09-06T12:00:00.000Z');
+  assert.equal(updated.purpose, 'Finalidade atualizada após alinhamento');
   const audit = await service.listAudit(ctx, visit.id);
   assert.equal(audit.length, 2);
   assert.equal(audit[1].action, 'updated');
   assert.equal(audit[1].reason, 'Ajuste solicitado pelo cliente');
-  assert.deepEqual(audit[1].changedFields, ['scheduledFor']);
+  assert.deepEqual(audit[1].changedFields, ['purpose']);
 });
 
 await test('22. Confirmação é feita por perfil de agendamento', async () => {
@@ -598,12 +598,12 @@ await test('29. Rota, navegação, provider e barreira de build estão integrado
   assert.equal(leak.includes('PreviewTechnicalVisitGateway'), true);
 });
 
-await test('30. Escopo não antecipa agenda detalhada, frota, fotos ou formulário de campo', () => {
+await test('30. Escopo da fundação não antecipa formulário de campo, fotos ou geolocalização', () => {
   const source = [
     fs.readFileSync('src/types/technicalVisit.ts', 'utf8'),
     fs.readFileSync('src/fieldVisits/technicalVisitService.ts', 'utf8'),
   ].join('\n');
-  assert.equal(/vehicleId|routePlan|photoEvidence|formSections|checklistItems/.test(source), false);
+  assert.equal(/photoEvidence|formSections|fieldResponses|latitude|longitude/.test(source), false);
 });
 
 console.log('\n====================================================');

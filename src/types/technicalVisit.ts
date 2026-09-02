@@ -18,6 +18,61 @@ export type TechnicalVisitActivityType =
   | 'document_collection'
   | 'other';
 
+export type TechnicalVisitScheduleConflictReason =
+  | 'responsible'
+  | 'participant'
+  | 'vehicle';
+
+export interface TechnicalVisitAddress {
+  readonly addressLine: string;
+  readonly city: string;
+  readonly state: string;
+  readonly postalCode: string | null;
+  readonly notes: string | null;
+}
+
+export interface TechnicalVisitPreparationChecklistItem {
+  readonly id: string;
+  readonly label: string;
+  readonly required: boolean;
+  readonly completed: boolean;
+  readonly completedByUserId: string | null;
+  readonly completedAt: string | null;
+}
+
+export interface TechnicalVisitVehicleReference {
+  readonly referenceId: string;
+  readonly label: string;
+}
+
+export interface TechnicalVisitScheduleConflict {
+  readonly visitId: TechnicalVisitId;
+  readonly scheduledFor: string;
+  readonly endsAt: string;
+  readonly reasons: readonly TechnicalVisitScheduleConflictReason[];
+  readonly sharedUserIds: readonly string[];
+}
+
+export interface TechnicalVisitConflictOverride {
+  readonly reason: string;
+  readonly authorizedByUserId: string;
+  readonly authorizedAt: string;
+  readonly conflictVisitIds: readonly TechnicalVisitId[];
+}
+
+export interface TechnicalVisitPreparation {
+  readonly timeZone: string;
+  readonly durationMinutes: number;
+  readonly address: TechnicalVisitAddress;
+  readonly participantUserIds: readonly string[];
+  readonly checklist: readonly TechnicalVisitPreparationChecklistItem[];
+  readonly vehicleReference: TechnicalVisitVehicleReference | null;
+  readonly routeNotes: string | null;
+  readonly conflictOverride: TechnicalVisitConflictOverride | null;
+  readonly preparedByUserId: string;
+  readonly preparedAt: string;
+}
+
 export interface TechnicalVisit {
   readonly id: TechnicalVisitId;
   readonly organizationId: string;
@@ -29,6 +84,7 @@ export interface TechnicalVisit {
   readonly appraisalId: string | null;
   readonly responsibleUserId: string;
   readonly scheduledFor: string;
+  readonly preparation: TechnicalVisitPreparation | null;
   readonly purpose: string;
   readonly createdByUserId: string;
   readonly createdAt: string;
@@ -79,6 +135,32 @@ export interface CreateTechnicalVisitInput {
   readonly purpose: string;
 }
 
+export interface TechnicalVisitPreparationChecklistInput {
+  readonly id?: string;
+  readonly label: string;
+  readonly required: boolean;
+}
+
+export interface UpdateTechnicalVisitPreparationInput {
+  readonly localStart: string;
+  readonly timeZone: string;
+  readonly durationMinutes: number;
+  readonly address: TechnicalVisitAddress;
+  readonly participantUserIds: readonly string[];
+  readonly checklist: readonly TechnicalVisitPreparationChecklistInput[];
+  readonly vehicleReference?: TechnicalVisitVehicleReference | null;
+  readonly routeNotes?: string | null;
+  readonly expectedVersion: number;
+  readonly changeReason: string;
+  readonly conflictOverrideReason?: string;
+}
+
+export interface SetTechnicalVisitChecklistItemCompletionInput {
+  readonly itemId: string;
+  readonly completed: boolean;
+  readonly expectedVersion: number;
+}
+
 export interface UpdateTechnicalVisitInput {
   readonly activityType?: TechnicalVisitActivityType;
   readonly clientId?: string;
@@ -86,7 +168,6 @@ export interface UpdateTechnicalVisitInput {
   readonly proposalId?: string | null;
   readonly appraisalId?: string | null;
   readonly responsibleUserId?: string;
-  readonly scheduledFor?: string;
   readonly purpose?: string;
   readonly expectedVersion: number;
   readonly changeReason: string;
@@ -201,6 +282,16 @@ export type TechnicalVisitErrorCode =
   | 'APPRAISAL_MISMATCH'
   | 'INVALID_ACTIVITY_TYPE'
   | 'INVALID_DATE'
+  | 'INVALID_TIME_ZONE'
+  | 'INVALID_DURATION'
+  | 'INVALID_ADDRESS'
+  | 'INVALID_PARTICIPANT'
+  | 'INVALID_CHECKLIST'
+  | 'INVALID_VEHICLE_REFERENCE'
+  | 'INVALID_ROUTE'
+  | 'SCHEDULE_CONFLICT'
+  | 'PREPARATION_LOCKED'
+  | 'CHECKLIST_ITEM_NOT_FOUND'
   | 'INVALID_PURPOSE'
   | 'INVALID_TRANSITION'
   | 'REASON_REQUIRED'
@@ -215,5 +306,24 @@ export class TechnicalVisitDomainError extends Error {
     this.name = 'TechnicalVisitDomainError';
     this.code = code;
     Object.setPrototypeOf(this, TechnicalVisitDomainError.prototype);
+  }
+}
+
+
+export class TechnicalVisitScheduleConflictError extends TechnicalVisitDomainError {
+  readonly conflicts: readonly TechnicalVisitScheduleConflict[];
+
+  constructor(conflicts: readonly TechnicalVisitScheduleConflict[]) {
+    super(
+      'SCHEDULE_CONFLICT',
+      'Foram encontrados conflitos de agenda. Revise os horários ou informe um motivo autorizado para manter a exceção.'
+    );
+    this.name = 'TechnicalVisitScheduleConflictError';
+    this.conflicts = conflicts.map((conflict) => ({
+      ...conflict,
+      reasons: [...conflict.reasons],
+      sharedUserIds: [...conflict.sharedUserIds],
+    }));
+    Object.setPrototypeOf(this, TechnicalVisitScheduleConflictError.prototype);
   }
 }

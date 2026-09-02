@@ -543,7 +543,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 
 
 ### MÓDULO 007: VISITAS, VISTORIAS E OPERAÇÃO EM CAMPO
-- **Status Geral:** OE-007.001 implementada no código. Na revisão pós-implantação foram corrigidos o registro da rota `/visitas` na matriz central, o início público do PWA e a tela de autenticação de produção. A validação remota continua separando falhas reais de aplicação de indisponibilidade externa do runner.
+- **Status Geral:** OE-007.001 e OE-007.002 implementadas no código. O Módulo 007 cobre agora a fundação de visitas e a preparação operacional pré-campo, mantendo formulário de campo, evidências, conclusão e integrações externas para as ordens posteriores.
 - **Entregas da OE-007.001 — Modelo de Visitas e Vistorias:**
   - **Domínio Tipado:** `TechnicalVisit` registra organização, tipo de atividade, situação, cliente, imóvel opcional, proposta opcional, laudo opcional, responsável, data prevista, finalidade, autoria, datas de ciclo de vida e versão otimista.
   - **Estados Controlados:** fluxo explícito `planned → confirmed → in_progress → completed`, com cancelamento permitido antes da conclusão; estados concluído e cancelado são terminais e transições inválidas são recusadas.
@@ -554,8 +554,19 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - **Gateways:** `PreviewTechnicalVisitGateway` é volátil, vazio por padrão e isolado por organização; produção usa `UnavailableTechnicalVisitGateway` e fecha com segurança. O factory de desenvolvimento foi ajustado para impedir inclusão estática do gateway de preview no bundle de produção.
   - **Contexto e Sessão:** `FieldVisitsProvider` integra autenticação, organização, RBAC e as fontes canônicas, cancela respostas obsoletas na troca de contexto e limpa dados voláteis pelo registro central de logout.
   - **Interface:** rota `/visitas`, navegação “Visitas e vistorias”, formulário com seletores canônicos, estado vazio real, filtros por situação e comandos de confirmar, iniciar, concluir e cancelar conforme autorização. A identidade visual permanece restrita à paleta oficial AgroCore.
-  - **Escopo Preservado:** duração, endereço operacional detalhado, participantes, checklist de preparação, conflitos de agenda, roteirização, veículo, formulário de campo, fotos e geolocalização não foram antecipados; permanecem para OEs posteriores do Módulo 007.
+  - **Escopo Preservado na OE-007.001:** a fundação não antecipou preparação operacional; esses elementos passam a ser tratados exclusivamente pela OE-007.002, enquanto formulário de campo, fotos e geolocalização continuam reservados para ordens posteriores.
   - **Homologação Definida:** `scripts/test-field-visits-foundation.ts` contém 31 provas comportamentais e estruturais e voltou ao fluxo integral, sem interrupções de diagnóstico; a prova de integração agora também exige a presença de `/visitas` na matriz central. `scripts/test-field-visits-theme.js` audita a paleta e `scripts/test-module-007.js` consolida fundação, tema e auditoria global de textos.
+- **Entregas da OE-007.002 — Agenda e Preparação:**
+  - **Agenda com Fuso:** a preparação usa horário local + fuso IANA, converte para UTC de forma determinística e rejeita horários locais inexistentes em mudanças de fuso.
+  - **Duração e Endereço:** cada preparação registra duração de 15 minutos a 24 horas e endereço operacional estruturado com ponto de encontro, cidade, estado, referência postal e orientações.
+  - **Participantes:** integrantes ativos da mesma organização podem ser adicionados como participantes, com deduplicação e sem repetir o responsável principal.
+  - **Checklist Prévio:** itens versionados por visita possuem obrigatoriedade, conclusão/reabertura, autoria e horário; a definição do checklist preserva IDs existentes e bloqueia duplicidades.
+  - **Conflitos de Agenda:** sobreposição é sinalizada quando há responsável, participante ou veículo previsto compartilhado. A exceção somente é persistida por usuário com permissão de agendamento, com motivo, autor, data e visitas conflitantes auditáveis.
+  - **Veículo e Roteiro:** vínculo opcional usa referência preparatória sem criar cadastro paralelo de frota; roteiro e orientações ficam limitados ao planejamento textual desta ordem.
+  - **Remarcação e Cancelamento:** remarcações passam exclusivamente pelo serviço de preparação, usam versão otimista e motivo; visitas canceladas deixam de bloquear o horário e preparação fica bloqueada após início da execução.
+  - **Interface:** `VisitPreparationPanel` oferece edição responsiva de data/hora, fuso, duração, endereço, participantes, checklist, veículo e roteiro, além do fluxo explícito para autorizar exceção de conflito.
+  - **Escopo Preservado:** a OE-007.002 não cria formulário de campo, fotos, geolocalização, cadastro de veículos, agenda corporativa ou integração com frota; esses itens permanecem para OE-007.003, OE-007.004 e OE-007.006.
+  - **Homologação Definida:** `scripts/test-field-visits-preparation.ts` adiciona 30 provas específicas. Somadas às 31 provas da fundação, o Módulo 007 passa a ter 61 provas comportamentais/estruturais definidas, além da auditoria de tema e de textos públicos.
 
 ---
 
@@ -606,8 +617,9 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:documents-theme` | Audita a paleta oficial, variantes proibidas e seleção controlada de arquivos no Módulo 006 |
 | `npm run test:module-006` | Homologação consolidada do Módulo 006 até OE-006.007; agrega as 130 provas anteriormente homologadas, as 21 novas provas de segurança, texto público e tema. A homologação das 21 novas provas depende de execução efetiva do runner. |
 | `npm run test:field-visits-foundation` | Valida a OE-007.001 com 31 provas de estados, RBAC, responsáveis, fontes canônicas, isolamento organizacional, concorrência, auditoria, rota e produção fechada |
+| `npm run test:field-visits-preparation` | Valida a OE-007.002 com 30 provas de fusos, duração, endereço, participantes, checklist, remarcação, cancelamento, conflitos, exceções auditáveis, veículo previsto, roteiro e isolamento |
 | `npm run test:field-visits-theme` | Audita a identidade visual oficial do Módulo 007 e bloqueia famílias de cores não autorizadas |
-| `npm run test:module-007` | Homologação consolidada da fundação de visitas e vistorias, tema e textos públicos do Módulo 007 |
+| `npm run test:module-007` | Homologação consolidada do Módulo 007 até OE-007.002: 31 provas da fundação + 30 provas de agenda/preparação, tema e textos públicos |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -628,4 +640,4 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
 2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.007 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
 3. **Módulo 006 — Gestão Documental:** OE-006.007 implementada e integrada no código, com 21 novas provas de segurança adicionadas ao agregador `test:module-006`. O fechamento formal pelo runner continua pendente porque o AgroCore CI encerra antes de iniciar etapas. As migrações de Storage, versionamento, checklists e conformidade, além da função pública de compartilhamento, devem ser aplicadas somente quando o projeto Supabase específico do AgroCore estiver conectado.
-4. **Módulo 007 — Visitas, Vistorias e Operação em Campo:** OE-007.001 implementada no código com 31 provas definidas, rota, UI, RBAC, gateways, auditoria e build Vercel aprovado. O próximo incremento arquitetural é a OE-007.002 — preparação operacional da visita, sem reinterpretar a pendência externa do GitHub Actions como aprovação ou reprovação dos testes.
+4. **Módulo 007 — Visitas, Vistorias e Operação em Campo:** OE-007.001 e OE-007.002 implementadas no código, totalizando 61 provas definidas. A próxima ordem é a OE-007.003 — Formulário de campo, preservando a separação de responsabilidades com evidências/geolocalização (OE-007.004) e integrações com agenda/frota (OE-007.006).

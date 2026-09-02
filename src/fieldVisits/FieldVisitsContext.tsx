@@ -26,9 +26,12 @@ import {
   type TechnicalVisitListFilters,
   type TransitionTechnicalVisitInput,
   type UpdateTechnicalVisitInput,
+  type UpdateTechnicalVisitPreparationInput,
+  type SetTechnicalVisitChecklistItemCompletionInput,
 } from '../types/technicalVisit';
 import { getTechnicalVisitGateway } from './gatewayFactory';
 import { TechnicalVisitService } from './technicalVisitService';
+import { TechnicalVisitPreparationService } from './preparationService';
 
 export type FieldVisitsContextStatus =
   | 'idle'
@@ -42,6 +45,7 @@ export interface FieldVisitsContextValue {
   readonly status: FieldVisitsContextStatus;
   readonly visits: readonly TechnicalVisit[];
   readonly members: readonly OrganizationMember[];
+  readonly responsibleMembers: readonly OrganizationMember[];
   readonly filters: TechnicalVisitListFilters;
   readonly isLoading: boolean;
   readonly errorMessage: string | null;
@@ -58,6 +62,14 @@ export interface FieldVisitsContextValue {
   readonly transitionVisit: (
     visitId: string,
     input: TransitionTechnicalVisitInput
+  ) => Promise<TechnicalVisit>;
+  readonly prepareVisit: (
+    visitId: string,
+    input: UpdateTechnicalVisitPreparationInput
+  ) => Promise<TechnicalVisit>;
+  readonly setChecklistItemCompletion: (
+    visitId: string,
+    input: SetTechnicalVisitChecklistItemCompletionInput
   ) => Promise<TechnicalVisit>;
 }
 
@@ -79,6 +91,7 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
   const [status, setStatus] = useState<FieldVisitsContextStatus>('idle');
   const [visits, setVisits] = useState<readonly TechnicalVisit[]>([]);
   const [members, setMembers] = useState<readonly OrganizationMember[]>([]);
+  const [responsibleMembers, setResponsibleMembers] = useState<readonly OrganizationMember[]>([]);
   const [filters, setFiltersState] = useState<TechnicalVisitListFilters>(EMPTY_FILTERS);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -92,6 +105,10 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
 
   const service = useMemo(
     () => new TechnicalVisitService(getTechnicalVisitGateway()),
+    []
+  );
+  const preparationService = useMemo(
+    () => new TechnicalVisitPreparationService(getTechnicalVisitGateway()),
     []
   );
 
@@ -184,6 +201,7 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
     abortRef.current = null;
     setVisits([]);
     setMembers([]);
+    setResponsibleMembers([]);
     setErrorMessage(null);
     setStatus('idle');
   }, []);
@@ -217,7 +235,8 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
       }
 
       setVisits(nextVisits);
-      setMembers(
+      setMembers(nextMembers.filter((member) => member.isActive));
+      setResponsibleMembers(
         nextMembers.filter(
           (member) =>
             member.isActive &&
@@ -236,6 +255,7 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
 
       setVisits([]);
       setMembers([]);
+      setResponsibleMembers([]);
       const unavailable =
         error instanceof TechnicalVisitDomainError &&
         error.code === 'SERVICE_UNAVAILABLE';
@@ -310,6 +330,31 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
     [ensureContext, refresh, service]
   );
 
+  const prepareVisit = useCallback(
+    async (visitId: string, input: UpdateTechnicalVisitPreparationInput) => {
+      const updated = await preparationService.prepareVisit(ensureContext(), visitId, input);
+      await refresh();
+      return updated;
+    },
+    [ensureContext, preparationService, refresh]
+  );
+
+  const setChecklistItemCompletion = useCallback(
+    async (
+      visitId: string,
+      input: SetTechnicalVisitChecklistItemCompletionInput
+    ) => {
+      const updated = await preparationService.setChecklistItemCompletion(
+        ensureContext(),
+        visitId,
+        input
+      );
+      await refresh();
+      return updated;
+    },
+    [ensureContext, preparationService, refresh]
+  );
+
   const getVisitById = useCallback(
     (visitId: string) => service.getVisitById(ensureContext(), visitId),
     [ensureContext, service]
@@ -333,6 +378,7 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
       status,
       visits,
       members,
+      responsibleMembers,
       filters,
       isLoading: status === 'loading',
       errorMessage,
@@ -344,6 +390,8 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
       createVisit,
       updateVisit,
       transitionVisit,
+      prepareVisit,
+      setChecklistItemCompletion,
     }),
     [
       clearFilters,
@@ -353,8 +401,11 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
       getAudit,
       getVisitById,
       members,
+      prepareVisit,
       refresh,
+      responsibleMembers,
       setFilters,
+      setChecklistItemCompletion,
       status,
       transitionVisit,
       updateVisit,

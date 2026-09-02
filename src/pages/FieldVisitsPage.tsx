@@ -5,6 +5,7 @@ import { useAuthorization } from '../authorization/useAuthorization';
 import { useClients } from '../clients/useClients';
 import { useFieldVisits } from '../fieldVisits/useFieldVisits';
 import { FIELD_VISIT_THEME } from '../fieldVisits/theme';
+import { VisitPreparationPanel } from '../fieldVisits/VisitPreparationPanel';
 import { useProperties } from '../properties/useProperties';
 import { useProposals } from '../proposals/useProposals';
 import { useAppraisals } from '../appraisals/useAppraisals';
@@ -54,6 +55,7 @@ export const FieldVisitsPage: React.FC = () => {
     status,
     visits,
     members,
+    responsibleMembers,
     filters,
     errorMessage,
     setFilters,
@@ -317,7 +319,7 @@ export const FieldVisitsPage: React.FC = () => {
                 onChange={(event) => setResponsibleUserId(event.target.value)}
               >
                 <option value="">Selecione</option>
-                {members.map((member) => (
+                {responsibleMembers.map((member) => (
                   <option key={member.userId} value={member.userId}>{member.name}</option>
                 ))}
               </select>
@@ -518,6 +520,12 @@ export const FieldVisitsPage: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                <VisitPreparationPanel
+                  visit={visit}
+                  members={members}
+                  canEdit={canSchedule}
+                />
 
                 {cancelVisitId === visit.id && (
                   <div className={FIELD_VISIT_THEME.surfaceSoft + ' mt-4 p-4'}>

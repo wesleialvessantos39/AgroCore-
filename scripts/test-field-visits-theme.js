@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const FILES = [
   'src/fieldVisits/theme.ts',
   'src/pages/FieldVisitsPage.tsx',
+  'src/fieldVisits/VisitPreparationPanel.tsx',
 ];
 
 const forbidden = [

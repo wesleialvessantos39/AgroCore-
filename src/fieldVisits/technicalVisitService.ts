@@ -115,6 +115,7 @@ export class TechnicalVisitService {
       appraisalId: normalized.appraisalId,
       responsibleUserId: normalized.responsibleUserId,
       scheduledFor: normalized.scheduledFor,
+      preparation: null,
       purpose: normalized.purpose,
       createdByUserId: context.actor.userId,
       createdAt: now,
@@ -182,7 +183,7 @@ export class TechnicalVisitService {
       proposalId: input.proposalId === undefined ? current.proposalId : input.proposalId,
       appraisalId: input.appraisalId === undefined ? current.appraisalId : input.appraisalId,
       responsibleUserId: input.responsibleUserId ?? current.responsibleUserId,
-      scheduledFor: input.scheduledFor ?? current.scheduledFor,
+      scheduledFor: current.scheduledFor,
       purpose: input.purpose ?? current.purpose,
     });
 

@@ -15,6 +15,8 @@ const signIn = read('src/pages/SignInPage.tsx');
 const header = read('src/components/Header.tsx');
 const hero = read('src/components/Hero.tsx');
 const fieldTests = read('scripts/test-field-visits-foundation.ts');
+const fieldPreparationTests = read('scripts/test-field-visits-preparation.ts');
+const fieldPreparationPanel = read('src/fieldVisits/VisitPreparationPanel.tsx');
 const packageJson = JSON.parse(read('package.json'));
 
 assert(manifest.id === '/', 'O PWA AgroCore deve possuir id raiz /.');
@@ -45,8 +47,18 @@ assert(
   'A suíte da OE-007.001 não pode conter interrupções de diagnóstico.'
 );
 assert(
+  !fieldPreparationTests.includes('process.exit(0)'),
+  'A suíte da OE-007.002 não pode conter interrupções de diagnóstico.'
+);
+assert(
+  fieldPreparationPanel.includes('Fuso horário') &&
+    fieldPreparationPanel.includes('Checklist prévio') &&
+    fieldPreparationPanel.includes('Autorizar exceção e salvar'),
+  'A preparação operacional da OE-007.002 deve permanecer integrada à interface.'
+);
+assert(
   !Object.prototype.hasOwnProperty.call(packageJson.scripts ?? {}, 'prebuild'),
   'O build de produção não pode depender do prebuild temporário de diagnóstico.'
 );
 
-console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e OE-007.001 integrada.');
+console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e Módulo 007 integrado até OE-007.002.');
