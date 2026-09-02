@@ -129,6 +129,13 @@ function stripPreviewPlugin(isProduction: boolean) {
         ) {
           return '\0virtual:production-auth-gateway-factory';
         }
+        if (
+          normalizedTarget.includes('/fieldVisits/gatewayFactory') ||
+          id.includes('/fieldVisits/gatewayFactory') ||
+          (importer && importer.includes('/fieldVisits/') && id === './gatewayFactory')
+        ) {
+          return '\0virtual:production-field-visits-gateway-factory';
+        }
       }
 
       // Em produção, intercepta qualquer import de preview e retorna stubs vazios
@@ -159,49 +166,87 @@ function stripPreviewPlugin(isProduction: boolean) {
     load(id: string) {
       if (id === '\0virtual:production-auth-gateway-factory') {
         return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseAuthGateway } from '/src/auth/supabaseAuthGateway.ts';
           import { UnavailableAuthGateway } from '/src/auth/unavailableGateway.ts';
           export async function createAuthGateway() {
-            return new UnavailableAuthGateway();
+            const supabase = getSupabaseClient();
+            return supabase ? new SupabaseAuthGateway(supabase) : new UnavailableAuthGateway();
           }
         `;
       }
 
       if (id === '\0virtual:production-org-gateway-factory') {
         return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseOrganizationGateway } from '/src/organization/supabaseOrganizationGateway.ts';
           import { UnavailableOrganizationGateway } from '/src/organization/unavailableGateway.ts';
           export async function createOrganizationGateway() {
-            return new UnavailableOrganizationGateway();
+            const supabase = getSupabaseClient();
+            return supabase
+              ? new SupabaseOrganizationGateway(supabase)
+              : new UnavailableOrganizationGateway();
           }
         `;
       }
 
       if (id === '\0virtual:production-org-members-gateway-factory') {
         return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseOrganizationMembersGateway } from '/src/auth/supabaseOrganizationMembersGateway.ts';
           import { UnavailableOrganizationMembersGateway } from '/src/auth/unavailableOrganizationMembersGateway.ts';
+          let activeGateway = null;
           export function getOrganizationMembersGateway() {
-            return new UnavailableOrganizationMembersGateway();
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseOrganizationMembersGateway(supabase)
+              : new UnavailableOrganizationMembersGateway();
+            return activeGateway;
           }
-          export function setOrganizationMembersGatewayForTesting() {}
+          export function setOrganizationMembersGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
         `;
       }
 
       if (id === '\0virtual:production-clients-gateway-factory') {
         return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseClientGateway } from '/src/clients/supabaseClientGateway.ts';
           import { UnavailableClientGateway } from '/src/clients/unavailableGateway.ts';
+          let activeGateway = null;
           export function getClientGateway() {
-            return new UnavailableClientGateway();
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseClientGateway(supabase)
+              : new UnavailableClientGateway();
+            return activeGateway;
           }
-          export function setClientGatewayForTesting() {}
+          export function setClientGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
         `;
       }
 
       if (id === '\0virtual:production-properties-gateway-factory') {
         return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabasePropertyGateway } from '/src/properties/supabasePropertyGateway.ts';
           import { UnavailablePropertyGateway } from '/src/properties/unavailableGateway.ts';
+          let activeGateway = null;
           export function getPropertyGateway() {
-            return new UnavailablePropertyGateway();
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabasePropertyGateway(supabase)
+              : new UnavailablePropertyGateway();
+            return activeGateway;
           }
-          export function setPropertyGatewayForTesting() {}
+          export function setPropertyGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
         `;
       }
 
@@ -277,21 +322,41 @@ function stripPreviewPlugin(isProduction: boolean) {
 
       if (id === '\0virtual:production-documents-gateway-factory') {
         return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseDocumentReferenceGateway } from '/src/documents/supabaseDocumentReferenceGateway.ts';
           import { UnavailableDocumentReferenceGateway } from '/src/documents/unavailableDocumentReferenceGateway.ts';
+          let activeGateway = null;
           export function getDocumentReferenceGateway() {
-            return new UnavailableDocumentReferenceGateway();
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseDocumentReferenceGateway(supabase)
+              : new UnavailableDocumentReferenceGateway();
+            return activeGateway;
           }
-          export function setDocumentReferenceGatewayForTesting() {}
+          export function setDocumentReferenceGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
         `;
       }
 
       if (id === '\0virtual:production-proposal-checklists-gateway-factory') {
         return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseProposalChecklistGateway } from '/src/documents/supabaseProposalChecklistGateway.ts';
           import { UnavailableProposalChecklistGateway } from '/src/documents/unavailableProposalChecklistGateway.ts';
+          let activeGateway = null;
           export function getProposalChecklistGateway() {
-            return new UnavailableProposalChecklistGateway();
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseProposalChecklistGateway(supabase)
+              : new UnavailableProposalChecklistGateway();
+            return activeGateway;
           }
-          export function setProposalChecklistGatewayForTesting() {}
+          export function setProposalChecklistGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
         `;
       }
 
@@ -310,6 +375,26 @@ function stripPreviewPlugin(isProduction: boolean) {
             return activeGateway;
           }
           export function setDocumentComplianceGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
+        `;
+      }
+
+      if (id === '\0virtual:production-field-visits-gateway-factory') {
+        return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseTechnicalVisitGateway } from '/src/fieldVisits/supabaseTechnicalVisitGateway.ts';
+          import { UnavailableTechnicalVisitGateway } from '/src/fieldVisits/unavailableGateway.ts';
+          let activeGateway = null;
+          export function getTechnicalVisitGateway() {
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseTechnicalVisitGateway(supabase)
+              : new UnavailableTechnicalVisitGateway();
+            return activeGateway;
+          }
+          export function setTechnicalVisitGatewayForTesting(gateway) {
             activeGateway = gateway ?? null;
           }
         `;
