@@ -415,8 +415,7 @@ export class TechnicalVisitService {
       }
       if (
         proposal.clientId !== clientId ||
-        (proposal.propertyId && propertyId && proposal.propertyId !== propertyId) ||
-        (proposal.propertyId && !propertyId)
+        (proposal.propertyId && propertyId && proposal.propertyId !== propertyId)
       ) {
         throw new TechnicalVisitDomainError(
           'PROPOSAL_MISMATCH',
