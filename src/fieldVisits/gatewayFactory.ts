@@ -7,6 +7,8 @@ import type {
 } from '../types/technicalVisit';
 import { registerDomainCleanup } from '../auth/domainCleanupRegistry';
 import { UnavailableTechnicalVisitGateway } from './unavailableGateway';
+import { getSupabaseClient } from '../infrastructure/supabaseClient';
+import { SupabaseTechnicalVisitGateway } from './supabaseTechnicalVisitGateway';
 
 class LazyDevelopmentTechnicalVisitGateway implements TechnicalVisitGateway {
   private instancePromise: Promise<TechnicalVisitGateway> | null = null;
@@ -63,6 +65,12 @@ let unregisterCleanup: (() => void) | null = null;
 
 export function getTechnicalVisitGateway(): TechnicalVisitGateway {
   if (activeGatewayInstance) return activeGatewayInstance;
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    activeGatewayInstance = new SupabaseTechnicalVisitGateway(supabase);
+    return activeGatewayInstance;
+  }
 
   if (import.meta.env.DEV) {
     const developmentGateway = new LazyDevelopmentTechnicalVisitGateway();
