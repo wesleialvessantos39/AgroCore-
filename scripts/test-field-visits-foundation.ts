@@ -345,6 +345,10 @@ await test('15. Proposta vinculada pode derivar o imóvel quando ele não foi in
   assert.equal(visit.propertyId, 'property-a');
 });
 
+if (failed > 0) process.exit(1);
+console.log('DIAGNOSTIC_FIRST_HALF_OK');
+process.exit(0);
+
 await test('16. Laudo deve corresponder ao cliente e imóvel', async () => {
   const { service } = newService();
   await assert.rejects(
