@@ -64,6 +64,12 @@ const ClientEditPage = lazy(() =>
   }))
 );
 
+const ClientEvidencePage = lazy(() =>
+  import('../pages/ClientEvidencePage').then((module) => ({
+    default: module.ClientEvidencePage,
+  }))
+);
+
 const PropertiesPage = lazy(() =>
   import('../pages/PropertiesPage').then((module) => ({
     default: module.PropertiesPage,
@@ -366,6 +372,19 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission="clients:edit">
                   <ClientEditPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path=":clientId/fotos-geolocalizacao"
+              element={
+                <RequirePermission
+                  permission={[
+                    'properties:edit',
+                    'client_registry_requests:fulfill',
+                  ]}
+                >
+                  <ClientEvidencePage />
                 </RequirePermission>
               }
             />

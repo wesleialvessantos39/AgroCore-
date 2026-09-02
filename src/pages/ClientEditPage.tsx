@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { UserCheck, AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react';
+import { UserCheck, AlertTriangle, ArrowLeft, Loader2, MapPin } from 'lucide-react';
 import { useClients } from '../clients/useClients';
 import { ClientForm } from '../clients/components/ClientForm';
 import { Client, ClientFormValues } from '../types/client';
 import { formValuesToUpdateInput } from '../clients/validators';
-import { ROUTES } from '../routes/paths';
+import { ROUTES, getClientEvidencePath } from '../routes/paths';
 import { Button } from '../components/ui/Button';
 
 export function ClientEditPage() {
@@ -155,6 +155,29 @@ export function ClientEditPage() {
           </p>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-[#0B3D2E]/15 bg-white p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold text-[#0B3D2E]">
+              Fotos e geolocalização dos imóveis
+            </h2>
+            <p className="mt-1 text-sm text-[#0B3D2E]/70">
+              Abra o cadastro territorial compartilhado com laudos e visitas/vistorias.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="primary"
+            size="md"
+            onClick={() => navigate(getClientEvidencePath(client.id))}
+            className="inline-flex min-h-[44px] items-center justify-center gap-2"
+          >
+            <MapPin className="h-4 w-4" aria-hidden="true" />
+            Abrir fotos e geolocalização
+          </Button>
+        </div>
+      </section>
 
       {/* Formulário Reutilizável */}
       <ClientForm

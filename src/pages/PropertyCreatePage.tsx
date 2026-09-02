@@ -1,18 +1,47 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, MapPin, Building2, Sparkles } from 'lucide-react';
-import { ROUTES } from '../routes/paths';
+import { ROUTES, getClientEvidencePath } from '../routes/paths';
 import { usePropertiesContext } from '../properties/PropertiesContext';
 import { useOrganization } from '../organization/useOrganization';
 import { PropertyForm } from '../properties/components/PropertyForm';
 import { PROPERTY_THEME } from '../properties/theme';
 import { PropertyFormValues } from '../types/property';
-import { formValuesToCreateInput } from '../properties/validators';
+import {
+  formValuesToCreateInput,
+  getDefaultPropertyFormValues,
+} from '../properties/validators';
+import { getClientRegistryRequestGateway } from '../clients/clientRegistryRequestGatewayFactory';
+import { useFieldVisits } from '../fieldVisits/useFieldVisits';
 
 export function PropertyCreatePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { createProperty } = usePropertiesContext();
   const { activeOrganization } = useOrganization();
+  const fieldVisits = useFieldVisits();
+
+  const clientId = searchParams.get('clientId') || '';
+  const registryRequestId = searchParams.get('registryRequestId') || '';
+  const returnTo = searchParams.get('returnTo') || '';
+  const sourceType = searchParams.get('sourceType') || '';
+  const sourceId = searchParams.get('sourceId') || '';
+
+  const initialValues = useMemo<PropertyFormValues | undefined>(() => {
+    if (!clientId) return undefined;
+    const values = getDefaultPropertyFormValues('rural');
+    values.clientLinks = [
+      {
+        clientId,
+        relationship: 'owner',
+        otherRelationshipDescription: '',
+        isPrimaryHolder: true,
+        declaredParticipationPercentage: '100',
+        observation: '',
+      },
+    ];
+    return values;
+  }, [clientId]);
 
   const handleCreateSubmit = async (values: PropertyFormValues) => {
     if (!activeOrganization?.id) {
@@ -21,7 +50,50 @@ export function PropertyCreatePage() {
     const input = formValuesToCreateInput(values, activeOrganization.id);
     const result = await createProperty(input);
     if (result.success) {
-      navigate(ROUTES.PROPERTIES);
+      if (registryRequestId && clientId) {
+        try {
+          await getClientRegistryRequestGateway().attachProperty(
+            activeOrganization.id,
+            registryRequestId,
+            result.property.id
+          );
+          navigate(
+            getClientEvidencePath(
+              clientId,
+              result.property.id,
+              registryRequestId
+            )
+          );
+          return result;
+        } catch (error) {
+          return {
+            success: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : 'O imóvel foi cadastrado, mas não foi possível vinculá-lo à solicitação.',
+          };
+        }
+      }
+
+      if (sourceType === 'visit' && sourceId) {
+        try {
+          const visit = await fieldVisits.getVisitById(sourceId);
+          if (visit) {
+            await fieldVisits.updateVisit(sourceId, {
+              propertyId: result.property.id,
+              expectedVersion: visit.version,
+              changeReason:
+                'Imóvel cadastrado a partir da pendência de fotos e geolocalização.',
+            });
+          }
+        } catch {
+          // O imóvel permanece corretamente vinculado ao cliente; o retorno
+          // permitirá ao projetista revisar o vínculo da visita.
+        }
+      }
+
+      navigate(returnTo || ROUTES.PROPERTIES);
     }
     return result;
   };
@@ -87,6 +159,7 @@ export function PropertyCreatePage() {
       <main>
         <PropertyForm
           mode="create"
+          initialValues={initialValues}
           onSubmit={handleCreateSubmit}
           onCancel={() => navigate(ROUTES.PROPERTIES)}
         />

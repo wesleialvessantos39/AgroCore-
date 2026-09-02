@@ -28,17 +28,28 @@ function secureId(): string {
 
 export class PreviewFieldEvidenceGateway implements FieldEvidenceGateway {
   private readonly sets = new Map<string, FieldEvidenceSet>();
+  private readonly propertyIndex = new Map<string, string>();
   private readonly visitIndex = new Map<string, string>();
   private readonly appraisalIndex = new Map<string, string>();
   private readonly photoUrls = new Map<string, string>();
 
-  private orgKey(organizationId: string, id: string): string {
+  private key(organizationId: string, id: string): string {
     return organizationId + ':' + id;
   }
 
-  private byId(id: string): FieldEvidenceSet | null {
+  private byId(id: string | undefined): FieldEvidenceSet | null {
+    if (!id) return null;
     const value = this.sets.get(id);
     return value ? cloneEvidence(value) : null;
+  }
+
+  async getByProperty(
+    organizationId: string,
+    propertyId: string,
+    signal?: AbortSignal
+  ): Promise<FieldEvidenceSet | null> {
+    if (signal?.aborted) throw new DOMException('Operação cancelada.', 'AbortError');
+    return this.byId(this.propertyIndex.get(this.key(organizationId, propertyId)));
   }
 
   async getByVisit(
@@ -47,8 +58,7 @@ export class PreviewFieldEvidenceGateway implements FieldEvidenceGateway {
     signal?: AbortSignal
   ): Promise<FieldEvidenceSet | null> {
     if (signal?.aborted) throw new DOMException('Operação cancelada.', 'AbortError');
-    const id = this.visitIndex.get(this.orgKey(organizationId, visitId));
-    return id ? this.byId(id) : null;
+    return this.byId(this.visitIndex.get(this.key(organizationId, visitId)));
   }
 
   async getByAppraisal(
@@ -57,8 +67,7 @@ export class PreviewFieldEvidenceGateway implements FieldEvidenceGateway {
     signal?: AbortSignal
   ): Promise<FieldEvidenceSet | null> {
     if (signal?.aborted) throw new DOMException('Operação cancelada.', 'AbortError');
-    const id = this.appraisalIndex.get(this.orgKey(organizationId, appraisalId));
-    return id ? this.byId(id) : null;
+    return this.byId(this.appraisalIndex.get(this.key(organizationId, appraisalId)));
   }
 
   async initialize(
@@ -66,108 +75,63 @@ export class PreviewFieldEvidenceGateway implements FieldEvidenceGateway {
     signal?: AbortSignal
   ): Promise<FieldEvidenceSet> {
     if (signal?.aborted) throw new DOMException('Operação cancelada.', 'AbortError');
+    if (!input.propertyId) throw new Error('Imóvel obrigatório para fotos e geolocalização.');
 
-    const appraisalExisting = input.appraisalId
-      ? this.appraisalIndex.get(this.orgKey(input.organizationId, input.appraisalId))
-      : undefined;
-    const visitExisting = input.visitId
-      ? this.visitIndex.get(this.orgKey(input.organizationId, input.visitId))
-      : undefined;
-
-    if (appraisalExisting && visitExisting && appraisalExisting !== visitExisting) {
-      throw new Error('As evidências existentes não correspondem ao mesmo atendimento.');
-    }
-
-    const existingId = appraisalExisting ?? visitExisting;
+    const propertyKey = this.key(input.organizationId, input.propertyId);
+    const existingId = this.propertyIndex.get(propertyKey);
     const now = new Date().toISOString();
 
     if (existingId) {
       const current = this.sets.get(existingId);
-      if (!current) throw new Error('Evidência não encontrada.');
-
-      if (
-        (current.propertyId && input.propertyId && current.propertyId !== input.propertyId) ||
-        current.clientId !== input.clientId
-      ) {
-        throw new Error('A evidência não corresponde ao cliente ou imóvel informado.');
+      if (!current) throw new Error('Evidência canônica não encontrada.');
+      if (current.clientId !== input.clientId) {
+        throw new Error('O imóvel não pertence ao cliente informado.');
       }
-
-      const existingLegacy = new Set(
-        current.photos.map((photo) => photo.legacyReference).filter(Boolean)
-      );
-      const imported: FieldEvidencePhoto[] = (input.legacyAppraisalPhotoReferences ?? [])
-        .filter((reference) => reference.trim() && !existingLegacy.has(reference.trim()))
-        .map((reference) => ({
-          id: secureId(),
-          organizationId: input.organizationId,
-          evidenceId: current.id,
-          source: 'appraisal_legacy' as const,
-          legacyReference: reference.trim(),
-          capturedAt: now,
-        }));
 
       const next: FieldEvidenceSet = {
         ...current,
-        visitId: current.visitId ?? input.visitId,
-        appraisalId: current.appraisalId ?? input.appraisalId,
-        propertyId: current.propertyId ?? input.propertyId,
-        location: current.location ?? input.registryLocation,
-        photos: [...current.photos, ...imported],
+        location: input.registryLocation ?? current.location,
         updatedByUserId: input.actorUserId,
         updatedAt: now,
-        version: imported.length > 0 || (!current.location && input.registryLocation)
-          ? current.version + 1
-          : current.version,
+        version:
+          input.registryLocation &&
+          JSON.stringify(input.registryLocation) !== JSON.stringify(current.location)
+            ? current.version + 1
+            : current.version,
       };
       this.sets.set(next.id, cloneEvidence(next));
-      if (next.visitId) {
-        this.visitIndex.set(this.orgKey(next.organizationId, next.visitId), next.id);
+
+      if (input.visitId) {
+        this.visitIndex.set(this.key(input.organizationId, input.visitId), next.id);
       }
-      if (next.appraisalId) {
-        this.appraisalIndex.set(
-          this.orgKey(next.organizationId, next.appraisalId),
-          next.id
-        );
+      if (input.appraisalId) {
+        this.appraisalIndex.set(this.key(input.organizationId, input.appraisalId), next.id);
       }
       return cloneEvidence(next);
     }
 
     const id = secureId();
-    const photos: FieldEvidencePhoto[] = (input.legacyAppraisalPhotoReferences ?? [])
-      .filter((reference) => reference.trim())
-      .map((reference) => ({
-        id: secureId(),
-        organizationId: input.organizationId,
-        evidenceId: id,
-        source: 'appraisal_legacy',
-        legacyReference: reference.trim(),
-        capturedAt: now,
-      }));
-
     const created: FieldEvidenceSet = {
       id,
       organizationId: input.organizationId,
-      visitId: input.visitId,
-      appraisalId: input.appraisalId,
       propertyId: input.propertyId,
       clientId: input.clientId,
       location: input.registryLocation,
-      photos,
+      photos: [],
       version: 1,
       createdByUserId: input.actorUserId,
       createdAt: now,
       updatedByUserId: input.actorUserId,
       updatedAt: now,
     };
+
     this.sets.set(id, cloneEvidence(created));
-    if (created.visitId) {
-      this.visitIndex.set(this.orgKey(created.organizationId, created.visitId), id);
+    this.propertyIndex.set(propertyKey, id);
+    if (input.visitId) {
+      this.visitIndex.set(this.key(input.organizationId, input.visitId), id);
     }
-    if (created.appraisalId) {
-      this.appraisalIndex.set(
-        this.orgKey(created.organizationId, created.appraisalId),
-        id
-      );
+    if (input.appraisalId) {
+      this.appraisalIndex.set(this.key(input.organizationId, input.appraisalId), id);
     }
     return cloneEvidence(created);
   }
@@ -178,6 +142,7 @@ export class PreviewFieldEvidenceGateway implements FieldEvidenceGateway {
   ): Promise<FieldEvidenceSet> {
     if (signal?.aborted) throw new DOMException('Operação cancelada.', 'AbortError');
     validateFieldEvidenceLocation(input.location);
+
     const current = this.sets.get(input.evidenceId);
     if (!current || current.organizationId !== input.organizationId) {
       throw new Error('Evidência não encontrada.');
@@ -185,6 +150,7 @@ export class PreviewFieldEvidenceGateway implements FieldEvidenceGateway {
     if (current.version !== input.expectedVersion) {
       throw new Error('A evidência foi alterada por outra operação. Recarregue os dados.');
     }
+
     const now = new Date().toISOString();
     const next: FieldEvidenceSet = {
       ...current,
@@ -205,6 +171,7 @@ export class PreviewFieldEvidenceGateway implements FieldEvidenceGateway {
     if (signal?.aborted) throw new DOMException('Operação cancelada.', 'AbortError');
     const mimeType = await validateFieldEvidencePhoto(file);
     const current = this.sets.get(input.evidenceId);
+
     if (!current || current.organizationId !== input.organizationId) {
       throw new Error('Evidência não encontrada.');
     }
@@ -257,6 +224,7 @@ export class PreviewFieldEvidenceGateway implements FieldEvidenceGateway {
     }
     this.photoUrls.clear();
     this.sets.clear();
+    this.propertyIndex.clear();
     this.visitIndex.clear();
     this.appraisalIndex.clear();
   }

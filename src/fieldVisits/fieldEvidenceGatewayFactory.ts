@@ -16,6 +16,10 @@ class LazyDevelopmentFieldEvidenceGateway implements FieldEvidenceGateway {
     return this.instancePromise;
   }
 
+  async getByProperty(...args: Parameters<FieldEvidenceGateway['getByProperty']>) {
+    return (await this.load()).getByProperty(...args);
+  }
+
   async getByVisit(...args: Parameters<FieldEvidenceGateway['getByVisit']>) {
     return (await this.load()).getByVisit(...args);
   }

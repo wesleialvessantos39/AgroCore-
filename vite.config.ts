@@ -25,6 +25,13 @@ function stripPreviewPlugin(isProduction: boolean) {
         lowerId.includes('requestgatewayfactory')
       ) {
         if (
+          normalizedTarget.includes('/clients/clientRegistryRequestGatewayFactory') ||
+          id.includes('clientRegistryRequestGatewayFactory') ||
+          (importer && importer.includes('/clients/') && id === './clientRegistryRequestGatewayFactory')
+        ) {
+          return '\0virtual:production-client-registry-request-gateway-factory';
+        }
+        if (
           normalizedTarget.includes('/clients/capturerAssignmentGatewayFactory') ||
           id.includes('capturerAssignmentGatewayFactory') ||
           (importer && importer.includes('/clients/') && id === './capturerAssignmentGatewayFactory')
@@ -301,6 +308,26 @@ function stripPreviewPlugin(isProduction: boolean) {
             return new UnavailableTechnicalProfessionalGateway();
           }
           export function setTechnicalProfessionalGatewayForTesting() {}
+        `;
+      }
+
+      if (id === '\0virtual:production-client-registry-request-gateway-factory') {
+        return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseClientRegistryRequestGateway } from '/src/clients/supabaseClientRegistryRequestGateway.ts';
+          import { UnavailableClientRegistryRequestGateway } from '/src/clients/unavailableClientRegistryRequestGateway.ts';
+          let activeGateway = null;
+          export function getClientRegistryRequestGateway() {
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseClientRegistryRequestGateway(supabase)
+              : new UnavailableClientRegistryRequestGateway();
+            return activeGateway;
+          }
+          export function setClientRegistryRequestGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
         `;
       }
 

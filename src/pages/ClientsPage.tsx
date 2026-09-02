@@ -26,6 +26,7 @@ import { ROUTES, getClientEditPath } from '../routes/paths';
 import { Button } from '../components/ui/Button';
 import { maskCpf, maskCnpj, formatPhone } from '../clients/validators';
 import { ClientCapturerAssignmentModal } from '../components/appraisals/ClientCapturerAssignmentModal';
+import { ClientRegistryRequestsPanel } from '../clients/components/ClientRegistryRequestsPanel';
 import {
   ClientPersonTypeFilter,
   ClientSortOption,
@@ -149,7 +150,9 @@ export function ClientsPage() {
         </div>
       </header>
 
-      {/* 2. Barra de Busca, Filtros e Ordenação */}
+      <ClientRegistryRequestsPanel />
+
+            {/* 2. Barra de Busca, Filtros e Ordenação */}
       <section
         id="clients-filter-bar"
         aria-label="Filtros e busca de clientes"

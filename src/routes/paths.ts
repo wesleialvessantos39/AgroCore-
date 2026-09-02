@@ -7,6 +7,7 @@ export const ROUTES = {
   CLIENTS: '/clientes',
   CLIENTS_NEW: '/clientes/novo',
   CLIENTS_EDIT: '/clientes/:clientId/editar',
+  CLIENTS_EVIDENCE: '/clientes/:clientId/fotos-geolocalizacao',
   PROPERTIES: '/imoveis',
   PROPERTIES_NEW: '/imoveis/novo',
   PROPERTIES_EDIT: '/imoveis/:propertyId/editar',
@@ -50,6 +51,19 @@ export type AppRoute = typeof ROUTES[keyof typeof ROUTES];
 
 export function getClientEditPath(clientId: string): string {
   return `/clientes/${encodeURIComponent(clientId)}/editar`;
+}
+
+export function getClientEvidencePath(
+  clientId: string,
+  propertyId?: string,
+  requestId?: string
+): string {
+  const path = `/clientes/${encodeURIComponent(clientId)}/fotos-geolocalizacao`;
+  const params = new URLSearchParams();
+  if (propertyId) params.set('propertyId', propertyId);
+  if (requestId) params.set('requestId', requestId);
+  const query = params.toString();
+  return query ? path + '?' + query : path;
 }
 
 export function getPropertyEditPath(propertyId: string): string {

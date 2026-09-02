@@ -12,6 +12,10 @@ function unavailable(): never {
 }
 
 export class UnavailableFieldEvidenceGateway implements FieldEvidenceGateway {
+  async getByProperty(): Promise<FieldEvidenceSet | null> {
+    return unavailable();
+  }
+
   async getByVisit(): Promise<FieldEvidenceSet | null> {
     return unavailable();
   }

@@ -132,6 +132,15 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Formulário de edição e atualização cadastral de cliente ou produtor rural.',
   },
   {
+    path: ROUTES.CLIENTS_EVIDENCE,
+    category: 'authenticated_protected',
+    name: 'Fotos e Geolocalização dos Imóveis do Cliente',
+    requiresAuth: true,
+    requiredPermissions: ['properties:edit', 'client_registry_requests:fulfill'],
+    scope: 'organization',
+    description: 'Cadastro canônico de fotos e geolocalização dos imóveis vinculados ao cliente.',
+  },
+  {
     path: ROUTES.PROPERTIES,
     category: 'authenticated_protected',
     name: 'Imóveis Rurais e Urbanos',
@@ -395,6 +404,10 @@ export function findRouteDefinition(path: string): RouteDefinition | undefined {
 
   if (/^\/clientes\/[^/]+\/editar$/.test(path)) {
     return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.CLIENTS_EDIT);
+  }
+
+  if (/^\/clientes\/[^/]+\/fotos-geolocalizacao$/.test(path)) {
+    return CENTRAL_ROUTE_MATRIX.find((r) => r.path === ROUTES.CLIENTS_EVIDENCE);
   }
 
   if (/^\/imoveis\/[^/]+\/editar$/.test(path)) {

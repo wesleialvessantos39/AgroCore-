@@ -1,10 +1,10 @@
 import { DocumentDomainError } from '../types/documents';
 import type {
+  FieldEvidenceCompleteness,
   FieldEvidenceLocation,
   FieldEvidencePhotoMimeType,
   FieldEvidenceSet,
 } from '../types/fieldEvidence';
-import type { Client } from '../types/client';
 import type { Property } from '../types/property';
 import { verifyDocumentFileSignature } from '../documents/documentStoragePolicy';
 
@@ -15,52 +15,32 @@ const PHOTO_MIMES = new Set<FieldEvidencePhotoMimeType>([
   'image/tiff',
 ]);
 
-export function buildRegistryLocation(
-  property: Property | null,
-  client: Client | null
+export function buildPropertyRegistryLocation(
+  property: Property | null
 ): FieldEvidenceLocation | undefined {
-  const coordinate = property?.referenceCoordinate;
-  let label: string | undefined;
+  if (!property) return undefined;
 
-  if (property?.propertyType === 'urban') {
-    label = [
-      property.location.street,
-      property.location.number,
-      property.location.neighborhood,
-      property.location.city,
-      property.location.state,
-    ]
-      .filter(Boolean)
-      .join(', ');
-  } else if (property?.propertyType === 'rural') {
-    label = [
-      property.location.ruralRegionOrCommunity,
-      property.location.district,
-      property.location.city,
-      property.location.state,
-    ]
-      .filter(Boolean)
-      .join(', ');
-  } else if (client?.address.addressType === 'urban') {
-    label = [
-      client.address.street,
-      client.address.number,
-      client.address.neighborhood,
-      client.address.city,
-      client.address.state,
-    ]
-      .filter(Boolean)
-      .join(', ');
-  } else if (client?.address.addressType === 'rural') {
-    label = [
-      client.address.locality,
-      client.address.city,
-      client.address.state,
-    ]
-      .filter(Boolean)
-      .join(', ');
-  }
+  const label =
+    property.propertyType === 'urban'
+      ? [
+          property.location.street,
+          property.location.number,
+          property.location.neighborhood,
+          property.location.city,
+          property.location.state,
+        ]
+          .filter(Boolean)
+          .join(', ')
+      : [
+          property.location.ruralRegionOrCommunity,
+          property.location.district,
+          property.location.city,
+          property.location.state,
+        ]
+          .filter(Boolean)
+          .join(', ');
 
+  const coordinate = property.referenceCoordinate;
   if (coordinate) {
     const latitude = Number(coordinate.latitude);
     const longitude = Number(coordinate.longitude);
@@ -75,26 +55,50 @@ export function buildRegistryLocation(
       return {
         latitude,
         longitude,
-        label,
+        label: label || undefined,
         source: 'property_reference',
       };
     }
   }
 
-  if (label) {
-    return {
-      latitude: null,
-      longitude: null,
-      label,
-      source: 'registry_address',
-    };
-  }
-
-  return undefined;
+  return label
+    ? {
+        latitude: null,
+        longitude: null,
+        label,
+        source: 'property_reference',
+      }
+    : undefined;
 }
 
-export async function validateFieldEvidencePhoto(file: File): Promise<FieldEvidencePhotoMimeType> {
-  if (!Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_FIELD_EVIDENCE_PHOTO_BYTES) {
+export function getFieldEvidenceCompleteness(
+  evidence: FieldEvidenceSet | null,
+  propertyId?: string
+): FieldEvidenceCompleteness {
+  const hasProperty = Boolean(propertyId);
+  const hasGeolocation = Boolean(
+    evidence?.location &&
+      evidence.location.latitude !== null &&
+      evidence.location.longitude !== null
+  );
+  const hasPhotos = Boolean(evidence?.photos.length);
+
+  return {
+    hasProperty,
+    hasGeolocation,
+    hasPhotos,
+    complete: hasProperty && hasGeolocation && hasPhotos,
+  };
+}
+
+export async function validateFieldEvidencePhoto(
+  file: File
+): Promise<FieldEvidencePhotoMimeType> {
+  if (
+    !Number.isSafeInteger(file.size) ||
+    file.size <= 0 ||
+    file.size > MAX_FIELD_EVIDENCE_PHOTO_BYTES
+  ) {
     throw new DocumentDomainError(
       'INVALID_FILE',
       'A foto deve possuir até 15 MB e não pode estar vazia.'
@@ -110,12 +114,16 @@ export async function validateFieldEvidencePhoto(file: File): Promise<FieldEvide
   return file.type as FieldEvidencePhotoMimeType;
 }
 
-export function validateFieldEvidenceLocation(location: FieldEvidenceLocation): void {
+export function validateFieldEvidenceLocation(
+  location: FieldEvidenceLocation
+): void {
   const hasLatitude = location.latitude !== null;
   const hasLongitude = location.longitude !== null;
+
   if (hasLatitude !== hasLongitude) {
     throw new Error('Latitude e longitude devem ser informadas em conjunto.');
   }
+
   if (hasLatitude && hasLongitude) {
     if (
       !Number.isFinite(location.latitude) ||
@@ -128,9 +136,11 @@ export function validateFieldEvidenceLocation(location: FieldEvidenceLocation): 
       throw new Error('Coordenadas geográficas inválidas.');
     }
   }
+
   if (
     location.accuracyMeters !== undefined &&
-    (!Number.isFinite(location.accuracyMeters) || location.accuracyMeters < 0)
+    (!Number.isFinite(location.accuracyMeters) ||
+      location.accuracyMeters < 0)
   ) {
     throw new Error('Precisão geográfica inválida.');
   }
@@ -141,13 +151,13 @@ export function toAppraisalFieldEvidenceSnapshot(
 ): import('../types/fieldEvidence').AppraisalFieldEvidenceSnapshot {
   return {
     evidenceId: evidence.id,
+    propertyId: evidence.propertyId,
     location: evidence.location,
     photos: evidence.photos.map((photo) => ({
       id: photo.id,
       source: photo.source,
       caption: photo.caption,
       capturedAt: photo.capturedAt,
-      legacyReference: photo.legacyReference,
       documentVersionId: photo.documentVersionId,
     })),
     synchronizedAt: new Date().toISOString(),

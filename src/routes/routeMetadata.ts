@@ -38,6 +38,10 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Editar Cliente | AgroCore',
     announcementTitle: 'Editar cliente ou produtor rural',
   },
+  [ROUTES.CLIENTS_EVIDENCE]: {
+    documentTitle: 'Fotos e Geolocalização do Imóvel | AgroCore',
+    announcementTitle: 'Fotos e geolocalização dos imóveis do cliente',
+  },
   [ROUTES.PROPERTIES]: {
     documentTitle: 'Imóveis Rurais e Urbanos | AgroCore',
     announcementTitle: 'Imóveis rurais e urbanos',
@@ -186,6 +190,10 @@ export function getRouteMetadata(pathname: string): RouteMetadata {
   // 2. Correspondência para rotas parametrizadas
   if (/^\/clientes\/[^/]+\/editar$/.test(pathname)) {
     return ROUTE_METADATA_MAP[ROUTES.CLIENTS_EDIT];
+  }
+
+  if (/^\/clientes\/[^/]+\/fotos-geolocalizacao$/.test(pathname)) {
+    return ROUTE_METADATA_MAP[ROUTES.CLIENTS_EVIDENCE];
   }
 
   if (/^\/imoveis\/[^/]+\/editar$/.test(pathname)) {

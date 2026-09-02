@@ -3,17 +3,14 @@ import type { OrganizationRole } from './auth';
 export const FIELD_EVIDENCE_STORAGE_BUCKET = 'field-evidence' as const;
 
 export type FieldEvidenceLocationSource =
-  | 'appraisal'
   | 'property_reference'
   | 'property_geometry'
-  | 'registry_address'
   | 'device'
   | 'manual';
 
 export type FieldEvidencePhotoSource =
-  | 'appraisal_document'
-  | 'registry_document'
-  | 'appraisal_legacy'
+  | 'property_document'
+  | 'property_capture'
   | 'visit_capture'
   | 'appraisal_capture';
 
@@ -37,7 +34,6 @@ export interface FieldEvidencePhoto {
   readonly evidenceId: string;
   readonly source: FieldEvidencePhotoSource;
   readonly documentVersionId?: string;
-  readonly legacyReference?: string;
   readonly storageBucket?: string;
   readonly storageObjectPath?: string;
   readonly mimeType?: FieldEvidencePhotoMimeType;
@@ -52,9 +48,7 @@ export interface FieldEvidencePhoto {
 export interface FieldEvidenceSet {
   readonly id: string;
   readonly organizationId: string;
-  readonly visitId?: string;
-  readonly appraisalId?: string;
-  readonly propertyId?: string;
+  readonly propertyId: string;
   readonly clientId: string;
   readonly location?: FieldEvidenceLocation;
   readonly photos: readonly FieldEvidencePhoto[];
@@ -75,11 +69,10 @@ export interface InitializeFieldEvidenceInput {
   readonly organizationId: string;
   readonly visitId?: string;
   readonly appraisalId?: string;
-  readonly propertyId?: string;
+  readonly propertyId: string;
   readonly clientId: string;
   readonly actorUserId: string;
   readonly registryLocation?: FieldEvidenceLocation;
-  readonly legacyAppraisalPhotoReferences?: readonly string[];
 }
 
 export interface SetFieldEvidenceLocationInput {
@@ -95,13 +88,19 @@ export interface UploadFieldEvidencePhotoInput {
   readonly evidenceId: string;
   readonly actorUserId: string;
   readonly expectedVersion: number;
-  readonly source: 'visit_capture' | 'appraisal_capture';
+  readonly source: 'property_capture' | 'visit_capture' | 'appraisal_capture';
   readonly caption?: string;
   readonly latitude?: number;
   readonly longitude?: number;
 }
 
 export interface FieldEvidenceGateway {
+  getByProperty(
+    organizationId: string,
+    propertyId: string,
+    signal?: AbortSignal
+  ): Promise<FieldEvidenceSet | null>;
+
   getByVisit(
     organizationId: string,
     visitId: string,
@@ -138,15 +137,22 @@ export interface FieldEvidenceGateway {
   clearAllSessionData(): void;
 }
 
+export interface FieldEvidenceCompleteness {
+  readonly hasProperty: boolean;
+  readonly hasGeolocation: boolean;
+  readonly hasPhotos: boolean;
+  readonly complete: boolean;
+}
+
 export interface AppraisalFieldEvidenceSnapshot {
   readonly evidenceId: string;
+  readonly propertyId: string;
   readonly location?: FieldEvidenceLocation;
   readonly photos: readonly {
     readonly id: string;
     readonly source: FieldEvidencePhotoSource;
     readonly caption?: string;
     readonly capturedAt: string;
-    readonly legacyReference?: string;
     readonly documentVersionId?: string;
   }[];
   readonly synchronizedAt: string;

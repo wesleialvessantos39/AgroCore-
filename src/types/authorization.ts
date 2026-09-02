@@ -43,6 +43,10 @@ export type Permission =
   | 'clients:edit'
   | 'client_capturer_assignments:view'
   | 'client_capturer_assignments:manage'
+  | 'client_registry_requests:create'
+  | 'client_registry_requests:view_assigned'
+  | 'client_registry_requests:fulfill'
+  | 'client_registry_requests:view_all'
 
   // Escopo: Imóveis Rurais e Urbanos
   | 'properties:view'
