@@ -1219,6 +1219,393 @@ await test('Migrações documentais não contêm senhas ou URLs expostas e possu
   }
 });
 
+// 12. MATRIZ COMPLETA, REDE INSTÁVEL E EVIDÊNCIAS ESTRUTURAIS
+console.log('\n--- 12. Revisão complementar contra o Plano Mestre ---');
+
+await test('Matriz documental cobre positivamente e negativamente os sete perfis oficiais', () => {
+  const expected = {
+    platform_super_admin: {
+      view: false, upload: false, manage: false, share: false, export: false,
+    },
+    owner: {
+      view: true, upload: true, manage: true, share: true, export: true,
+    },
+    company_admin: {
+      view: true, upload: true, manage: true, share: true, export: true,
+    },
+    manager: {
+      view: true, upload: true, manage: true, share: true, export: true,
+    },
+    project_designer: {
+      view: true, upload: true, manage: false, share: true, export: true,
+    },
+    finance: {
+      view: true, upload: false, manage: false, share: false, export: true,
+    },
+    capturer: {
+      view: true, upload: true, manage: false, share: true, export: true,
+    },
+  } as const;
+
+  for (const [role, permissions] of Object.entries(expected)) {
+    const granted = getRolePermissions(role as Parameters<typeof getRolePermissions>[0]);
+    assert.equal(granted.includes('documents:view'), permissions.view, `${role}:view`);
+    assert.equal(granted.includes('documents:upload'), permissions.upload, `${role}:upload`);
+    assert.equal(granted.includes('documents:manage'), permissions.manage, `${role}:manage`);
+    assert.equal(granted.includes('documents:share'), permissions.share, `${role}:share`);
+    assert.equal(granted.includes('documents:export'), permissions.export, `${role}:export`);
+  }
+});
+
+await test('Owner, administrador e gerente executam mutação documental autorizada', async () => {
+  for (const role of ['owner', 'company_admin', 'manager'] as const) {
+    const storage = new VolatileDocumentStorageGateway();
+    const refGateway = new PreviewDocumentReferenceGateway();
+    const docService = new DocumentApplicationService(
+      refGateway,
+      new FixedClock('2026-09-02T12:00:00.000Z'),
+      new SequentialIds(`DOC-${role}`)
+    );
+    const uploadService = new DocumentUploadService(
+      docService,
+      storage,
+      new SequentialIds(`UPL-${role}`)
+    );
+    const ownerMap = new Map<string, DocumentOwnerResolution>([
+      ['client:client-matrix', {
+        exists: true,
+        organizationId: 'org-matrix',
+        authorizedUserIds: [`user-${role}`],
+      }],
+    ]);
+    const ctx = createContext(
+      'org-matrix',
+      `user-${role}`,
+      role,
+      ownerMap,
+      new Map()
+    );
+    const document = await uploadService.uploadDocument(ctx, {
+      file: pdfFile(`${role}.pdf`),
+      metadata: {
+        logicalOwnerType: 'client',
+        logicalOwnerId: 'client-matrix',
+        category: 'registration_certificate',
+        accessScope: 'organization',
+        displayName: `Documento ${role}`,
+      },
+      onProgress: () => undefined,
+      signal: dummySignal(),
+      idempotencyKey: `matrix-${role}-0001`,
+    });
+    const archived = await docService.archiveReference(ctx, {
+      documentId: document.id,
+      expectedVersion: document.versionNumber,
+      reason: 'Encerramento controlado para prova de gestão',
+      idempotencyKey: `archive-${role}-0001`,
+    });
+    assert.equal(archived.status, 'archived');
+  }
+});
+
+await test('Projetista envia no próprio escopo, mas não adquire gestão documental global', async () => {
+  const storage = new VolatileDocumentStorageGateway();
+  const refGateway = new PreviewDocumentReferenceGateway();
+  const docService = new DocumentApplicationService(
+    refGateway,
+    new FixedClock('2026-09-02T12:00:00.000Z'),
+    new SequentialIds('DOC-DES')
+  );
+  const uploadService = new DocumentUploadService(
+    docService,
+    storage,
+    new SequentialIds('UPL-DES')
+  );
+  const ownerMap = new Map<string, DocumentOwnerResolution>([
+    ['client:client-designer', {
+      exists: true,
+      organizationId: 'org-designer',
+      authorizedUserIds: ['designer-user'],
+    }],
+  ]);
+  const ctx = createContext(
+    'org-designer',
+    'designer-user',
+    'project_designer',
+    ownerMap,
+    new Map()
+  );
+  const document = await uploadService.uploadDocument(ctx, {
+    file: pdfFile('designer.pdf'),
+    metadata: {
+      logicalOwnerType: 'client',
+      logicalOwnerId: 'client-designer',
+      category: 'technical_report',
+      accessScope: 'participants',
+      displayName: 'Relatório técnico',
+    },
+    onProgress: () => undefined,
+    signal: dummySignal(),
+    idempotencyKey: 'designer-upload-0001',
+  });
+  assert.equal(document.createdByUserId, 'designer-user');
+  await assert.rejects(
+    () => docService.archiveReference(ctx, {
+      documentId: document.id,
+      expectedVersion: document.versionNumber,
+      reason: 'Tentativa de gestão indevida',
+      idempotencyKey: 'designer-archive-0001',
+    }),
+    (err: unknown) => err instanceof DocumentDomainError && err.code === 'FORBIDDEN'
+  );
+});
+
+await test('Falha transitória de rede preserva o mesmo path no retry e não executa compensação falsa', async () => {
+  class FlakyStorageGateway extends VolatileDocumentStorageGateway {
+    attempts = 0;
+    removals = 0;
+    paths: string[] = [];
+
+    override async upload(input: Parameters<VolatileDocumentStorageGateway['upload']>[0]) {
+      this.attempts += 1;
+      this.paths.push(input.objectPath);
+      if (this.attempts === 1) {
+        throw new DocumentDomainError(
+          'STORAGE_UPLOAD_FAILED',
+          'Falha transitória simulada de rede.'
+        );
+      }
+      return super.upload(input);
+    }
+
+    override async remove(bucket: typeof DOCUMENT_STORAGE_BUCKET, objectPath: string) {
+      this.removals += 1;
+      return super.remove(bucket, objectPath);
+    }
+  }
+
+  const storage = new FlakyStorageGateway();
+  const refGateway = new PreviewDocumentReferenceGateway();
+  const docService = new DocumentApplicationService(
+    refGateway,
+    new FixedClock('2026-09-02T12:00:00.000Z'),
+    new SequentialIds('DOC-NET')
+  );
+  const uploadService = new DocumentUploadService(
+    docService,
+    storage,
+    new SequentialIds('UPL-NET')
+  );
+  const ownerMap = new Map<string, DocumentOwnerResolution>([
+    ['client:client-net', {
+      exists: true,
+      organizationId: 'org-net',
+      authorizedUserIds: ['user-net'],
+    }],
+  ]);
+  const ctx = createContext('org-net', 'user-net', 'owner', ownerMap, new Map());
+  const command = {
+    file: pdfFile('rede.pdf'),
+    metadata: {
+      logicalOwnerType: 'client' as const,
+      logicalOwnerId: 'client-net',
+      category: 'registration_certificate' as const,
+      accessScope: 'organization' as const,
+      displayName: 'Documento de rede',
+    },
+    onProgress: () => undefined,
+    signal: dummySignal(),
+    idempotencyKey: 'network-retry-0001',
+  };
+
+  await assert.rejects(
+    () => uploadService.uploadDocument(ctx, command),
+    (err: unknown) =>
+      err instanceof DocumentDomainError && err.code === 'STORAGE_UPLOAD_FAILED'
+  );
+  assert.equal(storage.removals, 0);
+
+  const document = await uploadService.uploadDocument(ctx, command);
+  assert.equal(storage.paths.length, 2);
+  assert.equal(storage.paths[0], storage.paths[1]);
+  assert.equal(document.storageObjectPath, storage.paths[1]);
+});
+
+await test('Storage indisponível preserva o erro raiz e não é mascarado por compensação', async () => {
+  class CountingUnavailableStorage extends UnavailableDocumentStorageGateway {
+    removals = 0;
+    override async remove(bucket: typeof DOCUMENT_STORAGE_BUCKET, objectPath: string) {
+      this.removals += 1;
+      return super.remove(bucket, objectPath);
+    }
+  }
+
+  const storage = new CountingUnavailableStorage();
+  const docService = new DocumentApplicationService(
+    new PreviewDocumentReferenceGateway(),
+    new FixedClock('2026-09-02T12:00:00.000Z'),
+    new SequentialIds('DOC-OFF')
+  );
+  const uploadService = new DocumentUploadService(
+    docService,
+    storage,
+    new SequentialIds('UPL-OFF')
+  );
+  const ownerMap = new Map<string, DocumentOwnerResolution>([
+    ['client:client-off', {
+      exists: true,
+      organizationId: 'org-off',
+      authorizedUserIds: ['user-off'],
+    }],
+  ]);
+  const ctx = createContext('org-off', 'user-off', 'owner', ownerMap, new Map());
+
+  await assert.rejects(
+    () => uploadService.uploadDocument(ctx, {
+      file: pdfFile('offline.pdf'),
+      metadata: {
+        logicalOwnerType: 'client',
+        logicalOwnerId: 'client-off',
+        category: 'registration_certificate',
+        accessScope: 'organization',
+        displayName: 'Documento offline',
+      },
+      onProgress: () => undefined,
+      signal: dummySignal(),
+      idempotencyKey: 'offline-storage-0001',
+    }),
+    (err: unknown) =>
+      err instanceof DocumentDomainError && err.code === 'STORAGE_NOT_CONFIGURED'
+  );
+  assert.equal(storage.removals, 0);
+});
+
+await test('Falha de limpeza após objeto confirmado tenta três vezes e sinaliza órfão potencial', async () => {
+  class FailingReferenceGateway extends PreviewDocumentReferenceGateway {
+    override async createReference(): Promise<never> {
+      throw new DocumentDomainError(
+        'SERVICE_UNAVAILABLE',
+        'Falha controlada após confirmação do Storage.'
+      );
+    }
+  }
+
+  class UnremovableStorageGateway extends VolatileDocumentStorageGateway {
+    removals = 0;
+    override async remove(): Promise<void> {
+      this.removals += 1;
+      throw new DocumentDomainError(
+        'STORAGE_COMPENSATION_FAILED',
+        'Falha controlada de limpeza.'
+      );
+    }
+  }
+
+  const storage = new UnremovableStorageGateway();
+  const refGateway = new FailingReferenceGateway();
+  const docService = new DocumentApplicationService(
+    refGateway,
+    new FixedClock('2026-09-02T12:00:00.000Z'),
+    new SequentialIds('DOC-ORPH')
+  );
+  const uploadService = new DocumentUploadService(
+    docService,
+    storage,
+    new SequentialIds('UPL-ORPH')
+  );
+  const ownerMap = new Map<string, DocumentOwnerResolution>([
+    ['client:client-orph', {
+      exists: true,
+      organizationId: 'org-orph',
+      authorizedUserIds: ['user-orph'],
+    }],
+  ]);
+  const ctx = createContext(
+    'org-orph',
+    'user-orph',
+    'owner',
+    ownerMap,
+    new Map()
+  );
+
+  await assert.rejects(
+    () => uploadService.uploadDocument(ctx, {
+      file: pdfFile('orfao.pdf'),
+      metadata: {
+        logicalOwnerType: 'client',
+        logicalOwnerId: 'client-orph',
+        category: 'registration_certificate',
+        accessScope: 'organization',
+        displayName: 'Documento com limpeza controlada',
+      },
+      onProgress: () => undefined,
+      signal: dummySignal(),
+      idempotencyKey: 'orphan-cleanup-0001',
+    }),
+    (err: unknown) =>
+      err instanceof DocumentDomainError &&
+      err.code === 'STORAGE_COMPENSATION_FAILED'
+  );
+  assert.equal(storage.removals, 3);
+  assert.equal(
+    (await refGateway.listReferences({ organizationId: 'org-orph' })).length,
+    0
+  );
+});
+
+await test('Migrações documentais preservam RLS fechado sem políticas permissivas universais', () => {
+  const storageMigration = fs.readFileSync(
+    'supabase/migrations/20260901025305_oe_006_002_document_storage.sql',
+    'utf8'
+  );
+  assert.equal((storageMigration.match(/create policy/gi) ?? []).length, 4);
+  assert.match(storageMigration, /organization-documents/);
+  assert.match(storageMigration, /public\s*,?\s*false/i);
+  assert.match(storageMigration, /organization_memberships/);
+  assert.doesNotMatch(storageMigration, /using\s*\(\s*true\s*\)/i);
+  assert.doesNotMatch(storageMigration, /with\s+check\s*\(\s*true\s*\)/i);
+
+  for (const migration of [
+    'supabase/migrations/20260901115546_oe_006_004_document_versions.sql',
+    'supabase/migrations/20260901170544_oe_006_005_proposal_checklists.sql',
+    'supabase/migrations/20260902010000_oe_006_006_document_compliance.sql',
+  ]) {
+    const sql = fs.readFileSync(migration, 'utf8');
+    assert.match(sql, /enable row level security/i);
+    assert.match(sql, /security definer/i);
+    assert.match(sql, /set search_path = ''/i);
+    assert.doesNotMatch(sql, /using\s*\(\s*true\s*\)/i);
+    assert.doesNotMatch(sql, /with\s+check\s*\(\s*true\s*\)/i);
+  }
+
+  const compliance = fs.readFileSync(
+    'supabase/migrations/20260902010000_oe_006_006_document_compliance.sql',
+    'utf8'
+  );
+  assert.match(
+    compliance,
+    /grant execute on function public\.agrocore_redeem_document_share\(text\)[\s\S]*to service_role/i
+  );
+  assert.doesNotMatch(
+    compliance,
+    /grant execute on function public\.agrocore_redeem_document_share\(text\)[\s\S]{0,120}to (?:anon|authenticated)/i
+  );
+});
+
+await test('Edge Function pública minimiza exposição de token, resposta e URL temporária', () => {
+  const edge = fs.readFileSync('supabase/functions/document-share/index.ts', 'utf8');
+  assert.match(edge, /Cache-Control': 'no-store, max-age=0'/);
+  assert.match(edge, /Referrer-Policy': 'no-referrer'/);
+  assert.match(edge, /X-Content-Type-Options': 'nosniff'/);
+  assert.match(edge, /readLimitedText\(request, 256\)/);
+  assert.match(edge, /\^\[A-Za-z0-9_-\]\{43\}\$/);
+  assert.match(edge, /crypto\.subtle\.digest\('SHA-256'/);
+  assert.match(edge, /JSON\.stringify\(\{ expiresIn: 60 \}\)/);
+  assert.equal(/console\.(?:log|info|debug|warn)\s*\(/.test(edge), false);
+  assert.equal(/sb_secret_[A-Za-z0-9_-]{20,}/.test(edge), false);
+  assert.equal(/service_role_key\s*=\s*['"][^'"]+/i.test(edge), false);
+});
+
 console.log('=============================================================');
 console.log(`Resultado OE-006.007: ${passed} passaram, ${failed} falharam`);
 console.log('=============================================================');

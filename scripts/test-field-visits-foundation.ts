@@ -479,6 +479,8 @@ await test('22. Confirmação é feita por perfil de agendamento', async () => {
   assert.equal(confirmed.status, 'confirmed');
   assert.equal(confirmed.version, 2);
   assert.ok(confirmed.confirmedAt);
+  const audit = await service.listAudit(ctx, visit.id);
+  assert.deepEqual(audit.at(-1)?.changedFields, ['status', 'confirmedAt']);
 });
 
 await test('23. Somente o responsável pode iniciar a execução', async () => {
@@ -550,6 +552,10 @@ await test('25. Cancelamento exige motivo e fica auditado', async () => {
   assert.equal(cancelled.cancellationReason, 'Cliente solicitou cancelamento');
   const audit = await service.listAudit(ctx, visit.id);
   assert.equal(audit.at(-1)?.reason, 'Cliente solicitou cancelamento');
+  assert.deepEqual(
+    audit.at(-1)?.changedFields,
+    ['status', 'cancelledAt', 'cancellationReason']
+  );
 });
 
 await test('26. Visita em execução ou terminal bloqueia alteração de planejamento', async () => {
@@ -634,6 +640,74 @@ await test('30. Escopo da fundação não antecipa formulário de campo, fotos o
     fs.readFileSync('src/fieldVisits/technicalVisitService.ts', 'utf8'),
   ].join('\n');
   assert.equal(/photoEvidence|formSections|fieldResponses|latitude|longitude/.test(source), false);
+});
+
+await test('31. Matriz dos sete perfis oficiais preserva view, schedule e execute', () => {
+  const expected = {
+    platform_super_admin: { view: false, schedule: false, execute: false },
+    owner: { view: true, schedule: true, execute: true },
+    company_admin: { view: true, schedule: true, execute: true },
+    manager: { view: true, schedule: true, execute: true },
+    project_designer: { view: true, schedule: true, execute: true },
+    finance: { view: false, schedule: false, execute: false },
+    capturer: { view: true, schedule: false, execute: false },
+  } as const;
+
+  for (const [role, permissions] of Object.entries(expected)) {
+    const granted = getRolePermissions(role as Parameters<typeof getRolePermissions>[0]);
+    assert.equal(granted.includes('surveys_and_visits:view'), permissions.view, `${role}:view`);
+    assert.equal(
+      granted.includes('surveys_and_visits:schedule'),
+      permissions.schedule,
+      `${role}:schedule`
+    );
+    assert.equal(
+      granted.includes('surveys_and_visits:execute'),
+      permissions.execute,
+      `${role}:execute`
+    );
+  }
+});
+
+await test('32. Auditoria de visita não pode ser consultada por outra organização', async () => {
+  const gateway = new PreviewTechnicalVisitGateway();
+  const service = new TechnicalVisitService(
+    gateway,
+    new FixedClock('2026-09-02T15:00:00.000Z'),
+    new SequentialIds()
+  );
+  const visit = await service.createVisit(context('org-a'), validInput());
+  const mapsB = baseMaps('org-b');
+
+  await assert.rejects(
+    () => service.listAudit(
+      context('org-b', 'user-owner', 'owner', mapsB),
+      visit.id
+    ),
+    (error: unknown) =>
+      error instanceof TechnicalVisitDomainError && error.code === 'VISIT_NOT_FOUND'
+  );
+});
+
+await test('33. Data com offset é normalizada para UTC sem perder o instante', async () => {
+  const { service } = newService();
+  const visit = await service.createVisit(context(), {
+    ...validInput(),
+    scheduledFor: '2026-09-05T09:00:00-03:00',
+  });
+  assert.equal(visit.scheduledFor, '2026-09-05T12:00:00.000Z');
+});
+
+await test('34. Leitura da auditoria devolve cópias e não permite mutação externa do histórico', async () => {
+  const { service } = newService();
+  const ctx = context();
+  const visit = await service.createVisit(ctx, validInput());
+  const firstRead = await service.listAudit(ctx, visit.id);
+  const mutable = firstRead[0].changedFields as string[];
+  mutable.push('tampered');
+
+  const secondRead = await service.listAudit(ctx, visit.id);
+  assert.equal(secondRead[0].changedFields.includes('tampered'), false);
 });
 
 console.log('\n====================================================');

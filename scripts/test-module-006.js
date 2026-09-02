@@ -20,7 +20,7 @@ try {
   run('scripts/test-document-security-homologation.ts');
   run('scripts/test-documents-ui-copy.ts');
   run('scripts/test-documents-theme.js');
-  console.log('\n✅ MÓDULO 006 — OE-006.001 A OE-006.007 APROVADAS');
+  console.log('\n✅ MÓDULO 006 — HOMOLOGAÇÃO DE CÓDIGO APROVADA ATÉ OE-006.007; validação remota do Supabase permanece separada.');
 } catch (error) {
   console.error('\n❌ Falha na homologação do Módulo 006.');
   process.exit(1);

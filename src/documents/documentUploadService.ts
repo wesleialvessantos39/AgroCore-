@@ -35,11 +35,21 @@ export interface ReplaceStoredDocumentCommand extends ReplaceStoredDocumentComma
 }
 
 export class DocumentUploadService {
+  private readonly stableDocumentIds = new Map<string, string>();
+
   constructor(
     private readonly applicationService: DocumentApplicationService = new DocumentApplicationService(),
     private readonly storageGateway: DocumentStorageGateway = getDocumentStorageGateway(),
     private readonly idGenerator: DocumentIdGenerator = SecureDocumentIdGenerator
   ) {}
+
+  private stableDocumentId(operationKey: string): string {
+    const existing = this.stableDocumentIds.get(operationKey);
+    if (existing) return existing;
+    const generated = this.idGenerator.generate();
+    this.stableDocumentIds.set(operationKey, generated);
+    return generated;
+  }
 
   private async compensate(objectPath: string): Promise<void> {
     let lastError: unknown;
@@ -76,7 +86,9 @@ export class DocumentUploadService {
       throw new DocumentDomainError('UPLOAD_CANCELLED', 'Envio cancelado.');
     }
 
-    const documentId = this.idGenerator.generate();
+    const documentId = this.stableDocumentId(
+      `create:${context.organizationId}:${command.idempotencyKey}`
+    );
     const objectPath = buildDocumentStoragePath({
       organizationId: context.organizationId,
       logicalOwnerType: command.metadata.logicalOwnerType,
@@ -85,6 +97,7 @@ export class DocumentUploadService {
       mimeType,
     });
 
+    let uploadCompleted = false;
     try {
       const storedObject = await this.storageGateway.upload({
         bucket: DOCUMENT_STORAGE_BUCKET,
@@ -94,17 +107,26 @@ export class DocumentUploadService {
         signal: command.signal,
         onProgress: command.onProgress,
       });
+      uploadCompleted = true;
+      if (command.signal.aborted) {
+        await this.compensate(objectPath);
+        throw new DocumentDomainError('UPLOAD_CANCELLED', 'Envio cancelado.');
+      }
       return await this.applicationService.registerStoredDocument(context, {
         ...authorizationInput,
         documentId,
         storedObject,
       });
     } catch (error) {
-      if (error instanceof DocumentDomainError && error.code === 'STORAGE_COMPENSATION_FAILED') throw error;
-      try {
-        await this.compensate(objectPath);
-      } catch (compensationError) {
-        throw compensationError;
+      if (error instanceof DocumentDomainError && error.code === 'STORAGE_COMPENSATION_FAILED') {
+        throw error;
+      }
+      if (uploadCompleted) {
+        try {
+          await this.compensate(objectPath);
+        } catch (compensationError) {
+          throw compensationError;
+        }
       }
       if (command.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
         throw new DocumentDomainError('UPLOAD_CANCELLED', 'Envio cancelado.');
@@ -141,7 +163,9 @@ export class DocumentUploadService {
       throw new DocumentDomainError('UPLOAD_CANCELLED', 'Envio cancelado.');
     }
 
-    const documentId = this.idGenerator.generate();
+    const documentId = this.stableDocumentId(
+      `replace:${context.organizationId}:${previous.logicalDocumentId}:${command.idempotencyKey}`
+    );
     const objectPath = buildDocumentStoragePath({
       organizationId: context.organizationId,
       logicalOwnerType: previous.logicalOwnerType,
@@ -151,6 +175,7 @@ export class DocumentUploadService {
       mimeType,
     });
 
+    let uploadCompleted = false;
     try {
       const storedObject = await this.storageGateway.upload({
         bucket: DOCUMENT_STORAGE_BUCKET,
@@ -160,6 +185,11 @@ export class DocumentUploadService {
         signal: command.signal,
         onProgress: command.onProgress,
       });
+      uploadCompleted = true;
+      if (command.signal.aborted) {
+        await this.compensate(objectPath);
+        throw new DocumentDomainError('UPLOAD_CANCELLED', 'Envio cancelado.');
+      }
       return await this.applicationService.registerStoredDocumentVersion(context, {
         ...authorizationInput,
         documentId,
@@ -169,10 +199,12 @@ export class DocumentUploadService {
       if (error instanceof DocumentDomainError && error.code === 'STORAGE_COMPENSATION_FAILED') {
         throw error;
       }
-      try {
-        await this.compensate(objectPath);
-      } catch (compensationError) {
-        throw compensationError;
+      if (uploadCompleted) {
+        try {
+          await this.compensate(objectPath);
+        } catch (compensationError) {
+          throw compensationError;
+        }
       }
       if (command.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
         throw new DocumentDomainError('UPLOAD_CANCELLED', 'Envio cancelado.');

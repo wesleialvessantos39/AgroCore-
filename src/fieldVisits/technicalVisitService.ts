@@ -284,6 +284,14 @@ export class TechnicalVisitService {
       version: current.version + 1,
     };
 
+    const changedFields = ['status'];
+    if (input.targetStatus === 'confirmed') changedFields.push('confirmedAt');
+    if (input.targetStatus === 'in_progress') changedFields.push('startedAt');
+    if (input.targetStatus === 'completed') changedFields.push('completedAt');
+    if (input.targetStatus === 'cancelled') {
+      changedFields.push('cancelledAt', 'cancellationReason');
+    }
+
     const audit = this.buildAudit(
       context,
       next,
@@ -291,7 +299,7 @@ export class TechnicalVisitService {
       current.status,
       next.status,
       reason,
-      ['status']
+      changedFields
     );
 
     return this.gateway.updateVisit({
