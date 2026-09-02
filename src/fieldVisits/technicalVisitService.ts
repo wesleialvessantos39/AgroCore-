@@ -243,6 +243,25 @@ export class TechnicalVisitService {
           'Somente o responsável atual pode registrar a execução desta visita.'
         );
       }
+
+      if (input.targetStatus === 'in_progress') {
+        if (!current.preparation) {
+          throw new TechnicalVisitDomainError(
+            'PREPARATION_REQUIRED',
+            'Conclua a preparação operacional antes de iniciar a visita.'
+          );
+        }
+
+        const pendingRequiredItems = current.preparation.checklist.filter(
+          (item) => item.required && !item.completed
+        );
+        if (pendingRequiredItems.length > 0) {
+          throw new TechnicalVisitDomainError(
+            'PREPARATION_INCOMPLETE',
+            'Conclua os itens obrigatórios do checklist antes de iniciar a visita.'
+          );
+        }
+      }
     }
 
     const reason =

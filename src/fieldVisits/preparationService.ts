@@ -13,7 +13,6 @@ import {
   type TechnicalVisitPreparationChecklistItem,
   type TechnicalVisitScheduleConflict,
   type TechnicalVisitScheduleConflictReason,
-  type TechnicalVisitVehicleReference,
   type UpdateTechnicalVisitPreparationInput,
 } from '../types/technicalVisit';
 import type {
@@ -40,6 +39,41 @@ const defaultIds: TechnicalVisitIdGenerator = {
   },
 };
 
+const gatewayScheduleLocks = new WeakMap<
+  TechnicalVisitGateway,
+  Map<string, Promise<void>>
+>();
+
+async function withOrganizationScheduleLock<T>(
+  gateway: TechnicalVisitGateway,
+  organizationId: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  let locks = gatewayScheduleLocks.get(gateway);
+  if (!locks) {
+    locks = new Map<string, Promise<void>>();
+    gatewayScheduleLocks.set(gateway, locks);
+  }
+
+  const previous = locks.get(organizationId) ?? Promise.resolve();
+  let release: (() => void) | null = null;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const queued = previous.then(() => current);
+  locks.set(organizationId, queued);
+
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release?.();
+    if (locks.get(organizationId) === queued) {
+      locks.delete(organizationId);
+    }
+  }
+}
+
 export class TechnicalVisitPreparationService {
   constructor(
     private readonly gateway: TechnicalVisitGateway,
@@ -54,12 +88,20 @@ export class TechnicalVisitPreparationService {
   ): Promise<TechnicalVisit> {
     this.assertContext(context);
     this.assertPermission(context);
-    const current = await this.requireEditableVisit(context, visitId, input.expectedVersion);
-    const changeReason = this.requireReason(input.changeReason);
 
-    const scheduledFor = zonedLocalDateTimeToUtc(input.localStart, input.timeZone);
-    const preparation = await this.normalizePreparation(context, current, input);
-    const candidate: TechnicalVisit = {
+    return withOrganizationScheduleLock(
+      this.gateway,
+      context.organizationId,
+      async () => {
+        const current = await this.requireEditableVisit(
+          context,
+          visitId,
+          input.expectedVersion
+        );
+        const scheduledFor = zonedLocalDateTimeToUtc(input.localStart, input.timeZone);
+        const changeReason = this.requireReason(input.changeReason);
+        const preparation = await this.normalizePreparation(context, current, input);
+        const candidate: TechnicalVisit = {
       ...current,
       scheduledFor,
       preparation,
@@ -100,11 +142,13 @@ export class TechnicalVisitPreparationService {
     if (changedFields.length === 0) return current;
 
     const audit = this.buildAudit(context, next, changeReason, changedFields);
-    return this.gateway.updateVisit({
-      visit: next,
-      audit,
-      expectedVersion: input.expectedVersion,
-    });
+        return this.gateway.updateVisit({
+          visit: next,
+          audit,
+          expectedVersion: input.expectedVersion,
+        });
+      }
+    );
   }
 
   async setChecklistItemCompletion(
@@ -206,7 +250,6 @@ export class TechnicalVisitPreparationService {
       current.preparation?.checklist ?? [],
       input.checklist
     );
-    const vehicleReference = this.normalizeVehicle(input.vehicleReference ?? null);
     const routeNotes = this.normalizeRoute(input.routeNotes ?? null);
 
     return {
@@ -215,7 +258,6 @@ export class TechnicalVisitPreparationService {
       address,
       participantUserIds,
       checklist,
-      vehicleReference,
       routeNotes,
       conflictOverride: null,
       preparedByUserId: context.actor.userId,
@@ -334,26 +376,6 @@ export class TechnicalVisitPreparationService {
     });
   }
 
-  private normalizeVehicle(
-    vehicle: TechnicalVisitVehicleReference | null
-  ): TechnicalVisitVehicleReference | null {
-    if (!vehicle) return null;
-    const referenceId = vehicle.referenceId.trim();
-    const label = vehicle.label.trim();
-    if (
-      referenceId.length < 1 ||
-      referenceId.length > 120 ||
-      label.length < 2 ||
-      label.length > 120
-    ) {
-      throw new TechnicalVisitDomainError(
-        'INVALID_VEHICLE_REFERENCE',
-        'Revise a referência e a identificação do veículo previsto.'
-      );
-    }
-    return { referenceId, label };
-  }
-
   private normalizeRoute(routeNotes: string | null): string | null {
     const normalized = routeNotes?.trim() || null;
     if (normalized && normalized.length > 1200) {
@@ -375,8 +397,6 @@ export class TechnicalVisitPreparationService {
       candidate.responsibleUserId,
       ...(candidate.preparation?.participantUserIds ?? []),
     ]);
-    const candidateVehicle = candidate.preparation?.vehicleReference?.referenceId ?? null;
-
     const visits = await this.gateway.listVisits(context.organizationId, { status: 'all' });
     const conflicts: TechnicalVisitScheduleConflict[] = [];
 
@@ -423,11 +443,6 @@ export class TechnicalVisitPreparationService {
       ) {
         reasons.push('participant');
       }
-      const otherVehicle = other.preparation?.vehicleReference?.referenceId ?? null;
-      if (candidateVehicle && otherVehicle && candidateVehicle === otherVehicle) {
-        reasons.push('vehicle');
-      }
-
       if (reasons.length > 0) {
         conflicts.push({
           visitId: other.id,

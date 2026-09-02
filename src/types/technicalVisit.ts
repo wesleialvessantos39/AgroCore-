@@ -20,8 +20,7 @@ export type TechnicalVisitActivityType =
 
 export type TechnicalVisitScheduleConflictReason =
   | 'responsible'
-  | 'participant'
-  | 'vehicle';
+  | 'participant';
 
 export interface TechnicalVisitAddress {
   readonly addressLine: string;
@@ -38,11 +37,6 @@ export interface TechnicalVisitPreparationChecklistItem {
   readonly completed: boolean;
   readonly completedByUserId: string | null;
   readonly completedAt: string | null;
-}
-
-export interface TechnicalVisitVehicleReference {
-  readonly referenceId: string;
-  readonly label: string;
 }
 
 export interface TechnicalVisitScheduleConflict {
@@ -66,7 +60,6 @@ export interface TechnicalVisitPreparation {
   readonly address: TechnicalVisitAddress;
   readonly participantUserIds: readonly string[];
   readonly checklist: readonly TechnicalVisitPreparationChecklistItem[];
-  readonly vehicleReference: TechnicalVisitVehicleReference | null;
   readonly routeNotes: string | null;
   readonly conflictOverride: TechnicalVisitConflictOverride | null;
   readonly preparedByUserId: string;
@@ -148,7 +141,6 @@ export interface UpdateTechnicalVisitPreparationInput {
   readonly address: TechnicalVisitAddress;
   readonly participantUserIds: readonly string[];
   readonly checklist: readonly TechnicalVisitPreparationChecklistInput[];
-  readonly vehicleReference?: TechnicalVisitVehicleReference | null;
   readonly routeNotes?: string | null;
   readonly expectedVersion: number;
   readonly changeReason: string;
@@ -287,9 +279,10 @@ export type TechnicalVisitErrorCode =
   | 'INVALID_ADDRESS'
   | 'INVALID_PARTICIPANT'
   | 'INVALID_CHECKLIST'
-  | 'INVALID_VEHICLE_REFERENCE'
   | 'INVALID_ROUTE'
   | 'SCHEDULE_CONFLICT'
+  | 'PREPARATION_REQUIRED'
+  | 'PREPARATION_INCOMPLETE'
   | 'PREPARATION_LOCKED'
   | 'CHECKLIST_ITEM_NOT_FOUND'
   | 'INVALID_PURPOSE'

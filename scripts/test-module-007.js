@@ -14,6 +14,7 @@ console.log('====================================================\n');
 try {
   run('scripts/test-field-visits-foundation.ts');
   run('scripts/test-field-visits-preparation.ts');
+  run('scripts/test-field-visits-accessibility.ts');
   run('scripts/test-field-visits-theme.js');
   run('scripts/test-ui-copy.ts');
   console.log('\n✅ MÓDULO 007 — OE-007.001 E OE-007.002 APROVADAS');

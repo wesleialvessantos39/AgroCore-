@@ -16,9 +16,6 @@ function cloneVisit(visit: TechnicalVisit): TechnicalVisit {
           address: { ...visit.preparation.address },
           participantUserIds: [...visit.preparation.participantUserIds],
           checklist: visit.preparation.checklist.map((item) => ({ ...item })),
-          vehicleReference: visit.preparation.vehicleReference
-            ? { ...visit.preparation.vehicleReference }
-            : null,
           conflictOverride: visit.preparation.conflictOverride
             ? {
                 ...visit.preparation.conflictOverride,

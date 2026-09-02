@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, ClipboardList, MapPin, Route, Save, Users } from 'lucide-react';
 import type { OrganizationMember } from '../auth/organizationMembersGateway';
 import { useFieldVisits } from './useFieldVisits';
@@ -35,21 +35,10 @@ function browserTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
 }
 
-function vehicleReferenceId(label: string): string {
-  return label
-    .trim()
-    .normalize('NFKC')
-    .toLocaleLowerCase('pt-BR')
-    .replace(/\s+/g, '-')
-    .slice(0, 120);
-}
-
 function conflictLabel(conflict: TechnicalVisitScheduleConflict): string {
-  const labels = conflict.reasons.map((reason) => {
-    if (reason === 'responsible') return 'responsável';
-    if (reason === 'participant') return 'participante';
-    return 'veículo';
-  });
+  const labels = conflict.reasons.map((reason) =>
+    reason === 'responsible' ? 'responsável' : 'participante'
+  );
   return labels.join(', ');
 }
 
@@ -90,15 +79,22 @@ export function VisitPreparationPanel({
       required: item.required,
     })) ?? []
   );
-  const [vehicleLabel, setVehicleLabel] = useState(
-    visit.preparation?.vehicleReference?.label ?? ''
-  );
   const [routeNotes, setRouteNotes] = useState(visit.preparation?.routeNotes ?? '');
-  const [changeReason, setChangeReason] = useState('Preparação operacional da visita');
+  const [changeReason, setChangeReason] = useState(
+    visit.preparation ? '' : 'Preparação operacional inicial'
+  );
   const [overrideReason, setOverrideReason] = useState('');
   const [conflicts, setConflicts] = useState<readonly TechnicalVisitScheduleConflict[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const firstFieldRef = useRef<HTMLInputElement | null>(null);
+  const panelId = `visit-preparation-${visit.id}`;
+
+  useEffect(() => {
+    if (open) {
+      firstFieldRef.current?.focus();
+    }
+  }, [open]);
 
   useEffect(() => {
     const zone = visit.preparation?.timeZone ?? browserTimeZone();
@@ -118,8 +114,8 @@ export function VisitPreparationPanel({
         required: item.required,
       })) ?? []
     );
-    setVehicleLabel(visit.preparation?.vehicleReference?.label ?? '');
     setRouteNotes(visit.preparation?.routeNotes ?? '');
+    setChangeReason(visit.preparation ? '' : 'Preparação operacional inicial');
     setConflicts([]);
     setOverrideReason('');
     setError(null);
@@ -184,12 +180,6 @@ export function VisitPreparationPanel({
         },
         participantUserIds,
         checklist: checklistInput,
-        vehicleReference: vehicleLabel.trim()
-          ? {
-              referenceId: vehicleReferenceId(vehicleLabel),
-              label: vehicleLabel,
-            }
-          : null,
         routeNotes: routeNotes || null,
         expectedVersion: visit.version,
         changeReason,
@@ -228,7 +218,10 @@ export function VisitPreparationPanel({
   };
 
   return (
-    <section className={FIELD_VISIT_THEME.surfaceSoft + ' mt-4 p-4'}>
+    <section
+      className={FIELD_VISIT_THEME.surfaceSoft + ' mt-4 p-4'}
+      aria-busy={busy}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -253,9 +246,6 @@ export function VisitPreparationPanel({
               <p>
                 Checklist obrigatório: {requiredCompleted}/{requiredChecklist.length} concluído
               </p>
-              {visit.preparation.vehicleReference && (
-                <p>Veículo previsto: {visit.preparation.vehicleReference.label}</p>
-              )}
               {visit.preparation.conflictOverride && (
                 <p>
                   Exceção de agenda autorizada: {visit.preparation.conflictOverride.reason}
@@ -273,6 +263,8 @@ export function VisitPreparationPanel({
             type="button"
             className={FIELD_VISIT_THEME.buttonSecondary}
             onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            aria-controls={panelId}
           >
             {open ? 'Fechar' : visit.preparation ? 'Editar preparação' : 'Preparar visita'}
           </button>
@@ -352,11 +344,15 @@ export function VisitPreparationPanel({
       )}
 
       {open && canEdit && (
-        <div className="mt-5 space-y-5 border-t border-[#78C89A]/30 pt-5">
+        <div
+          id={panelId}
+          className="mt-5 space-y-5 border-t border-[#78C89A]/30 pt-5"
+        >
           <div className="grid gap-4 md:grid-cols-3">
             <label className="space-y-1.5 text-sm font-medium">
               <span>Data e hora local</span>
               <input
+                ref={firstFieldRef}
                 type="datetime-local"
                 className={FIELD_VISIT_THEME.input}
                 value={localStart}
@@ -445,11 +441,11 @@ export function VisitPreparationPanel({
             </div>
           </div>
 
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <fieldset>
+            <legend className="mb-2 flex items-center gap-2 text-sm font-semibold">
               <Users className="h-4 w-4" aria-hidden="true" />
               Participantes adicionais
-            </div>
+            </legend>
             <div className="grid gap-2 sm:grid-cols-2">
               {members
                 .filter((member) => member.userId !== visit.responsibleUserId)
@@ -468,14 +464,14 @@ export function VisitPreparationPanel({
                   </label>
                 ))}
             </div>
-          </div>
+          </fieldset>
 
-          <div>
+          <fieldset>
             <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-semibold">
+              <legend className="flex items-center gap-2 text-sm font-semibold">
                 <ClipboardList className="h-4 w-4" aria-hidden="true" />
                 Checklist prévio
-              </div>
+              </legend>
               <button
                 type="button"
                 className={FIELD_VISIT_THEME.buttonSecondary}
@@ -496,6 +492,7 @@ export function VisitPreparationPanel({
                   className="grid gap-2 rounded-xl border border-[#0B3D2E]/15 bg-white p-3 sm:grid-cols-[1fr_auto_auto]"
                 >
                   <input
+                    aria-label={`Descrição do item ${index + 1} do checklist`}
                     className={FIELD_VISIT_THEME.input}
                     value={item.label}
                     onChange={(event) =>
@@ -519,35 +516,29 @@ export function VisitPreparationPanel({
                     type="button"
                     className={FIELD_VISIT_THEME.buttonSecondary}
                     onClick={() => removeChecklistItem(index)}
+                    aria-label={`Remover item ${item.label || index + 1} do checklist`}
                   >
                     Remover
                   </button>
                 </div>
               ))}
             </div>
-          </div>
+          </fieldset>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-1.5 text-sm font-medium">
-              <span>Veículo previsto (opcional)</span>
-              <input
-                className={FIELD_VISIT_THEME.input}
-                value={vehicleLabel}
-                onChange={(event) => setVehicleLabel(event.target.value)}
-                maxLength={120}
-                placeholder="Placa, identificação ou nome de uso"
-              />
-            </label>
-            <label className="space-y-1.5 text-sm font-medium">
-              <span>Motivo da preparação / remarcação</span>
-              <input
-                className={FIELD_VISIT_THEME.input}
-                value={changeReason}
-                onChange={(event) => setChangeReason(event.target.value)}
-                maxLength={500}
-              />
-            </label>
-          </div>
+          <label className="space-y-1.5 text-sm font-medium">
+            <span>Motivo da preparação / remarcação</span>
+            <input
+              className={FIELD_VISIT_THEME.input}
+              value={changeReason}
+              onChange={(event) => setChangeReason(event.target.value)}
+              maxLength={500}
+              placeholder={
+                visit.preparation
+                  ? 'Informe o motivo da alteração ou remarcação'
+                  : 'Preparação operacional inicial'
+              }
+            />
+          </label>
 
           <label className="space-y-1.5 text-sm font-medium">
             <span className="flex items-center gap-2">

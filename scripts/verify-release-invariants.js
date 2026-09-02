@@ -16,7 +16,10 @@ const header = read('src/components/Header.tsx');
 const hero = read('src/components/Hero.tsx');
 const fieldTests = read('scripts/test-field-visits-foundation.ts');
 const fieldPreparationTests = read('scripts/test-field-visits-preparation.ts');
+const fieldAccessibilityTests = read('scripts/test-field-visits-accessibility.ts');
 const fieldPreparationPanel = read('src/fieldVisits/VisitPreparationPanel.tsx');
+const fieldVisitTypes = read('src/types/technicalVisit.ts');
+const fieldPreparationService = read('src/fieldVisits/preparationService.ts');
 const packageJson = JSON.parse(read('package.json'));
 
 assert(manifest.id === '/', 'O PWA AgroCore deve possuir id raiz /.');
@@ -55,6 +58,17 @@ assert(
     fieldPreparationPanel.includes('Checklist prévio') &&
     fieldPreparationPanel.includes('Autorizar exceção e salvar'),
   'A preparação operacional da OE-007.002 deve permanecer integrada à interface.'
+);
+assert(
+  !fieldPreparationPanel.includes('Veículo previsto') &&
+    !fieldVisitTypes.includes('vehicleReference') &&
+    !fieldPreparationService.includes('vehicleReference'),
+  'A OE-007.002 não pode antecipar a integração com frota prevista para OE-007.006.'
+);
+assert(
+  fieldAccessibilityTests.includes('[320, 390, 430, 720, 768, 1024, 1366, 1440]') &&
+    fieldAccessibilityTests.includes('firstFieldRef.current?.focus()'),
+  'A auditoria estrutural de responsividade e acessibilidade do Módulo 007 deve permanecer ativa.'
 );
 assert(
   !Object.prototype.hasOwnProperty.call(packageJson.scripts ?? {}, 'prebuild'),

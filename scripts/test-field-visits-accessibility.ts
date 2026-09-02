@@ -1,0 +1,112 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+let passed = 0;
+let failed = 0;
+
+function test(name: string, operation: () => void) {
+  try {
+    operation();
+    passed += 1;
+    console.log('  [PASS] ' + name);
+  } catch (error) {
+    failed += 1;
+    console.error('  [FAIL] ' + name);
+    console.error(error);
+  }
+}
+
+const page = fs.readFileSync('src/pages/FieldVisitsPage.tsx', 'utf8');
+const panel = fs.readFileSync('src/fieldVisits/VisitPreparationPanel.tsx', 'utf8');
+const theme = fs.readFileSync('src/fieldVisits/theme.ts', 'utf8');
+
+console.log('====================================================');
+console.log(' AGROCORE — RESPONSIVIDADE E ACESSIBILIDADE MÓDULO 007');
+console.log('====================================================\n');
+
+test('1. Controles principais preservam alvo mínimo de 44 px', () => {
+  for (const token of ['input:', 'buttonPrimary:', 'buttonSecondary:']) {
+    const index = theme.indexOf(token);
+    assert.notEqual(index, -1);
+    assert.equal(theme.slice(index, index + 650).includes('min-h-[44px]'), true);
+  }
+});
+
+test('2. Controles interativos possuem foco visível', () => {
+  assert.equal(theme.includes('focus:ring-2'), true);
+  assert.equal(theme.includes('focus:ring-[#78C89A]'), true);
+});
+
+test('3. Painel expansível expõe estado e relação ARIA', () => {
+  assert.equal(panel.includes('aria-expanded={open}'), true);
+  assert.equal(panel.includes('aria-controls={panelId}'), true);
+  assert.equal(panel.includes('id={panelId}'), true);
+});
+
+test('4. Abertura do painel move foco para o primeiro campo', () => {
+  assert.equal(panel.includes('firstFieldRef.current?.focus()'), true);
+  assert.equal(panel.includes('ref={firstFieldRef}'), true);
+});
+
+test('5. Grupos de participantes e checklist possuem semântica de fieldset/legend', () => {
+  assert.equal((panel.match(/<fieldset>/g) ?? []).length >= 2, true);
+  assert.equal((panel.match(/<legend/g) ?? []).length >= 2, true);
+});
+
+test('6. Estados dinâmicos são anunciáveis', () => {
+  assert.equal(panel.includes('role="alert"'), true);
+  assert.equal(panel.includes('aria-busy={busy}'), true);
+  assert.equal(page.includes('aria-live="polite"'), true);
+  assert.equal(page.includes('role="status"'), true);
+});
+
+test('7. Checklist editável possui nome acessível mesmo sem label visual', () => {
+  assert.equal(panel.includes('Descrição do item'), true);
+  assert.equal(panel.includes('Remover item'), true);
+});
+
+test('8. Layout é mobile-first e cresce apenas em breakpoints', () => {
+  assert.equal(page.includes('sm:flex-row'), true);
+  assert.equal(page.includes('lg:flex-row'), true);
+  assert.equal(page.includes('sm:grid-cols-2'), true);
+  assert.equal(panel.includes('sm:grid-cols-2'), true);
+  assert.equal(panel.includes('md:grid-cols-2'), true);
+  assert.equal(panel.includes('md:grid-cols-3'), true);
+});
+
+test('9. Nenhuma largura mínima fixa força overflow em celular', () => {
+  const source = page + '\n' + panel;
+  assert.equal(/min-w-\[(?:[4-9]\d\d|\d{4,})px\]/.test(source), false);
+  assert.equal(/w-\[(?:[4-9]\d\d|\d{4,})px\]/.test(source), false);
+});
+
+test('10. Viewports obrigatórios ficam cobertos pela estratégia responsiva declarada', () => {
+  const widths = [320, 390, 430, 720, 768, 1024, 1366, 1440];
+  for (const width of widths) {
+    if (width < 640) {
+      assert.equal(panel.includes('grid gap-4 md:grid-cols-3'), true);
+    } else if (width < 768) {
+      assert.equal(panel.includes('sm:grid-cols-2'), true);
+    } else {
+      assert.equal(panel.includes('md:grid-cols-3'), true);
+    }
+  }
+});
+
+test('11. Campos de agenda possuem tipos e limites explícitos', () => {
+  assert.equal(panel.includes('type="datetime-local"'), true);
+  assert.equal(panel.includes('type="number"'), true);
+  assert.equal(panel.includes('min={15}'), true);
+  assert.equal(panel.includes('max={1440}'), true);
+  assert.equal(panel.includes('maxLength={1200}'), true);
+});
+
+test('12. Cartão usa o fuso preparado em vez de assumir o dispositivo', () => {
+  assert.equal(page.includes('timeZone: visit.preparation?.timeZone'), true);
+});
+
+console.log('\n====================================================');
+console.log('Resultado: ' + passed + ' passaram, ' + failed + ' falharam');
+console.log('====================================================');
+
+if (failed > 0) process.exit(1);

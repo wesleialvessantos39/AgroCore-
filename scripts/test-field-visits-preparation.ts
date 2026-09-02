@@ -12,6 +12,7 @@ import {
   type UpdateTechnicalVisitPreparationInput,
 } from '../src/types/technicalVisit.ts';
 import { PreviewTechnicalVisitGateway } from '../src/fieldVisits/preview/previewTechnicalVisitGateway.ts';
+import { UnavailableTechnicalVisitGateway } from '../src/fieldVisits/unavailableGateway.ts';
 import {
   TechnicalVisitService,
   type TechnicalVisitClock,
@@ -219,7 +220,6 @@ function preparationInput(
       { label: 'Confirmar documentos do imóvel', required: true },
       { label: 'Levar equipamentos de medição', required: false },
     ],
-    vehicleReference: null,
     routeNotes: 'Saída do escritório e deslocamento direto até a propriedade.',
     expectedVersion,
     changeReason: 'Preparação operacional da visita',
@@ -266,6 +266,14 @@ await test('3. Converte horário local de Manaus para UTC corretamente', () => {
 await test('4. Rejeita horário local inexistente durante mudança de fuso', () => {
   assert.throws(
     () => zonedLocalDateTimeToUtc('2026-03-08T02:30', 'America/New_York'),
+    (error: unknown) =>
+      error instanceof TechnicalVisitDomainError && error.code === 'INVALID_DATE'
+  );
+});
+
+await test('4A. Rejeita horário local ambíguo durante retorno de horário de verão', () => {
+  assert.throws(
+    () => zonedLocalDateTimeToUtc('2026-11-01T01:30', 'America/New_York'),
     (error: unknown) =>
       error instanceof TechnicalVisitDomainError && error.code === 'INVALID_DATE'
   );
@@ -457,24 +465,10 @@ await test('12. Checklist recusa rótulos duplicados e preserva identidade dos i
   assert.equal(preparedAgain.preparation!.checklist[0].id, firstId);
 });
 
-await test('13. Referência de veículo inválida e roteiro excessivo são recusados', async () => {
+await test('13. Roteiro excessivo é recusado', async () => {
   const { visitService, preparationService } = services();
   const ctx = context();
   const visit = await visitService.createVisit(ctx, createInput());
-
-  await assert.rejects(
-    () =>
-      preparationService.prepareVisit(
-        ctx,
-        visit.id,
-        preparationInput(visit.version, {
-          vehicleReference: { referenceId: '', label: 'Carro' },
-        })
-      ),
-    (error: unknown) =>
-      error instanceof TechnicalVisitDomainError &&
-      error.code === 'INVALID_VEHICLE_REFERENCE'
-  );
 
   await assert.rejects(
     () =>
@@ -569,36 +563,21 @@ await test('16. Conflito de participante compartilhado é detectado mesmo com re
   );
 });
 
-await test('17. Conflito do mesmo veículo previsto é detectado', async () => {
+await test('17. Acesso cruzado por organização é recusado como visita inexistente', async () => {
   const { visitService, preparationService } = services();
-  const ctx = context();
-  const first = await visitService.createVisit(ctx, createInput('user-tech'));
-  const second = await visitService.createVisit(ctx, createInput('user-tech-2'));
-  const vehicle = { referenceId: 'abc-1234', label: 'ABC-1234' };
-
-  await preparationService.prepareVisit(
-    ctx,
-    first.id,
-    preparationInput(first.version, {
-      participantUserIds: [],
-      vehicleReference: vehicle,
-    })
-  );
+  const ctxA = context('org-a', 'user-owner', 'owner', baseMaps('org-a'));
+  const ctxB = context('org-b', 'user-owner', 'owner', baseMaps('org-b'));
+  const visitA = await visitService.createVisit(ctxA, createInput());
 
   await assert.rejects(
     () =>
       preparationService.prepareVisit(
-        ctx,
-        second.id,
-        preparationInput(second.version, {
-          localStart: '2026-09-05T09:30',
-          participantUserIds: [],
-          vehicleReference: vehicle,
-        })
+        ctxB,
+        visitA.id,
+        preparationInput(visitA.version)
       ),
     (error: unknown) =>
-      error instanceof TechnicalVisitScheduleConflictError &&
-      error.conflicts.some((conflict) => conflict.reasons.includes('vehicle'))
+      error instanceof TechnicalVisitDomainError && error.code === 'VISIT_NOT_FOUND'
   );
 });
 
@@ -724,7 +703,9 @@ await test('23. Preparação é bloqueada depois que a execução começa', asyn
   const prepared = await preparationService.prepareVisit(
     ownerCtx,
     visit.id,
-    preparationInput(visit.version)
+    preparationInput(visit.version, {
+      checklist: [{ label: 'Levar equipamentos', required: false }],
+    })
   );
   const confirmed = await visitService.transitionVisit(ownerCtx, visit.id, {
     targetStatus: 'confirmed',
@@ -851,7 +832,7 @@ await test('27. Concorrência de preparação tem um único vencedor', async () 
   assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
 });
 
-await test('28. Interface de preparação expõe agenda, participantes, checklist, veículo e roteiro', () => {
+await test('28. Interface de preparação expõe agenda, participantes, checklist e roteiro', () => {
   const source = fs.readFileSync('src/fieldVisits/VisitPreparationPanel.tsx', 'utf8');
   for (const marker of [
     'Data e hora local',
@@ -859,7 +840,6 @@ await test('28. Interface de preparação expõe agenda, participantes, checklis
     'Duração em minutos',
     'Participantes adicionais',
     'Checklist prévio',
-    'Veículo previsto',
     'Roteiro e orientações',
     'Autorizar exceção e salvar',
   ]) {
@@ -867,13 +847,16 @@ await test('28. Interface de preparação expõe agenda, participantes, checklis
   }
 });
 
-await test('29. OE-007.002 não antecipa formulário de campo, fotos, geolocalização nem cadastro de frota', () => {
+await test('29. OE-007.002 não antecipa formulário de campo, fotos, geolocalização nem frota', () => {
   const source = [
     fs.readFileSync('src/types/technicalVisit.ts', 'utf8'),
     fs.readFileSync('src/fieldVisits/preparationService.ts', 'utf8'),
     fs.readFileSync('src/fieldVisits/VisitPreparationPanel.tsx', 'utf8'),
   ].join('\n');
-  assert.equal(/photoEvidence|formSections|fieldResponses|latitude|longitude|createVehicle|vehicleGateway/.test(source), false);
+  assert.equal(
+    /photoEvidence|formSections|fieldResponses|latitude|longitude|vehicleReference|vehicleGateway|Veículo previsto/.test(source),
+    false
+  );
 });
 
 await test('30. Serviço de preparação preserva isolamento e auditoria no gateway existente', () => {
@@ -881,6 +864,179 @@ await test('30. Serviço de preparação preserva isolamento e auditoria no gate
   assert.equal(source.includes('this.gateway.listVisits(context.organizationId'), true);
   assert.equal(source.includes('expectedVersion: input.expectedVersion'), true);
   assert.equal(source.includes("action: 'updated'"), true);
+});
+
+await test('31. Todos os perfis oficiais respeitam a matriz positiva e negativa de preparação', async () => {
+  for (const role of ['owner', 'company_admin', 'manager', 'project_designer'] as const) {
+    const { visitService, preparationService } = services();
+    const maps = baseMaps();
+    const ownerCtx = context('org-a', 'user-owner', 'owner', maps);
+    const visit = await visitService.createVisit(ownerCtx, createInput());
+    const actorCtx = context('org-a', 'user-owner', role, maps);
+    const prepared = await preparationService.prepareVisit(
+      actorCtx,
+      visit.id,
+      preparationInput(visit.version)
+    );
+    assert.equal(prepared.preparation?.preparedByUserId, 'user-owner');
+  }
+
+  for (const role of ['finance', 'capturer'] as const) {
+    const { visitService, preparationService } = services();
+    const maps = baseMaps();
+    const ownerCtx = context('org-a', 'user-owner', 'owner', maps);
+    const visit = await visitService.createVisit(ownerCtx, createInput());
+    await assert.rejects(
+      () =>
+        preparationService.prepareVisit(
+          context('org-a', 'user-owner', role, maps),
+          visit.id,
+          preparationInput(visit.version)
+        ),
+      (error: unknown) =>
+        error instanceof TechnicalVisitDomainError && error.code === 'PERMISSION_DENIED'
+    );
+  }
+
+  assert.equal(
+    getRolePermissions('platform_super_admin').includes('surveys_and_visits:schedule'),
+    false
+  );
+});
+
+await test('32. Início da execução exige preparação operacional', async () => {
+  const maps = baseMaps();
+  const { visitService } = services();
+  const ownerCtx = context('org-a', 'user-owner', 'owner', maps);
+  const techCtx = context('org-a', 'user-tech', 'project_designer', maps);
+  const visit = await visitService.createVisit(ownerCtx, createInput('user-tech'));
+  const confirmed = await visitService.transitionVisit(ownerCtx, visit.id, {
+    targetStatus: 'confirmed',
+    expectedVersion: visit.version,
+  });
+
+  await assert.rejects(
+    () =>
+      visitService.transitionVisit(techCtx, visit.id, {
+        targetStatus: 'in_progress',
+        expectedVersion: confirmed.version,
+      }),
+    (error: unknown) =>
+      error instanceof TechnicalVisitDomainError && error.code === 'PREPARATION_REQUIRED'
+  );
+});
+
+await test('33. Checklist obrigatório precisa estar concluído antes do início', async () => {
+  const maps = baseMaps();
+  const { visitService, preparationService } = services();
+  const ownerCtx = context('org-a', 'user-owner', 'owner', maps);
+  const techCtx = context('org-a', 'user-tech', 'project_designer', maps);
+  const visit = await visitService.createVisit(ownerCtx, createInput('user-tech'));
+  const prepared = await preparationService.prepareVisit(
+    ownerCtx,
+    visit.id,
+    preparationInput(visit.version)
+  );
+  const confirmed = await visitService.transitionVisit(ownerCtx, visit.id, {
+    targetStatus: 'confirmed',
+    expectedVersion: prepared.version,
+  });
+
+  await assert.rejects(
+    () =>
+      visitService.transitionVisit(techCtx, visit.id, {
+        targetStatus: 'in_progress',
+        expectedVersion: confirmed.version,
+      }),
+    (error: unknown) =>
+      error instanceof TechnicalVisitDomainError && error.code === 'PREPARATION_INCOMPLETE'
+  );
+
+  const requiredItem = confirmed.preparation!.checklist.find((item) => item.required)!;
+  const checked = await preparationService.setChecklistItemCompletion(
+    ownerCtx,
+    visit.id,
+    {
+      itemId: requiredItem.id,
+      completed: true,
+      expectedVersion: confirmed.version,
+    }
+  );
+  const started = await visitService.transitionVisit(techCtx, visit.id, {
+    targetStatus: 'in_progress',
+    expectedVersion: checked.version,
+  });
+  assert.equal(started.status, 'in_progress');
+});
+
+await test('34. Operações concorrentes em visitas diferentes não ignoram conflito de agenda', async () => {
+  const { visitService, preparationService } = services();
+  const ctx = context();
+  const first = await visitService.createVisit(ctx, createInput('user-tech'));
+  const second = await visitService.createVisit(ctx, createInput('user-tech'));
+
+  const results = await Promise.allSettled([
+    preparationService.prepareVisit(
+      ctx,
+      first.id,
+      preparationInput(first.version, { localStart: '2026-09-05T09:00' })
+    ),
+    preparationService.prepareVisit(
+      ctx,
+      second.id,
+      preparationInput(second.version, { localStart: '2026-09-05T09:00' })
+    ),
+  ]);
+
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
+  const rejected = results.find((result) => result.status === 'rejected');
+  assert.equal(
+    rejected?.status === 'rejected' &&
+      rejected.reason instanceof TechnicalVisitScheduleConflictError,
+    true
+  );
+});
+
+await test('35. Produção fechada recusa preparação sem gateway persistente real', async () => {
+  const preparationService = new TechnicalVisitPreparationService(
+    new UnavailableTechnicalVisitGateway()
+  );
+  await assert.rejects(
+    () =>
+      preparationService.prepareVisit(
+        context(),
+        'visit-missing',
+        preparationInput(1)
+      ),
+    (error: unknown) =>
+      error instanceof TechnicalVisitDomainError && error.code === 'SERVICE_UNAVAILABLE'
+  );
+});
+
+await test('36. Remarcação exige motivo explícito', async () => {
+  const { visitService, preparationService } = services();
+  const ctx = context();
+  const visit = await visitService.createVisit(ctx, createInput());
+  const prepared = await preparationService.prepareVisit(
+    ctx,
+    visit.id,
+    preparationInput(visit.version)
+  );
+
+  await assert.rejects(
+    () =>
+      preparationService.prepareVisit(
+        ctx,
+        visit.id,
+        preparationInput(prepared.version, {
+          localStart: '2026-09-05T11:00',
+          changeReason: '',
+        })
+      ),
+    (error: unknown) =>
+      error instanceof TechnicalVisitDomainError && error.code === 'REASON_REQUIRED'
+  );
 });
 
 console.log('\n====================================================');

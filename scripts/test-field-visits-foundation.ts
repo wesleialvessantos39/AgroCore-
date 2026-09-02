@@ -16,6 +16,7 @@ import {
   type TechnicalVisitClock,
   type TechnicalVisitIdGenerator,
 } from '../src/fieldVisits/technicalVisitService.ts';
+import { TechnicalVisitPreparationService } from '../src/fieldVisits/preparationService.ts';
 import {
   assertTechnicalVisitTransition,
   canTransitionTechnicalVisit,
@@ -130,13 +131,32 @@ function validInput(responsibleUserId = 'user-tech') {
 }
 
 function newService(gateway = new PreviewTechnicalVisitGateway()) {
+  const clock = new FixedClock('2026-09-02T15:00:00.000Z');
+  const ids = new SequentialIds();
   return {
     gateway,
-    service: new TechnicalVisitService(
-      gateway,
-      new FixedClock('2026-09-02T15:00:00.000Z'),
-      new SequentialIds()
-    ),
+    service: new TechnicalVisitService(gateway, clock, ids),
+    preparationService: new TechnicalVisitPreparationService(gateway, clock, ids),
+  };
+}
+
+function preparationInput(expectedVersion: number) {
+  return {
+    localStart: '2026-09-05T09:00',
+    timeZone: 'America/Sao_Paulo',
+    durationMinutes: 60,
+    address: {
+      addressLine: 'Fazenda Boa Vista',
+      city: 'Uberaba',
+      state: 'MG',
+      postalCode: null,
+      notes: null,
+    },
+    participantUserIds: [],
+    checklist: [],
+    routeNotes: null,
+    expectedVersion,
+    changeReason: 'Preparação operacional inicial',
   };
 }
 
@@ -479,15 +499,20 @@ await test('23. Somente o responsável pode iniciar a execução', async () => {
   );
 });
 
-await test('24. Projetista responsável executa e conclui a visita', async () => {
+await test('24. Projetista responsável executa e conclui a visita após preparação', async () => {
   const maps = baseMaps();
-  const { service } = newService();
+  const { service, preparationService } = newService();
   const ownerCtx = context('org-a', 'user-owner', 'owner', maps);
   const techCtx = context('org-a', 'user-tech', 'project_designer', maps);
   const visit = await service.createVisit(ownerCtx, validInput('user-tech'));
+  const prepared = await preparationService.prepareVisit(
+    ownerCtx,
+    visit.id,
+    preparationInput(visit.version)
+  );
   const confirmed = await service.transitionVisit(ownerCtx, visit.id, {
     targetStatus: 'confirmed',
-    expectedVersion: visit.version,
+    expectedVersion: prepared.version,
   });
   const started = await service.transitionVisit(techCtx, visit.id, {
     targetStatus: 'in_progress',
@@ -529,13 +554,18 @@ await test('25. Cancelamento exige motivo e fica auditado', async () => {
 
 await test('26. Visita em execução ou terminal bloqueia alteração de planejamento', async () => {
   const maps = baseMaps();
-  const { service } = newService();
+  const { service, preparationService } = newService();
   const ownerCtx = context('org-a', 'user-owner', 'owner', maps);
   const techCtx = context('org-a', 'user-tech', 'project_designer', maps);
   const visit = await service.createVisit(ownerCtx, validInput('user-tech'));
+  const prepared = await preparationService.prepareVisit(
+    ownerCtx,
+    visit.id,
+    preparationInput(visit.version)
+  );
   const confirmed = await service.transitionVisit(ownerCtx, visit.id, {
     targetStatus: 'confirmed',
-    expectedVersion: visit.version,
+    expectedVersion: prepared.version,
   });
   const started = await service.transitionVisit(techCtx, visit.id, {
     targetStatus: 'in_progress',

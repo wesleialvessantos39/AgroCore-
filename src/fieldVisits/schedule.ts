@@ -149,6 +149,24 @@ export function zonedLocalDateTimeToUtc(localDateTime: string, timeZone: string)
     );
   }
 
+  const possibleOffsets = new Set<number>([
+    offsetMilliseconds(result, zone),
+    offsetMilliseconds(new Date(result.getTime() - 12 * 60 * 60 * 1000), zone),
+    offsetMilliseconds(new Date(result.getTime() + 12 * 60 * 60 * 1000), zone),
+  ]);
+  const matchingInstants = Array.from(possibleOffsets)
+    .map((offset) => new Date(targetWallClock - offset))
+    .filter((candidate) => sameLocalParts(partsAt(candidate, zone), local))
+    .map((candidate) => candidate.getTime());
+  const uniqueMatches = new Set(matchingInstants);
+
+  if (uniqueMatches.size > 1) {
+    throw new TechnicalVisitDomainError(
+      'INVALID_DATE',
+      'O horário informado é ambíguo nesse fuso por causa de uma mudança de horário local. Escolha outro horário.'
+    );
+  }
+
   return result.toISOString();
 }
 

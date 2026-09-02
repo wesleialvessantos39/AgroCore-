@@ -326,7 +326,7 @@ export const FieldVisitsPage: React.FC = () => {
             </label>
 
             <label className="space-y-1.5 text-sm font-medium md:col-span-2">
-              <span>Data e hora previstas</span>
+              <span>Data e hora iniciais (fuso do dispositivo)</span>
               <input
                 required
                 type="datetime-local"
@@ -434,6 +434,12 @@ export const FieldVisitsPage: React.FC = () => {
         <div className="grid gap-4">
           {visits.map((visit) => {
             const isResponsible = session?.user?.id === visit.responsibleUserId;
+            const pendingRequiredChecklist =
+              visit.preparation?.checklist.filter(
+                (item) => item.required && !item.completed
+              ).length ?? 0;
+            const preparationReady =
+              Boolean(visit.preparation) && pendingRequiredChecklist === 0;
             const canCancel =
               canSchedule &&
               (visit.status === 'planned' ||
@@ -465,7 +471,12 @@ export const FieldVisitsPage: React.FC = () => {
                       <div>
                         <dt className="font-medium">Data prevista</dt>
                         <dd className="text-[#0B3D2E]/70">
-                          {new Date(visit.scheduledFor).toLocaleString('pt-BR')}
+                          {new Date(visit.scheduledFor).toLocaleString('pt-BR', {
+                            timeZone: visit.preparation?.timeZone,
+                          })}
+                          {visit.preparation?.timeZone
+                            ? ` · ${visit.preparation.timeZone}`
+                            : ' · fuso do dispositivo'}
                         </dd>
                       </div>
                     </dl>
@@ -487,7 +498,12 @@ export const FieldVisitsPage: React.FC = () => {
                       <button
                         type="button"
                         className={FIELD_VISIT_THEME.buttonPrimary}
-                        disabled={busyId === visit.id}
+                        disabled={busyId === visit.id || !preparationReady}
+                        title={
+                          preparationReady
+                            ? 'Iniciar visita'
+                            : 'Conclua a preparação e os itens obrigatórios antes de iniciar'
+                        }
                         onClick={() => void transition(visit, 'in_progress')}
                       >
                         <CirclePlay className="h-4 w-4" aria-hidden="true" />
@@ -526,6 +542,19 @@ export const FieldVisitsPage: React.FC = () => {
                   members={members}
                   canEdit={canSchedule}
                 />
+
+                {visit.status === 'confirmed' && isResponsible && !preparationReady && (
+                  <p
+                    role="status"
+                    className="mt-3 text-sm font-medium text-[#0B3D2E]"
+                  >
+                    Conclua a preparação da visita
+                    {pendingRequiredChecklist > 0
+                      ? ` e ${pendingRequiredChecklist} item(ns) obrigatório(s) do checklist`
+                      : ''}
+                    {' '}antes de iniciar.
+                  </p>
+                )}
 
                 {cancelVisitId === visit.id && (
                   <div className={FIELD_VISIT_THEME.surfaceSoft + ' mt-4 p-4'}>
