@@ -77,9 +77,11 @@ assert(
 assert(
   typeof packageJson.scripts?.build === 'string' &&
     packageJson.scripts.build.includes('test:module-001') &&
+    packageJson.scripts.build.includes('test:module-002') &&
+    packageJson.scripts.build.includes('test:module-003') &&
     packageJson.scripts.build.includes('test:module-006') &&
     packageJson.scripts.build.includes('test:module-007'),
-  'O gate de produção deve executar as homologações de código dos Módulos 001, 006 e 007.'
+  'O gate de produção deve executar as homologações de código dos Módulos 001, 002, 003, 006 e 007.'
 );
 
 console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e Módulo 007 integrado até OE-007.002.');

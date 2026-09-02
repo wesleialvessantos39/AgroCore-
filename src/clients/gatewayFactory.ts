@@ -2,6 +2,8 @@ import { ClientGateway } from '../types/client';
 import { UnavailableClientGateway } from './unavailableGateway';
 import { PreviewClientGateway } from './preview/previewClientGateway';
 import { registerDomainCleanup } from '../auth/domainCleanupRegistry';
+import { getSupabaseClient } from '../infrastructure/supabaseClient';
+import { SupabaseClientGateway } from './supabaseClientGateway';
 
 let activeGatewayInstance: ClientGateway | null = null;
 let unregisterCleanup: (() => void) | null = null;
@@ -12,6 +14,12 @@ let unregisterCleanup: (() => void) | null = null;
  */
 export function getClientGateway(): ClientGateway {
   if (activeGatewayInstance) {
+    return activeGatewayInstance;
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    activeGatewayInstance = new SupabaseClientGateway(supabase);
     return activeGatewayInstance;
   }
 

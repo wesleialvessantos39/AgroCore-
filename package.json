@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "node scripts/verify-release-invariants.js && tsc --noEmit && npm run test:module-001 && npm run test:module-006 && npm run test:module-007 && vite build && node scripts/build-sw.js && node scripts/verify-leak-free-build.js",
+    "build": "node scripts/verify-release-invariants.js && tsc --noEmit && npm run test:module-001 && npm run test:module-002 && npm run test:module-003 && npm run test:module-006 && npm run test:module-007 && vite build && node scripts/build-sw.js && node scripts/verify-leak-free-build.js",
     "preview": "vite preview",
     "test:environment-contract": "node scripts/verify-environment-contract.js",
     "clean": "rm -rf dist server.js",

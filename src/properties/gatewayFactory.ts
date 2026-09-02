@@ -2,6 +2,8 @@ import { PropertyGateway } from '../types/property';
 import { UnavailablePropertyGateway } from './unavailableGateway';
 import { PreviewPropertyGateway } from './preview/previewPropertyGateway';
 import { registerDomainCleanup } from '../auth/domainCleanupRegistry';
+import { getSupabaseClient } from '../infrastructure/supabaseClient';
+import { SupabasePropertyGateway } from './supabasePropertyGateway';
 
 let activeGatewayInstance: PropertyGateway | null = null;
 let unregisterCleanup: (() => void) | null = null;
@@ -12,6 +14,12 @@ let unregisterCleanup: (() => void) | null = null;
  */
 export function getPropertyGateway(): PropertyGateway {
   if (activeGatewayInstance) {
+    return activeGatewayInstance;
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    activeGatewayInstance = new SupabasePropertyGateway(supabase);
     return activeGatewayInstance;
   }
 
