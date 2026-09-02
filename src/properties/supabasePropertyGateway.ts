@@ -16,8 +16,18 @@ import {
   formatArea,
   maskCib,
   maskSncr,
-  normalizeSearchTerm,
 } from './validators';
+
+function normalizePropertySearch(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
 
 interface PropertyRow {
   readonly organization_id: string;
@@ -144,7 +154,7 @@ export class SupabasePropertyGateway implements PropertyGateway {
   ): Promise<PropertyListPage> {
     const pageSize = Math.max(1, Number(query.pageSize) || 10);
     const requestedPage = Math.max(1, Number(query.page) || 1);
-    const search = normalizeSearchTerm(query.searchTerm?.slice(0, 100) ?? '');
+    const search = normalizePropertySearch(query.searchTerm?.slice(0, 100) ?? '');
 
     let countRequest = this.client
       .from('properties')
