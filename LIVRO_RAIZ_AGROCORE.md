@@ -541,6 +541,22 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - **CI e Evidência Remota:** o push de integração disparou o AgroCore CI, porém o job terminou antes de executar qualquer `step` e sem logs de teste disponíveis. Esse estado externo não é registrado como reprovação funcional da suíte nem como homologação. Separadamente, o status Vercel do commit de integração concluiu com sucesso.
   - **Contagem:** permanecem 130 provas comportamentais já homologadas até OE-006.006 e foram adicionadas 21 provas da OE-006.007, totalizando 151 provas automatizadas definidas para o módulo. As 21 novas provas somente entram na contagem de homologação após execução efetiva e aprovação do runner.
 
+
+### MÓDULO 007: VISITAS, VISTORIAS E OPERAÇÃO EM CAMPO
+- **Status Geral:** OE-007.001 implementada no código e com build de produção aprovado pelo Vercel no commit `0c834a1d4f94435a592de53588eadd8536c25d5f`. A suíte automatizada do módulo está definida, porém o GitHub Actions continua encerrando antes de executar qualquer `step`, portanto essa falha externa não é registrada como reprovação funcional nem como homologação do runner.
+- **Entregas da OE-007.001 — Modelo de Visitas e Vistorias:**
+  - **Domínio Tipado:** `TechnicalVisit` registra organização, tipo de atividade, situação, cliente, imóvel opcional, proposta opcional, laudo opcional, responsável, data prevista, finalidade, autoria, datas de ciclo de vida e versão otimista.
+  - **Estados Controlados:** fluxo explícito `planned → confirmed → in_progress → completed`, com cancelamento permitido antes da conclusão; estados concluído e cancelado são terminais e transições inválidas são recusadas.
+  - **Fontes Canônicas:** cliente, imóvel, proposta e laudo são resolvidos pelos módulos existentes. O módulo não cria cadastros paralelos e bloqueia vínculos incompatíveis ou pertencentes a outra organização.
+  - **Responsabilidade Operacional:** somente integrante ativo da organização e com autorização de execução pode ser responsável. O perfil `project_designer` passa a possuir `surveys_and_visits:execute`; financeiro e captador permanecem sem capacidade de execução.
+  - **Segregação de Funções:** consultar exige `surveys_and_visits:view`; criar, confirmar, alterar planejamento e cancelar exigem `surveys_and_visits:schedule`; iniciar e concluir exigem `surveys_and_visits:execute` e correspondência com o responsável atribuído.
+  - **Concorrência e Auditoria:** alterações usam `expectedVersion`, um único vencedor em corrida de versão, motivo obrigatório para alterações de planejamento e cancelamento, e trilha append-only com ator, horário, versão, transição e campos alterados.
+  - **Gateways:** `PreviewTechnicalVisitGateway` é volátil, vazio por padrão e isolado por organização; produção usa `UnavailableTechnicalVisitGateway` e fecha com segurança. O factory de desenvolvimento foi ajustado para impedir inclusão estática do gateway de preview no bundle de produção.
+  - **Contexto e Sessão:** `FieldVisitsProvider` integra autenticação, organização, RBAC e as fontes canônicas, cancela respostas obsoletas na troca de contexto e limpa dados voláteis pelo registro central de logout.
+  - **Interface:** rota `/visitas`, navegação “Visitas e vistorias”, formulário com seletores canônicos, estado vazio real, filtros por situação e comandos de confirmar, iniciar, concluir e cancelar conforme autorização. A identidade visual permanece restrita à paleta oficial AgroCore.
+  - **Escopo Preservado:** duração, endereço operacional detalhado, participantes, checklist de preparação, conflitos de agenda, roteirização, veículo, formulário de campo, fotos e geolocalização não foram antecipados; permanecem para OEs posteriores do Módulo 007.
+  - **Homologação Definida:** `scripts/test-field-visits-foundation.ts` contém 31 provas comportamentais e estruturais; `scripts/test-field-visits-theme.js` audita a paleta; `scripts/test-module-007.js` consolida fundação, tema e auditoria global de textos. O Vercel aprovou o build de produção após o hardening do factory. O runner do GitHub Actions não executou etapas, portanto as 31 provas permanecem definidas e aguardam execução efetiva pelo CI.
+
 ---
 
 ## 7. SUÍTE DE TESTES E VERIFICAÇÃO AUTOMATIZADA
@@ -589,6 +605,9 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:documents-ui-copy` | Impede linguagem interna e códigos de ordem nas páginas públicas do Módulo 006 |
 | `npm run test:documents-theme` | Audita a paleta oficial, variantes proibidas e seleção controlada de arquivos no Módulo 006 |
 | `npm run test:module-006` | Homologação consolidada do Módulo 006 até OE-006.007; agrega as 130 provas anteriormente homologadas, as 21 novas provas de segurança, texto público e tema. A homologação das 21 novas provas depende de execução efetiva do runner. |
+| `npm run test:field-visits-foundation` | Valida a OE-007.001 com 31 provas de estados, RBAC, responsáveis, fontes canônicas, isolamento organizacional, concorrência, auditoria, rota e produção fechada |
+| `npm run test:field-visits-theme` | Audita a identidade visual oficial do Módulo 007 e bloqueia famílias de cores não autorizadas |
+| `npm run test:module-007` | Homologação consolidada da fundação de visitas e vistorias, tema e textos públicos do Módulo 007 |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -608,4 +627,5 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
 2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.007 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
-3. **Módulo 006 — Gestão Documental:** OE-006.007 implementada e integrada no código, com 21 novas provas de segurança adicionadas ao agregador `test:module-006`. O fechamento formal permanece condicionado à execução efetiva e aprovação de `test:document-security`/`test:module-006`, pois o AgroCore CI do commit de integração encerrou antes de iniciar qualquer etapa. A OE-007.001 somente fica liberada após esse gate. As migrações de Storage, versionamento, checklists e conformidade, além da função pública de compartilhamento, devem ser aplicadas somente quando o projeto Supabase específico do AgroCore estiver conectado.
+3. **Módulo 006 — Gestão Documental:** OE-006.007 implementada e integrada no código, com 21 novas provas de segurança adicionadas ao agregador `test:module-006`. O fechamento formal pelo runner continua pendente porque o AgroCore CI encerra antes de iniciar etapas. As migrações de Storage, versionamento, checklists e conformidade, além da função pública de compartilhamento, devem ser aplicadas somente quando o projeto Supabase específico do AgroCore estiver conectado.
+4. **Módulo 007 — Visitas, Vistorias e Operação em Campo:** OE-007.001 implementada no código com 31 provas definidas, rota, UI, RBAC, gateways, auditoria e build Vercel aprovado. O próximo incremento arquitetural é a OE-007.002 — preparação operacional da visita, sem reinterpretar a pendência externa do GitHub Actions como aprovação ou reprovação dos testes.
