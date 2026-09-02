@@ -142,6 +142,10 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Documento | AgroCore',
     announcementTitle: 'Detalhes do documento',
   },
+  [ROUTES.FIELD_VISITS]: {
+    documentTitle: 'Visitas e Vistorias | AgroCore',
+    announcementTitle: 'Visitas e vistorias',
+  },
   [ROUTES.MY_ACCOUNT]: {
     documentTitle: 'Minha Conta | AgroCore',
     announcementTitle: 'Minha conta',

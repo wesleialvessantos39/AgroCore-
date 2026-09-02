@@ -265,6 +265,7 @@ export const ROLE_PERMISSIONS_MATRIX: Readonly<Record<AppRoleCode, readonly Perm
     'documents:export',
     'surveys_and_visits:view',
     'surveys_and_visits:schedule',
+    'surveys_and_visits:execute',
     'schedule:view',
     'personal_account:view_profile',
     'personal_account:manage_preferences',

@@ -641,21 +641,21 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     scope: 'surveys_and_visits',
     targetScope: 'organization',
     name: 'Consultar Vistorias',
-    description: 'Acompanhar relatórios e cronogramas de visitas e laudos periciais.',
+    description: 'Consultar visitas e vistorias autorizadas dentro do próprio escopo organizacional.',
   },
   {
     id: 'surveys_and_visits:schedule',
     scope: 'surveys_and_visits',
     targetScope: 'organization',
     name: 'Agendar Vistorias',
-    description: 'Agendar vistorias agronômicas e visitas técnicas a campo.',
+    description: 'Registrar e confirmar visitas e vistorias, seus vínculos e responsáveis autorizados.',
   },
   {
     id: 'surveys_and_visits:execute',
     scope: 'surveys_and_visits',
     targetScope: 'organization',
-    name: 'Registrar Laudos de Vistoria',
-    description: 'Preencher laudos técnicos, coordenadas e registros fotográficos da área.',
+    name: 'Executar Visitas e Vistorias',
+    description: 'Registrar início e conclusão das atividades de campo atribuídas ao responsável.',
   },
 
   // Agenda

@@ -13,6 +13,7 @@ import { TechnicalProfessionalProvider } from './technicalProfessionals/Technica
 import { AppraisalsProvider } from './appraisals/AppraisalsContext';
 import { ProposalsProvider } from './proposals/ProposalsContext';
 import { DocumentsProvider } from './documents/DocumentsContext';
+import { FieldVisitsProvider } from './fieldVisits/FieldVisitsContext';
 import { AppRoutes } from './routes/AppRoutes';
 
 export default function App() {
@@ -28,11 +29,13 @@ export default function App() {
                     <AppraisalsProvider>
                       <ProposalsProvider>
                         <DocumentsProvider>
-                          <ConnectivityNotice />
-                          <UpdateNotice />
-                          <RouteAnnouncer />
-                          <SkipToContent />
-                          <AppRoutes />
+                          <FieldVisitsProvider>
+                            <ConnectivityNotice />
+                            <UpdateNotice />
+                            <RouteAnnouncer />
+                            <SkipToContent />
+                            <AppRoutes />
+                          </FieldVisitsProvider>
                         </DocumentsProvider>
                       </ProposalsProvider>
                     </AppraisalsProvider>

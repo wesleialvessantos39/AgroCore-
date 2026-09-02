@@ -187,6 +187,10 @@ const DocumentReferenceDetailPage = lazy(() =>
   import('../pages/DocumentReferenceDetailPage').then((module) => ({ default: module.DocumentReferenceDetailPage }))
 );
 
+const FieldVisitsPage = lazy(() =>
+  import('../pages/FieldVisitsPage').then((module) => ({ default: module.FieldVisitsPage }))
+);
+
 const MyAccountPage = lazy(() =>
   import('../pages/MyAccountPage').then((module) => ({
     default: module.MyAccountPage,
@@ -633,6 +637,22 @@ export function AppRoutes() {
                 </RequirePermission>
               }
             />
+          </Route>
+
+          {/* Visitas e Vistorias (Módulo 007) */}
+          <Route
+            path={ROUTES.FIELD_VISITS}
+            element={
+              <ProtectedRoute>
+                <OrganizationGate>
+                  <RequirePermission permission="surveys_and_visits:view">
+                    <AppShell />
+                  </RequirePermission>
+                </OrganizationGate>
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<FieldVisitsPage />} />
           </Route>
 
           {/* Rota Minha Conta Integrada ao AppShell e Permissão */}

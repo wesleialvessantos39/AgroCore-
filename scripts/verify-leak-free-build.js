@@ -28,6 +28,7 @@ const FORBIDDEN_STRINGS = [
   'PreviewTechnicalProfessionalGateway',
   'PreviewProposalGateway',
   'PreviewDocumentReferenceGateway',
+  'PreviewTechnicalVisitGateway',
   'previewAccounts',
   'previewRecoveryControl',
   'agrocore:preview:',

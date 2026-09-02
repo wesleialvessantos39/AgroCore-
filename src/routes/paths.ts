@@ -36,6 +36,7 @@ export const ROUTES = {
   DOCUMENT_COMPLIANCE: '/documentos/validades',
   DOCUMENTS_DETAIL: '/documentos/:documentId',
   DOCUMENT_SHARE: '/compartilhar/documento',
+  FIELD_VISITS: '/visitas',
   MY_ACCOUNT: '/minha-conta',
   ACCESS_DENIED: '/acesso-negado',
   CONFIG_ORGANIZATION: '/configurar-empresa',

@@ -6,6 +6,7 @@ import {
   FileCheck,
   ClipboardList,
   FolderArchive,
+  CalendarDays,
   User,
   Globe,
   type LucideIcon,
@@ -77,6 +78,13 @@ export const SYSTEM_NAV_ITEMS: readonly NavItem[] = [
     path: ROUTES.DOCUMENTS,
     icon: FolderArchive,
     requiredPermission: 'documents:view',
+  },
+  {
+    id: 'nav-item-field-visits',
+    label: 'Visitas e vistorias',
+    path: ROUTES.FIELD_VISITS,
+    icon: CalendarDays,
+    requiredPermission: 'surveys_and_visits:view',
   },
   {
     id: 'nav-item-my-account',
