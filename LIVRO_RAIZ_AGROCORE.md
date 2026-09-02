@@ -543,7 +543,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 
 
 ### MÓDULO 007: VISITAS, VISTORIAS E OPERAÇÃO EM CAMPO
-- **Status Geral:** OE-007.001 e OE-007.002 implementadas no código. O Módulo 007 cobre agora a fundação de visitas e a preparação operacional pré-campo, mantendo formulário de campo, evidências, conclusão e integrações externas para as ordens posteriores.
+- **Status Geral:** OE-007.001 e OE-007.002 implementadas e homologadas pelo gate de produção do Vercel no commit `2a9cfa8a574594eed50f17dd754eed1cfce41e1b`, com TypeScript estrito, 61 provas do Módulo 007, auditoria de tema, auditoria de textos, build Vite, Service Worker e verificação de vazamentos aprovados. O GitHub Actions permanece com falha externa anterior à execução, encerrando o job com zero `steps`; esse estado não é tratado como reprovação do código.
 - **Entregas da OE-007.001 — Modelo de Visitas e Vistorias:**
   - **Domínio Tipado:** `TechnicalVisit` registra organização, tipo de atividade, situação, cliente, imóvel opcional, proposta opcional, laudo opcional, responsável, data prevista, finalidade, autoria, datas de ciclo de vida e versão otimista.
   - **Estados Controlados:** fluxo explícito `planned → confirmed → in_progress → completed`, com cancelamento permitido antes da conclusão; estados concluído e cancelado são terminais e transições inválidas são recusadas.
@@ -555,7 +555,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - **Contexto e Sessão:** `FieldVisitsProvider` integra autenticação, organização, RBAC e as fontes canônicas, cancela respostas obsoletas na troca de contexto e limpa dados voláteis pelo registro central de logout.
   - **Interface:** rota `/visitas`, navegação “Visitas e vistorias”, formulário com seletores canônicos, estado vazio real, filtros por situação e comandos de confirmar, iniciar, concluir e cancelar conforme autorização. A identidade visual permanece restrita à paleta oficial AgroCore.
   - **Escopo Preservado na OE-007.001:** a fundação não antecipou preparação operacional; esses elementos passam a ser tratados exclusivamente pela OE-007.002, enquanto formulário de campo, fotos e geolocalização continuam reservados para ordens posteriores.
-  - **Homologação Definida:** `scripts/test-field-visits-foundation.ts` contém 31 provas comportamentais e estruturais e voltou ao fluxo integral, sem interrupções de diagnóstico; a prova de integração agora também exige a presença de `/visitas` na matriz central. `scripts/test-field-visits-theme.js` audita a paleta e `scripts/test-module-007.js` consolida fundação, tema e auditoria global de textos.
+  - **Homologação Executada:** `scripts/test-field-visits-foundation.ts` contém 31 provas comportamentais e estruturais, incluindo estados, RBAC, fontes canônicas, isolamento, concorrência, auditoria e integração de rota. A suíte foi executada pelo gate de produção e aprovada após corrigir a derivação canônica do imóvel a partir da proposta.
 - **Entregas da OE-007.002 — Agenda e Preparação:**
   - **Agenda com Fuso:** a preparação usa horário local + fuso IANA, converte para UTC de forma determinística e rejeita horários locais inexistentes em mudanças de fuso.
   - **Duração e Endereço:** cada preparação registra duração de 15 minutos a 24 horas e endereço operacional estruturado com ponto de encontro, cidade, estado, referência postal e orientações.
@@ -566,7 +566,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - **Remarcação e Cancelamento:** remarcações passam exclusivamente pelo serviço de preparação, usam versão otimista e motivo; visitas canceladas deixam de bloquear o horário e preparação fica bloqueada após início da execução.
   - **Interface:** `VisitPreparationPanel` oferece edição responsiva de data/hora, fuso, duração, endereço, participantes, checklist, veículo e roteiro, além do fluxo explícito para autorizar exceção de conflito.
   - **Escopo Preservado:** a OE-007.002 não cria formulário de campo, fotos, geolocalização, cadastro de veículos, agenda corporativa ou integração com frota; esses itens permanecem para OE-007.003, OE-007.004 e OE-007.006.
-  - **Homologação Definida:** `scripts/test-field-visits-preparation.ts` adiciona 30 provas específicas. Somadas às 31 provas da fundação, o Módulo 007 passa a ter 61 provas comportamentais/estruturais definidas, além da auditoria de tema e de textos públicos.
+  - **Homologação Executada:** `scripts/test-field-visits-preparation.ts` contém 30 provas específicas e foi executado com aprovação no gate de produção. Somadas às 31 provas da fundação, o Módulo 007 possui 61 provas aprovadas, além das auditorias de tema e de textos públicos.
 
 ---
 
@@ -623,7 +623,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
-| `npm run build` | Compilação de produção Vite + geração de SW + verificação de vazamentos |
+| `npm run build` | Gate de produção: invariantes de release + TypeScript estrito + `test:module-007` + Vite + geração de SW + verificação de vazamentos |
 | `npm run lint` | Checagem estrita de tipos TypeScript (`tsc --noEmit`) |
 
 ---
