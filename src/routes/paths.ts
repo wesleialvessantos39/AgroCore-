@@ -32,6 +32,7 @@ export const ROUTES = {
   DOCUMENTS_NEW: '/documentos/novo',
   DOCUMENT_REQUIREMENTS: '/documentos/pendencias',
   DOCUMENT_REQUIREMENTS_NEW: '/documentos/pendencias/nova',
+  PROPOSAL_CHECKLISTS: '/documentos/checklists',
   DOCUMENTS_DETAIL: '/documentos/:documentId',
   MY_ACCOUNT: '/minha-conta',
   ACCESS_DENIED: '/acesso-negado',
@@ -86,6 +87,12 @@ export function getProposalRenewalPath(proposalId: string): string {
 
 export function getDocumentReferencePath(documentId: string): string {
   return `/documentos/${encodeURIComponent(documentId)}`;
+}
+
+export function getProposalChecklistPath(proposalId?: string): string {
+  return proposalId
+    ? `/documentos/checklists?proposta=${encodeURIComponent(proposalId)}`
+    : ROUTES.PROPOSAL_CHECKLISTS;
 }
 
 export function getAppraisalDetailPath(appraisalId: string): string {

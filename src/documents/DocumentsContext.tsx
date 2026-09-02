@@ -35,8 +35,18 @@ import type {
   ResolveDocumentRequirementInput,
 } from '../types/documents';
 import { DocumentDomainError } from '../types/documents';
+import type {
+  ApplyProposalChecklistInput,
+  ConfigureProposalChecklistTemplateInput,
+  ProposalChecklistApplicationContext,
+  ProposalChecklistDashboard,
+  ProposalChecklistTemplate,
+  ProposalDocumentChecklist,
+  TransitionProposalChecklistItemInput,
+} from '../types/proposalChecklists';
 import { DocumentApplicationService } from './documentApplicationService';
 import { DocumentUploadService } from './documentUploadService';
+import { ProposalChecklistApplicationService } from './proposalChecklistApplicationService';
 
 export type DocumentsContextStatus =
   | 'idle'
@@ -62,11 +72,19 @@ export interface DocumentsContextValue {
   readonly governanceStatus: DocumentsContextStatus;
   readonly governance: DocumentGovernanceDashboard | null;
   readonly governanceErrorMessage: string | null;
+  readonly checklistStatus: DocumentsContextStatus;
+  readonly checklistDashboard: ProposalChecklistDashboard | null;
+  readonly checklistErrorMessage: string | null;
   readonly isLoading: boolean;
   readonly setFilters: (filters: DocumentReferenceFilters) => void;
   readonly refresh: () => Promise<void>;
   readonly refreshGovernance: () => Promise<void>;
+  readonly refreshChecklistDashboard: () => Promise<void>;
   readonly getReferenceById: (documentId: string) => Promise<DocumentReference | null>;
+  readonly listDocumentsForProposal: (
+    proposalId: string,
+    signal?: AbortSignal
+  ) => Promise<readonly DocumentReference[]>;
   readonly listVersionHistory: (
     documentId: string,
     signal?: AbortSignal
@@ -109,6 +127,15 @@ export interface DocumentsContextValue {
   readonly cancelRequirement: (
     input: Omit<ResolveDocumentRequirementInput, 'idempotencyKey'>
   ) => Promise<DocumentMutationResult<DocumentRequirement>>;
+  readonly configureChecklistTemplate: (
+    input: Omit<ConfigureProposalChecklistTemplateInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<ProposalChecklistTemplate>>;
+  readonly applyProposalChecklist: (
+    input: Omit<ApplyProposalChecklistInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<ProposalDocumentChecklist>>;
+  readonly transitionProposalChecklistItem: (
+    input: Omit<TransitionProposalChecklistItemInput, 'idempotencyKey'>
+  ) => Promise<DocumentMutationResult<ProposalDocumentChecklist>>;
 }
 
 const DocumentsContext = createContext<DocumentsContextValue | null>(null);
@@ -136,14 +163,49 @@ export function DocumentsProvider({ children }: { readonly children: React.React
   const [governanceStatus, setGovernanceStatus] = useState<DocumentsContextStatus>('idle');
   const [governance, setGovernance] = useState<DocumentGovernanceDashboard | null>(null);
   const [governanceErrorMessage, setGovernanceErrorMessage] = useState<string | null>(null);
+  const [checklistStatus, setChecklistStatus] = useState<DocumentsContextStatus>('idle');
+  const [checklistDashboard, setChecklistDashboard] = useState<ProposalChecklistDashboard | null>(null);
+  const [checklistErrorMessage, setChecklistErrorMessage] = useState<string | null>(null);
   const requestSequence = useRef(0);
   const governanceRequestSequence = useRef(0);
+  const checklistRequestSequence = useRef(0);
   const abortController = useRef<AbortController | null>(null);
   const governanceAbortController = useRef<AbortController | null>(null);
+  const checklistAbortController = useRef<AbortController | null>(null);
   const activeOrganizationId = activeOrganization?.id ?? null;
   const service = useMemo(() => new DocumentApplicationService(), []);
   const uploadService = useMemo(() => new DocumentUploadService(service), [service]);
+  const checklistService = useMemo(() => new ProposalChecklistApplicationService(), []);
   const canViewGovernance = activePermissions.has('documents:view_requirements');
+
+  const resolveProposalChecklistSource = useCallback(
+    async (proposalId: string) => {
+      const proposal = await getProposalById(proposalId);
+      if (!proposal) {
+        return {
+          exists: false,
+          organizationId: null,
+          proposalId,
+          authorizedUserIds: [],
+        } as const;
+      }
+      return {
+        exists: true,
+        organizationId: proposal.organizationId,
+        proposalId: proposal.id,
+        proposalNumber: proposal.proposalNumber,
+        title: proposal.title,
+        proposalType: proposal.proposalType,
+        proposalCategory: proposal.category,
+        authorizedUserIds: [
+          proposal.createdByUserId,
+          proposal.capturerUserId,
+          proposal.activeReviewAssignment?.reviewerUserId,
+        ].filter((userId): userId is string => Boolean(userId)),
+      } as const;
+    },
+    [getProposalById]
+  );
 
   const resolveOwner = useCallback(
     async (
@@ -205,23 +267,17 @@ export function DocumentsProvider({ children }: { readonly children: React.React
           : { exists: false, organizationId: null, authorizedUserIds: [] };
       }
 
-      const proposal = await getProposalById(ownerId);
-      return proposal
-        ? {
-            exists: true,
-            organizationId: proposal.organizationId,
-            authorizedUserIds: [
-              proposal.createdByUserId,
-              proposal.capturerUserId,
-              proposal.activeReviewAssignment?.reviewerUserId,
-            ].filter((userId): userId is string => Boolean(userId)),
-          }
-        : { exists: false, organizationId: null, authorizedUserIds: [] };
+      const proposal = await resolveProposalChecklistSource(ownerId);
+      return {
+        exists: proposal.exists,
+        organizationId: proposal.organizationId,
+        authorizedUserIds: proposal.authorizedUserIds,
+      };
     },
-    [getAppraisalById, getClientById, getPropertyById, getProposalById, getRequestById]
+    [getAppraisalById, getClientById, getPropertyById, getRequestById, resolveProposalChecklistSource]
   );
 
-  const buildContext = useCallback((): DocumentApplicationContext => {
+  const buildContext = useCallback((): DocumentApplicationContext & ProposalChecklistApplicationContext => {
     if (!session || !activeOrganization || !activeMembership) {
       throw new DocumentDomainError('UNAUTHENTICATED', 'Sessão organizacional inválida.');
     }
@@ -235,8 +291,9 @@ export function DocumentsProvider({ children }: { readonly children: React.React
         permissions: [...activePermissions],
       },
       resolveOwner,
+      resolveProposalChecklistSource,
     };
-  }, [activeMembership, activeOrganization, activePermissions, resolveOwner, session]);
+  }, [activeMembership, activeOrganization, activePermissions, resolveOwner, resolveProposalChecklistSource, session]);
 
   const refresh = useCallback(async () => {
     if (
@@ -327,6 +384,52 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     }
   }, [activeMembership, activeOrganizationId, authStatus, buildContext, canViewGovernance, organizationStatus, service, session]);
 
+  const refreshChecklistDashboard = useCallback(async () => {
+    if (
+      authStatus !== 'authenticated' ||
+      organizationStatus !== 'active' ||
+      !activeOrganizationId ||
+      !session ||
+      !activeMembership ||
+      !canViewGovernance
+    ) {
+      setChecklistDashboard(null);
+      setChecklistStatus('idle');
+      setChecklistErrorMessage(null);
+      return;
+    }
+    checklistAbortController.current?.abort();
+    const controller = new AbortController();
+    checklistAbortController.current = controller;
+    const sequence = ++checklistRequestSequence.current;
+    setChecklistStatus('loading');
+    setChecklistErrorMessage(null);
+    try {
+      const result = await checklistService.getDashboard(buildContext(), controller.signal);
+      if (controller.signal.aborted || sequence !== checklistRequestSequence.current) return;
+      setChecklistDashboard(result);
+      setChecklistStatus(
+        result.templates.length > 0 || result.checklists.length > 0 ? 'ready' : 'empty'
+      );
+    } catch (error) {
+      if (controller.signal.aborted || sequence !== checklistRequestSequence.current) return;
+      setChecklistDashboard(null);
+      if (error instanceof DocumentDomainError) {
+        setChecklistErrorMessage(error.message);
+        setChecklistStatus(
+          error.code === 'SERVICE_UNAVAILABLE'
+            ? 'unavailable'
+            : error.code === 'FORBIDDEN'
+              ? 'forbidden'
+              : 'error'
+        );
+      } else {
+        setChecklistErrorMessage('Não foi possível consultar os checklists das propostas.');
+        setChecklistStatus('error');
+      }
+    }
+  }, [activeMembership, activeOrganizationId, authStatus, buildContext, canViewGovernance, checklistService, organizationStatus, session]);
+
   useEffect(() => {
     void refresh();
     return () => abortController.current?.abort();
@@ -338,18 +441,41 @@ export function DocumentsProvider({ children }: { readonly children: React.React
   }, [refreshGovernance]);
 
   useEffect(() => {
+    void refreshChecklistDashboard();
+    return () => checklistAbortController.current?.abort();
+  }, [refreshChecklistDashboard]);
+
+  useEffect(() => {
     requestSequence.current += 1;
     abortController.current?.abort();
     governanceRequestSequence.current += 1;
     governanceAbortController.current?.abort();
+    checklistRequestSequence.current += 1;
+    checklistAbortController.current?.abort();
     setReferences([]);
     setGovernance(null);
+    setChecklistDashboard(null);
     setErrorMessage(null);
     setGovernanceErrorMessage(null);
+    setChecklistErrorMessage(null);
   }, [activeOrganizationId, session?.user.id]);
 
   const getReferenceById = useCallback(
     async (documentId: string) => service.getReferenceById(buildContext(), documentId),
+    [buildContext, service]
+  );
+
+  const listDocumentsForProposal = useCallback(
+    async (proposalId: string, signal?: AbortSignal) => {
+      const documents = await service.listReferences(
+        buildContext(),
+        { ownerType: 'proposal', status: 'active' },
+        signal
+      );
+      return documents.filter(
+        (document) => document.logicalOwnerType === 'proposal' && document.logicalOwnerId === proposalId
+      );
+    },
     [buildContext, service]
   );
 
@@ -499,6 +625,55 @@ export function DocumentsProvider({ children }: { readonly children: React.React
     [buildContext, executeMutation, service]
   );
 
+  const executeChecklistMutation = useCallback(
+    async <T,>(operation: () => Promise<T>): Promise<DocumentMutationResult<T>> => {
+      try {
+        const data = await operation();
+        await refreshChecklistDashboard();
+        return { success: true, data };
+      } catch (error) {
+        if (error instanceof DocumentDomainError) {
+          return { success: false, error: error.message, errorCode: error.code };
+        }
+        return { success: false, error: 'Não foi possível concluir a operação do checklist.' };
+      }
+    },
+    [refreshChecklistDashboard]
+  );
+
+  const configureChecklistTemplate = useCallback(
+    (input: Omit<ConfigureProposalChecklistTemplateInput, 'idempotencyKey'>) =>
+      executeChecklistMutation(() =>
+        checklistService.configureTemplate(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('proposal-checklist-template'),
+        })
+      ),
+    [buildContext, checklistService, executeChecklistMutation]
+  );
+
+  const applyProposalChecklist = useCallback(
+    (input: Omit<ApplyProposalChecklistInput, 'idempotencyKey'>) =>
+      executeChecklistMutation(() =>
+        checklistService.applyChecklist(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('proposal-checklist-apply'),
+        })
+      ),
+    [buildContext, checklistService, executeChecklistMutation]
+  );
+
+  const transitionProposalChecklistItem = useCallback(
+    (input: Omit<TransitionProposalChecklistItemInput, 'idempotencyKey'>) =>
+      executeChecklistMutation(() =>
+        checklistService.transitionItem(buildContext(), {
+          ...input,
+          idempotencyKey: createMutationKey('proposal-checklist-transition'),
+        })
+      ),
+    [buildContext, checklistService, executeChecklistMutation]
+  );
+
   const value = useMemo<DocumentsContextValue>(
     () => ({
       status,
@@ -508,11 +683,16 @@ export function DocumentsProvider({ children }: { readonly children: React.React
       governanceStatus,
       governance,
       governanceErrorMessage,
+      checklistStatus,
+      checklistDashboard,
+      checklistErrorMessage,
       isLoading: status === 'loading',
       setFilters,
       refresh,
       refreshGovernance,
+      refreshChecklistDashboard,
       getReferenceById,
+      listDocumentsForProposal,
       listVersionHistory,
       registerReference,
       replaceReference,
@@ -524,8 +704,11 @@ export function DocumentsProvider({ children }: { readonly children: React.React
       fulfillRequirement,
       waiveRequirement,
       cancelRequirement,
+      configureChecklistTemplate,
+      applyProposalChecklist,
+      transitionProposalChecklistItem,
     }),
-    [archiveReference, cancelRequirement, createRequirement, errorMessage, filters, fulfillRequirement, getDocumentContent, getReferenceById, governance, governanceErrorMessage, governanceStatus, listVersionHistory, references, refresh, refreshGovernance, registerReference, replaceReference, replaceStoredDocument, status, uploadDocument, waiveRequirement]
+    [applyProposalChecklist, archiveReference, cancelRequirement, checklistDashboard, checklistErrorMessage, checklistStatus, configureChecklistTemplate, createRequirement, errorMessage, filters, fulfillRequirement, getDocumentContent, getReferenceById, governance, governanceErrorMessage, governanceStatus, listDocumentsForProposal, listVersionHistory, references, refresh, refreshChecklistDashboard, refreshGovernance, registerReference, replaceReference, replaceStoredDocument, status, transitionProposalChecklistItem, uploadDocument, waiveRequirement]
   );
 
   return <DocumentsContext.Provider value={value}>{children}</DocumentsContext.Provider>;

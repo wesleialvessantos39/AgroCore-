@@ -67,6 +67,13 @@ function stripPreviewPlugin(isProduction: boolean) {
           return '\0virtual:production-proposals-gateway-factory';
         }
         if (
+          normalizedTarget.includes('/documents/proposalChecklistGatewayFactory') ||
+          id.includes('/documents/proposalChecklistGatewayFactory') ||
+          (importer && importer.includes('/documents/') && id === './proposalChecklistGatewayFactory')
+        ) {
+          return '\0virtual:production-proposal-checklists-gateway-factory';
+        }
+        if (
           normalizedTarget.includes('/documents/documentGatewayFactory') ||
           id.includes('/documents/documentGatewayFactory') ||
           (importer && importer.includes('/documents/') && id === './documentGatewayFactory')
@@ -268,6 +275,16 @@ function stripPreviewPlugin(isProduction: boolean) {
             return new UnavailableDocumentReferenceGateway();
           }
           export function setDocumentReferenceGatewayForTesting() {}
+        `;
+      }
+
+      if (id === '\0virtual:production-proposal-checklists-gateway-factory') {
+        return `
+          import { UnavailableProposalChecklistGateway } from '/src/documents/unavailableProposalChecklistGateway.ts';
+          export function getProposalChecklistGateway() {
+            return new UnavailableProposalChecklistGateway();
+          }
+          export function setProposalChecklistGatewayForTesting() {}
         `;
       }
 

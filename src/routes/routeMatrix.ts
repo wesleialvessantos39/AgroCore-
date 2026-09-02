@@ -330,6 +330,15 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Criação de uma pendência documental para um atendimento da organização.',
   },
   {
+    path: ROUTES.PROPOSAL_CHECKLISTS,
+    category: 'authenticated_protected',
+    name: 'Checklists de Propostas',
+    requiresAuth: true,
+    requiredPermissions: 'documents:view_requirements',
+    scope: 'organization',
+    description: 'Modelos, requisitos, análise e histórico documental por proposta.',
+  },
+  {
     path: ROUTES.DOCUMENTS_DETAIL,
     category: 'authenticated_protected',
     name: 'Detalhes do Documento',

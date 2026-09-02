@@ -47,6 +47,7 @@
     "test:document-storage": "node --import tsx scripts/test-document-storage.ts",
     "test:document-upload": "node --import tsx scripts/test-document-upload.ts",
     "test:document-versioning": "node --import tsx scripts/test-document-versioning.ts",
+    "test:proposal-checklists": "node --import tsx scripts/test-proposal-checklists.ts",
     "test:documents-ui-copy": "node --import tsx scripts/test-documents-ui-copy.ts",
     "test:documents-theme": "node scripts/test-documents-theme.js",
     "test:module-006": "node --import tsx scripts/test-module-006.js",

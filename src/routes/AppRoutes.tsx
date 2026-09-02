@@ -171,6 +171,9 @@ const DocumentGovernancePage = lazy(() =>
 const DocumentRequirementCreatePage = lazy(() =>
   import('../pages/DocumentRequirementCreatePage').then((module) => ({ default: module.DocumentRequirementCreatePage }))
 );
+const ProposalChecklistsPage = lazy(() =>
+  import('../pages/ProposalChecklistsPage').then((module) => ({ default: module.ProposalChecklistsPage }))
+);
 
 const DocumentReferenceDetailPage = lazy(() =>
   import('../pages/DocumentReferenceDetailPage').then((module) => ({ default: module.DocumentReferenceDetailPage }))
@@ -340,22 +343,6 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission="clients:create">
                   <ClientCreatePage />
-                </RequirePermission>
-              }
-            />
-            <Route
-              path="pendencias"
-              element={
-                <RequirePermission permission="documents:view_requirements">
-                  <DocumentGovernancePage />
-                </RequirePermission>
-              }
-            />
-            <Route
-              path="pendencias/nova"
-              element={
-                <RequirePermission permission="documents:manage_requirements">
-                  <DocumentRequirementCreatePage />
                 </RequirePermission>
               }
             />
@@ -592,6 +579,30 @@ export function AppRoutes() {
               element={
                 <RequirePermission permission="documents:upload">
                   <DocumentReferenceCreatePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="pendencias"
+              element={
+                <RequirePermission permission="documents:view_requirements">
+                  <DocumentGovernancePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="pendencias/nova"
+              element={
+                <RequirePermission permission="documents:manage_requirements">
+                  <DocumentRequirementCreatePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="checklists"
+              element={
+                <RequirePermission permission="documents:view_requirements">
+                  <ProposalChecklistsPage />
                 </RequirePermission>
               }
             />

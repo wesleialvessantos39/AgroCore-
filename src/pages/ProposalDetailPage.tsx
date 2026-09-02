@@ -31,8 +31,9 @@ import {
   getProposalDetailPath,
   getProposalDocumentPath,
   getProposalEditPath,
+  getProposalChecklistPath,
   getProposalRenewalPath,
-} from '../routes';
+} from '../routes/paths';
 import { getOrganizationMembersGateway } from '../auth/organizationMembersGatewayFactory';
 import { OrganizationMember } from '../auth/organizationMembersGateway';
 
@@ -479,6 +480,18 @@ export const ProposalDetailPage: React.FC = () => {
 
         {/* Barra de Ações Rápidas do Pipeline */}
         <div className="flex flex-wrap items-center gap-2" id="detail-actions-bar">
+          {can('documents:view_requirements') && (
+            <button
+              type="button"
+              onClick={() => navigate(getProposalChecklistPath(proposal.id))}
+              className={PROPOSAL_THEME.btnSecondary}
+              id="detail-proposal-checklist-btn"
+              disabled={isProcessing}
+            >
+              Checklist documental
+            </button>
+          )}
+
           {canEditDraft && (
             <button
               type="button"

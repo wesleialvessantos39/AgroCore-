@@ -7,6 +7,29 @@ const clientConfiguration = readFileSync(
   'utf8'
 );
 const viteTypes = readFileSync(new URL('../src/vite-env.d.ts', import.meta.url), 'utf8');
+const packageManifest = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+);
+const packageLock = JSON.parse(
+  readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8')
+);
+
+const normalizeDependencies = (dependencies = {}) =>
+  Object.entries(dependencies).sort(([left], [right]) => left.localeCompare(right));
+
+if (packageLock.lockfileVersion !== 3 || packageLock.packages?.[''] == null) {
+  throw new Error('O lockfile do projeto deve existir e usar o formato npm homologado.');
+}
+
+const lockedRoot = packageLock.packages[''];
+if (
+  JSON.stringify(normalizeDependencies(packageManifest.dependencies)) !==
+    JSON.stringify(normalizeDependencies(lockedRoot.dependencies)) ||
+  JSON.stringify(normalizeDependencies(packageManifest.devDependencies)) !==
+    JSON.stringify(normalizeDependencies(lockedRoot.devDependencies))
+) {
+  throw new Error('package.json e package-lock.json devem permanecer sincronizados para o AgroCore CI.');
+}
 
 const assignments = example
   .split(/\r?\n/)
@@ -29,4 +52,8 @@ if (/\$\{\{\s*secrets\./.test(workflow)) {
   throw new Error('O AgroCore CI deve executar a homologação sem depender de segredos.');
 }
 
-console.log('Contrato de ambiente aprovado: desenvolvimento e CI não solicitam chaves.');
+if (!/\bnpm ci --no-audit --no-fund\b/.test(workflow)) {
+  throw new Error('O AgroCore CI deve instalar exclusivamente as dependências travadas no lockfile.');
+}
+
+console.log('Contrato de ambiente aprovado: CI reproduzível e sem solicitação de chaves.');

@@ -702,17 +702,35 @@ create or replace function agrocore_private.document_storage_object_is_registere
   target_path text
 )
 returns boolean
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
-  select exists (
+declare
+  v_actor_id uuid := (select auth.uid());
+  v_organization_text text := split_part(target_path, '/', 1);
+  v_organization_id uuid;
+begin
+  if v_actor_id is null
+    or target_bucket <> 'organization-documents'
+    or v_organization_text !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+    return false;
+  end if;
+
+  v_organization_id := v_organization_text::uuid;
+  if agrocore_private.document_member_role(v_organization_id) is null then
+    return false;
+  end if;
+
+  return exists (
     select 1
     from public.document_versions version
-    where version.storage_bucket = target_bucket
+    where version.organization_id = v_organization_id
+      and version.storage_bucket = target_bucket
       and version.storage_object_path = target_path
   );
+end;
 $$;
 
 revoke all on function agrocore_private.document_storage_object_is_registered(text, text)

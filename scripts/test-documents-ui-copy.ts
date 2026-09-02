@@ -6,6 +6,7 @@ const TARGETS = [
   'src/pages/DocumentReferenceDetailPage.tsx',
   'src/pages/DocumentGovernancePage.tsx',
   'src/pages/DocumentRequirementCreatePage.tsx',
+  'src/pages/ProposalChecklistsPage.tsx',
 ];
 
 const FORBIDDEN_COPY = [

@@ -132,6 +132,12 @@ function databaseError(error: { readonly message?: string } | null): DocumentDom
   if (message.includes('AGROCORE_REFERENCE_NOT_FOUND')) {
     return new DocumentDomainError('REFERENCE_NOT_FOUND', 'Referência documental não encontrada.');
   }
+  if (message.includes('AGROCORE_INVALID_INPUT')) {
+    return new DocumentDomainError('INVALID_INPUT', 'Os dados documentais informados são inválidos.');
+  }
+  if (message.includes('AGROCORE_INVALID_STATE')) {
+    return new DocumentDomainError('INVALID_STATE', 'O documento não permite esta operação.');
+  }
   if (message.includes('AGROCORE_FORBIDDEN')) {
     return new DocumentDomainError('FORBIDDEN', 'Operação documental não autorizada.');
   }

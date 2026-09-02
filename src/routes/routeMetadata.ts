@@ -126,6 +126,10 @@ export const ROUTE_METADATA_MAP: Record<string, RouteMetadata> = {
     documentTitle: 'Nova Pendência de Documento | AgroCore',
     announcementTitle: 'Criar pendência de documento',
   },
+  [ROUTES.PROPOSAL_CHECKLISTS]: {
+    documentTitle: 'Checklists de Propostas | AgroCore',
+    announcementTitle: 'Checklists de propostas',
+  },
   [ROUTES.DOCUMENTS_DETAIL]: {
     documentTitle: 'Documento | AgroCore',
     announcementTitle: 'Detalhes do documento',

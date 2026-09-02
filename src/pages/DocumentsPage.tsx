@@ -1,4 +1,4 @@
-import { Archive, ClipboardList, FileCheck2, Plus, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Archive, ClipboardCheck, ClipboardList, FileCheck2, Plus, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthorization } from '../authorization/useAuthorization';
 import { DOCUMENT_THEME } from '../documents/theme';
@@ -47,14 +47,24 @@ export function DocumentsPage() {
             Atualizar
           </button>
           {can('documents:view_requirements') && (
-            <button
-              type="button"
-              className={DOCUMENT_THEME.buttonSecondary}
-              onClick={() => navigate(ROUTES.DOCUMENT_REQUIREMENTS)}
-            >
-              <ClipboardList className="h-4 w-4" aria-hidden="true" />
-              Pendências e prazos
-            </button>
+            <>
+              <button
+                type="button"
+                className={DOCUMENT_THEME.buttonSecondary}
+                onClick={() => navigate(ROUTES.PROPOSAL_CHECKLISTS)}
+              >
+                <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+                Checklists de propostas
+              </button>
+              <button
+                type="button"
+                className={DOCUMENT_THEME.buttonSecondary}
+                onClick={() => navigate(ROUTES.DOCUMENT_REQUIREMENTS)}
+              >
+                <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                Pendências e prazos
+              </button>
+            </>
           )}
           {can('documents:upload') && (
             <button

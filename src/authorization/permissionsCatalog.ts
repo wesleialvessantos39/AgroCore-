@@ -600,6 +600,13 @@ export const PERMISSIONS_CATALOG: readonly PermissionDefinition[] = [
     description: 'Associar um documento registrado a uma pendência do próprio escopo operacional.',
   },
   {
+    id: 'documents:review_requirements',
+    scope: 'documents',
+    targetScope: 'organization',
+    name: 'Analisar Requisitos Documentais',
+    description: 'Iniciar análise, aprovar, recusar e registrar vencimento de requisitos autorizados.',
+  },
+  {
     id: 'documents:manage_requirements',
     scope: 'documents',
     targetScope: 'organization',

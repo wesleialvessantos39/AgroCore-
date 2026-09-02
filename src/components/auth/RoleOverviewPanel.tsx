@@ -1,21 +1,38 @@
-import { Shield, CheckCircle2, Layers, Building2, BadgeCheck } from 'lucide-react';
+import { Shield, CheckCircle2, Layers, Building2, BadgeCheck, CalendarClock, ClipboardCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { RoleProfileConfig } from '../../auth/roleConfig';
 import { PageHeader } from '../content/PageHeader';
 import { Panel } from '../content/Panel';
 import { EmptyState } from '../content/EmptyState';
 import { PreviewBadge } from '../../auth/preview/PreviewBadge';
 import { useOrganization } from '../../organization/useOrganization';
+import { useAuthorization } from '../../authorization/useAuthorization';
+import { useDocuments } from '../../documents/DocumentsContext';
+import { ROUTES } from '../../routes/paths';
 
 interface RoleOverviewPanelProps {
   config: RoleProfileConfig;
   isPreview?: boolean;
 }
 
+const OVERVIEW_DATE_FORMATTER = new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' });
+
+function formatOverviewDate(value: string): string {
+  return OVERVIEW_DATE_FORMATTER.format(new Date(`${value}T00:00:00.000Z`));
+}
+
 export function RoleOverviewPanel({ config, isPreview = false }: RoleOverviewPanelProps) {
   const Icon = config.icon;
+  const navigate = useNavigate();
   const { activeOrganization, activeMembership } = useOrganization();
+  const { can } = useAuthorization();
+  const { checklistDashboard, checklistStatus } = useDocuments();
 
   const isPlatformScope = config.scope === 'platform';
+  const canViewChecklists = can('documents:view_requirements');
+  const hasChecklistData = Boolean(
+    canViewChecklists && checklistDashboard && checklistDashboard.checklists.length > 0
+  );
 
   return (
     <div id="agrocore-role-overview-panel" className="space-y-6 select-none">
@@ -102,18 +119,57 @@ export function RoleOverviewPanel({ config, isPreview = false }: RoleOverviewPan
         </div>
       </Panel>
 
-      {/* 3. Estado Vazio Verdadeiro de Atividades e Informações Operacionais */}
+      {/* 3. Informações operacionais derivadas somente de registros existentes */}
       <Panel
         id="panel-role-empty-state"
         title="Informações operacionais"
         className="bg-white"
       >
-        <EmptyState
-          id="role-empty-state"
-          icon={Layers}
-          title={config.emptyState.title}
-          description={config.emptyState.description}
-        />
+        {hasChecklistData && checklistDashboard ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-[#0B3D2E]/15 bg-white p-4">
+                <p className="text-sm text-[#0B3D2E]/65">Propostas com checklist</p>
+                <p className="mt-2 text-2xl font-bold text-[#0B3D2E]">{checklistDashboard.totals.proposalsWithChecklist}</p>
+              </div>
+              <div className="rounded-xl border border-[#0B3D2E]/15 bg-white p-4">
+                <p className="text-sm text-[#0B3D2E]/65">Documentos pendentes</p>
+                <p className="mt-2 text-2xl font-bold text-[#0B3D2E]">{checklistDashboard.totals.pending}</p>
+              </div>
+              <div className="rounded-xl border border-[#0B3D2E]/15 bg-white p-4">
+                <p className="text-sm text-[#0B3D2E]/65">Em análise</p>
+                <p className="mt-2 text-2xl font-bold text-[#0B3D2E]">{checklistDashboard.totals.inReview}</p>
+              </div>
+            </div>
+            {checklistDashboard.agendaEntries.length > 0 ? (
+              <div className="rounded-xl border border-[#78C89A]/35 bg-[#78C89A]/10 p-4">
+                <h3 className="flex items-center gap-2 font-bold text-[#0B3D2E]">
+                  <CalendarClock className="h-4 w-4" aria-hidden="true" /> Próximos prazos documentais
+                </h3>
+                <ul className="mt-3 space-y-2">
+                  {checklistDashboard.agendaEntries.slice(0, 4).map((entry) => (
+                    <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-sm text-[#0B3D2E]">
+                      <span>{entry.proposalNumber} · {entry.itemTitle}</span>
+                      <span className="font-semibold">{entry.isOverdue ? 'Prazo vencido' : formatOverviewDate(entry.dueOn)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <button type="button" className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#0B3D2E] px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#78C89A]" onClick={() => navigate(ROUTES.PROPOSAL_CHECKLISTS)}>
+              <ClipboardCheck className="h-4 w-4" aria-hidden="true" /> Abrir checklists
+            </button>
+          </div>
+        ) : checklistStatus === 'loading' && canViewChecklists ? (
+          <p className="text-sm text-[#0B3D2E]/70">Carregando informações operacionais…</p>
+        ) : (
+          <EmptyState
+            id="role-empty-state"
+            icon={Layers}
+            title={config.emptyState.title}
+            description={config.emptyState.description}
+          />
+        )}
       </Panel>
     </div>
   );
