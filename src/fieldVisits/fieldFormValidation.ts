@@ -170,9 +170,15 @@ export function validateTechnicalVisitFieldFormSections(
       }
 
       const normalizedOptions = item.options.map((option) => option.trim());
+      if (normalizedOptions.some((option) => option.length > 120)) {
+        invalid('Uma opção ultrapassa o limite permitido.');
+      }
       if (
-        normalizedOptions.some((option) => option.length === 0 || option.length > 120) ||
-        new Set(normalizedOptions).size !== normalizedOptions.length
+        forSubmission &&
+        (
+          normalizedOptions.some((option) => option.length === 0) ||
+          new Set(normalizedOptions).size !== normalizedOptions.length
+        )
       ) {
         invalid('As opções precisam ser únicas e preenchidas.');
       }

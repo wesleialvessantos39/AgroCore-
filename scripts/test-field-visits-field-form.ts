@@ -462,6 +462,28 @@ await test('24. Opções duplicadas são recusadas', () => {
   );
 });
 
+await test('24A. Rascunho preserva opção ainda incompleta durante a digitação', () => {
+  assert.doesNotThrow(() =>
+    validateTechnicalVisitFieldFormSections(
+      typedSection('single_choice', null, ['']),
+      false
+    )
+  );
+});
+
+await test('24B. Envio final continua recusando opção vazia', () => {
+  assert.throws(
+    () =>
+      validateTechnicalVisitFieldFormSections(
+        typedSection('single_choice', null, ['', 'B']),
+        true
+      ),
+    (error: unknown) =>
+      error instanceof TechnicalVisitDomainError &&
+      error.code === 'FIELD_FORM_INVALID'
+  );
+});
+
 await test('25. Seções duplicadas são recusadas', () => {
   const sections = validSections();
   assert.throws(
@@ -593,6 +615,10 @@ const typesSource = fs.readFileSync(
 );
 const migrationSource = fs.readFileSync(
   'supabase/migrations/20260902194000_oe_007_003_field_forms.sql',
+  'utf8'
+);
+const resilienceMigrationSource = fs.readFileSync(
+  'supabase/migrations/20260902194500_oe_007_003_field_form_draft_resilience.sql',
   'utf8'
 );
 
@@ -730,6 +756,27 @@ await test('47. Payload do formulário possui limite autoritativo no banco', () 
 await test('48. Metadados de autoria e horário são definidos no servidor', () => {
   assert.equal(migrationSource.includes('clock_timestamp()'), true);
   assert.equal(migrationSource.includes('v_actor uuid := (select auth.uid())'), true);
+});
+
+await test('49. Migration incremental preserva rascunho parcial e mantém envio estrito', () => {
+  assert.equal(
+    resilienceMigrationSource.includes(
+      'validate_technical_visit_field_form_draft'
+    ),
+    true
+  );
+  assert.equal(
+    resilienceMigrationSource.includes(
+      'validate_technical_visit_field_form(\n      p_payload,\n      true'
+    ),
+    true
+  );
+  assert.equal(
+    resilienceMigrationSource.includes(
+      'validate_technical_visit_field_form_draft(\n      p_payload'
+    ),
+    true
+  );
 });
 
 console.log('\n====================================================');
