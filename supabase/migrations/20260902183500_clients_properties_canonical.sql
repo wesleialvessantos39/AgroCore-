@@ -8,7 +8,7 @@ language sql
 immutable
 security invoker
 set search_path = ''
-as $
+as $$
   select regexp_replace(
     translate(
       lower(coalesce(value,'')),
@@ -19,7 +19,7 @@ as $
     ' ',
     'g'
   );
-$;
+$$;
 
 create table if not exists public.clients (
   id uuid primary key,
@@ -481,7 +481,7 @@ exception
     end if;
     raise;
 end;
-$;
+$$;
 
 create or replace function public.agrocore_update_property(
   p_organization_id uuid,
@@ -562,7 +562,7 @@ exception
     end if;
     raise;
 end;
-$;
+$$;
 
 revoke all on function public.agrocore_create_property(jsonb) from public, anon;
 revoke all on function public.agrocore_update_property(uuid,uuid,jsonb) from public, anon;
