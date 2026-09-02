@@ -17,6 +17,8 @@ import {
   type TechnicalVisitIdGenerator,
 } from '../src/fieldVisits/technicalVisitService.ts';
 import { TechnicalVisitPreparationService } from '../src/fieldVisits/preparationService.ts';
+import { TechnicalVisitFieldFormService } from '../src/fieldVisits/fieldFormService.ts';
+import { PreviewTechnicalVisitFieldFormGateway } from '../src/fieldVisits/preview/previewFieldFormGateway.ts';
 import {
   assertTechnicalVisitTransition,
   canTransitionTechnicalVisit,
@@ -133,10 +135,21 @@ function validInput(responsibleUserId = 'user-tech') {
 function newService(gateway = new PreviewTechnicalVisitGateway()) {
   const clock = new FixedClock('2026-09-02T15:00:00.000Z');
   const ids = new SequentialIds();
+  const fieldFormGateway = new PreviewTechnicalVisitFieldFormGateway();
   return {
     gateway,
-    service: new TechnicalVisitService(gateway, clock, ids),
+    fieldFormGateway,
+    service: new TechnicalVisitService(
+      gateway,
+      clock,
+      ids,
+      fieldFormGateway
+    ),
     preparationService: new TechnicalVisitPreparationService(gateway, clock, ids),
+    fieldFormService: new TechnicalVisitFieldFormService(
+      fieldFormGateway,
+      gateway
+    ),
   };
 }
 
@@ -501,9 +514,9 @@ await test('23. Somente o responsável pode iniciar a execução', async () => {
   );
 });
 
-await test('24. Projetista responsável executa e conclui a visita após preparação', async () => {
+await test('24. Projetista responsável executa e conclui a visita após preparação e formulário enviado', async () => {
   const maps = baseMaps();
-  const { service, preparationService } = newService();
+  const { service, preparationService, fieldFormService } = newService();
   const ownerCtx = context('org-a', 'user-owner', 'owner', maps);
   const techCtx = context('org-a', 'user-tech', 'project_designer', maps);
   const visit = await service.createVisit(ownerCtx, validInput('user-tech'));
@@ -520,6 +533,32 @@ await test('24. Projetista responsável executa e conclui a visita após prepara
     targetStatus: 'in_progress',
     expectedVersion: confirmed.version,
   });
+
+  await fieldFormService.submit(
+    techCtx,
+    visit.id,
+    [
+      {
+        id: 'section:execution',
+        title: 'Registro da execução',
+        description: null,
+        order: 1,
+        items: [
+          {
+            id: 'item:summary',
+            label: 'Resumo da vistoria',
+            type: 'long_text',
+            required: true,
+            options: [],
+            answer: 'Vistoria realizada conforme a finalidade prevista.',
+            observation: null,
+          },
+        ],
+      },
+    ],
+    0
+  );
+
   const completed = await service.transitionVisit(techCtx, visit.id, {
     targetStatus: 'completed',
     expectedVersion: started.version,

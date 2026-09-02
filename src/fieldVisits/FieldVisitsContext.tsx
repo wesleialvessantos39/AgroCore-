@@ -29,9 +29,16 @@ import {
   type UpdateTechnicalVisitPreparationInput,
   type SetTechnicalVisitChecklistItemCompletionInput,
 } from '../types/technicalVisit';
+import type {
+  TechnicalVisitFieldForm,
+  TechnicalVisitFieldFormRevision,
+  TechnicalVisitFieldSection,
+} from '../types/technicalVisitFieldForm';
 import { getTechnicalVisitGateway } from './gatewayFactory';
 import { TechnicalVisitService } from './technicalVisitService';
 import { TechnicalVisitPreparationService } from './preparationService';
+import { getTechnicalVisitFieldFormGateway } from './fieldFormGatewayFactory';
+import { TechnicalVisitFieldFormService } from './fieldFormService';
 
 export type FieldVisitsContextStatus =
   | 'idle'
@@ -71,6 +78,22 @@ export interface FieldVisitsContextValue {
     visitId: string,
     input: SetTechnicalVisitChecklistItemCompletionInput
   ) => Promise<TechnicalVisit>;
+  readonly getFieldForm: (
+    visitId: string
+  ) => Promise<TechnicalVisitFieldForm | null>;
+  readonly saveFieldFormDraft: (
+    visitId: string,
+    sections: readonly TechnicalVisitFieldSection[],
+    expectedVersion: number
+  ) => Promise<TechnicalVisitFieldForm>;
+  readonly submitFieldForm: (
+    visitId: string,
+    sections: readonly TechnicalVisitFieldSection[],
+    expectedVersion: number
+  ) => Promise<TechnicalVisitFieldForm>;
+  readonly getFieldFormRevisions: (
+    visitId: string
+  ) => Promise<readonly TechnicalVisitFieldFormRevision[]>;
 }
 
 export const FieldVisitsContext = createContext<FieldVisitsContextValue | null>(null);
@@ -103,13 +126,28 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
   const userId = session?.user?.id ?? null;
   const canView = can('surveys_and_visits:view');
 
-  const service = useMemo(
-    () => new TechnicalVisitService(getTechnicalVisitGateway()),
+  const visitGateway = useMemo(() => getTechnicalVisitGateway(), []);
+  const fieldFormGateway = useMemo(
+    () => getTechnicalVisitFieldFormGateway(),
     []
   );
+  const service = useMemo(
+    () =>
+      new TechnicalVisitService(
+        visitGateway,
+        undefined,
+        undefined,
+        fieldFormGateway
+      ),
+    [fieldFormGateway, visitGateway]
+  );
   const preparationService = useMemo(
-    () => new TechnicalVisitPreparationService(getTechnicalVisitGateway()),
-    []
+    () => new TechnicalVisitPreparationService(visitGateway),
+    [visitGateway]
+  );
+  const fieldFormService = useMemo(
+    () => new TechnicalVisitFieldFormService(fieldFormGateway, visitGateway),
+    [fieldFormGateway, visitGateway]
   );
 
   const applicationContext = useMemo<TechnicalVisitApplicationContext | null>(() => {
@@ -355,6 +393,48 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
     [ensureContext, preparationService, refresh]
   );
 
+  const getFieldForm = useCallback(
+    (visitId: string) =>
+      fieldFormService.getFieldForm(ensureContext(), visitId),
+    [ensureContext, fieldFormService]
+  );
+
+  const saveFieldFormDraft = useCallback(
+    (
+      visitId: string,
+      sections: readonly TechnicalVisitFieldSection[],
+      expectedVersion: number
+    ) =>
+      fieldFormService.saveDraft(
+        ensureContext(),
+        visitId,
+        sections,
+        expectedVersion
+      ),
+    [ensureContext, fieldFormService]
+  );
+
+  const submitFieldForm = useCallback(
+    (
+      visitId: string,
+      sections: readonly TechnicalVisitFieldSection[],
+      expectedVersion: number
+    ) =>
+      fieldFormService.submit(
+        ensureContext(),
+        visitId,
+        sections,
+        expectedVersion
+      ),
+    [ensureContext, fieldFormService]
+  );
+
+  const getFieldFormRevisions = useCallback(
+    (visitId: string) =>
+      fieldFormService.listRevisions(ensureContext(), visitId),
+    [ensureContext, fieldFormService]
+  );
+
   const getVisitById = useCallback(
     (visitId: string) => service.getVisitById(ensureContext(), visitId),
     [ensureContext, service]
@@ -392,6 +472,10 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
       transitionVisit,
       prepareVisit,
       setChecklistItemCompletion,
+      getFieldForm,
+      saveFieldFormDraft,
+      submitFieldForm,
+      getFieldFormRevisions,
     }),
     [
       clearFilters,
@@ -399,14 +483,18 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
       errorMessage,
       filters,
       getAudit,
+      getFieldForm,
+      getFieldFormRevisions,
       getVisitById,
       members,
       prepareVisit,
       refresh,
       responsibleMembers,
       setFilters,
+      saveFieldFormDraft,
       setChecklistItemCompletion,
       status,
+      submitFieldForm,
       transitionVisit,
       updateVisit,
       visits,

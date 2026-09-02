@@ -6,6 +6,7 @@ import { useClients } from '../clients/useClients';
 import { useFieldVisits } from '../fieldVisits/useFieldVisits';
 import { FIELD_VISIT_THEME } from '../fieldVisits/theme';
 import { VisitPreparationPanel } from '../fieldVisits/VisitPreparationPanel';
+import { VisitFieldFormPanel } from '../fieldVisits/VisitFieldFormPanel';
 import { useProperties } from '../properties/useProperties';
 import { useProposals } from '../proposals/useProposals';
 import { useAppraisals } from '../appraisals/useAppraisals';
@@ -81,6 +82,9 @@ export const FieldVisitsPage: React.FC = () => {
   const [cancelReason, setCancelReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [fieldFormSubmitted, setFieldFormSubmitted] = useState<
+    Record<string, boolean>
+  >({});
 
   const activeClients = useMemo(
     () => clients.clients.filter((client) => client.status === 'active'),
@@ -440,6 +444,7 @@ export const FieldVisitsPage: React.FC = () => {
               ).length ?? 0;
             const preparationReady =
               Boolean(visit.preparation) && pendingRequiredChecklist === 0;
+            const fieldFormReady = fieldFormSubmitted[visit.id] === true;
             const canCancel =
               canSchedule &&
               (visit.status === 'planned' ||
@@ -514,7 +519,12 @@ export const FieldVisitsPage: React.FC = () => {
                       <button
                         type="button"
                         className={FIELD_VISIT_THEME.buttonPrimary}
-                        disabled={busyId === visit.id}
+                        disabled={busyId === visit.id || !fieldFormReady}
+                        title={
+                          fieldFormReady
+                            ? 'Concluir visita'
+                            : 'Envie o formulário de campo antes de concluir'
+                        }
                         onClick={() => void transition(visit, 'completed')}
                       >
                         <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
@@ -541,6 +551,19 @@ export const FieldVisitsPage: React.FC = () => {
                   visit={visit}
                   members={members}
                   canEdit={canSchedule}
+                />
+
+                <VisitFieldFormPanel
+                  visit={visit}
+                  canAccess={canExecute}
+                  canEdit={canExecute && isResponsible}
+                  onSubmissionStateChange={(submitted) => {
+                    setFieldFormSubmitted((current) =>
+                      current[visit.id] === submitted
+                        ? current
+                        : { ...current, [visit.id]: submitted }
+                    );
+                  }}
                 />
 
                 {visit.status === 'confirmed' && isResponsible && !preparationReady && (

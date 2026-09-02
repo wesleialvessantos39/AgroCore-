@@ -24,6 +24,12 @@ function mapError(error: { readonly message?: string } | null): TechnicalVisitDo
       'A visita foi alterada por outra operação. Recarregue os dados.'
     );
   }
+  if (message.includes('AGROCORE_FIELD_FORM_INCOMPLETE')) {
+    return new TechnicalVisitDomainError(
+      'FIELD_FORM_INCOMPLETE',
+      'Envie o formulário de campo completo antes de concluir a visita.'
+    );
+  }
   if (message.includes('AGROCORE_SCHEDULE_CONFLICT')) {
     return new TechnicalVisitDomainError(
       'SCHEDULE_CONFLICT',

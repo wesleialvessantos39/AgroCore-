@@ -4,6 +4,7 @@ const FILES = [
   'src/fieldVisits/theme.ts',
   'src/pages/FieldVisitsPage.tsx',
   'src/fieldVisits/VisitPreparationPanel.tsx',
+  'src/fieldVisits/VisitFieldFormPanel.tsx',
 ];
 
 const forbidden = [

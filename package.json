@@ -61,7 +61,8 @@
     "test:rebranding": "node --import tsx scripts/test-rebranding.js",
     "test:sw-lifecycle": "node scripts/test-sw-lifecycle.js",
     "test:multi-build-update": "node scripts/test-multi-build-update.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:field-visits-field-form": "node --import tsx scripts/test-field-visits-field-form.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

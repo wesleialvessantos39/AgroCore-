@@ -11,6 +11,7 @@ import {
   type TransitionTechnicalVisitInput,
   type UpdateTechnicalVisitInput,
 } from '../types/technicalVisit';
+import type { TechnicalVisitFieldFormGateway } from '../types/technicalVisitFieldForm';
 import { assertTechnicalVisitTransition, isTechnicalVisitTerminal } from './stateMachine';
 
 const ACTIVITY_TYPES: readonly TechnicalVisitActivityType[] = [
@@ -50,7 +51,8 @@ export class TechnicalVisitService {
   constructor(
     private readonly gateway: TechnicalVisitGateway,
     private readonly clock: TechnicalVisitClock = systemClock,
-    private readonly idGenerator: TechnicalVisitIdGenerator = secureIdGenerator
+    private readonly idGenerator: TechnicalVisitIdGenerator = secureIdGenerator,
+    private readonly fieldFormGateway?: TechnicalVisitFieldFormGateway
   ) {}
 
   async listVisits(
@@ -242,6 +244,25 @@ export class TechnicalVisitService {
           'RESPONSIBLE_MISMATCH',
           'Somente o responsável atual pode registrar a execução desta visita.'
         );
+      }
+
+      if (input.targetStatus === 'completed') {
+        if (!this.fieldFormGateway) {
+          throw new TechnicalVisitDomainError(
+            'SERVICE_UNAVAILABLE',
+            'Serviço de formulário de campo indisponível.'
+          );
+        }
+        const fieldForm = await this.fieldFormGateway.getFieldForm(
+          context.organizationId,
+          visitId
+        );
+        if (!fieldForm || fieldForm.status !== 'submitted') {
+          throw new TechnicalVisitDomainError(
+            'FIELD_FORM_INCOMPLETE',
+            'Envie o formulário de campo completo antes de concluir a visita.'
+          );
+        }
       }
 
       if (input.targetStatus === 'in_progress') {

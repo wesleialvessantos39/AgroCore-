@@ -16,8 +16,10 @@ const header = read('src/components/Header.tsx');
 const hero = read('src/components/Hero.tsx');
 const fieldTests = read('scripts/test-field-visits-foundation.ts');
 const fieldPreparationTests = read('scripts/test-field-visits-preparation.ts');
+const fieldFormTests = read('scripts/test-field-visits-field-form.ts');
 const fieldAccessibilityTests = read('scripts/test-field-visits-accessibility.ts');
 const fieldPreparationPanel = read('src/fieldVisits/VisitPreparationPanel.tsx');
+const fieldFormPanel = read('src/fieldVisits/VisitFieldFormPanel.tsx');
 const fieldVisitTypes = read('src/types/technicalVisit.ts');
 const fieldPreparationService = read('src/fieldVisits/preparationService.ts');
 const packageJson = JSON.parse(read('package.json'));
@@ -54,10 +56,21 @@ assert(
   'A suíte da OE-007.002 não pode conter interrupções de diagnóstico.'
 );
 assert(
+  !fieldFormTests.includes('process.exit(0)'),
+  'A suíte da OE-007.003 não pode conter interrupções de diagnóstico.'
+);
+assert(
   fieldPreparationPanel.includes('Fuso horário') &&
     fieldPreparationPanel.includes('Checklist prévio') &&
     fieldPreparationPanel.includes('Autorizar exceção e salvar'),
   'A preparação operacional da OE-007.002 deve permanecer integrada à interface.'
+);
+assert(
+  fieldFormPanel.includes('Formulário de campo') &&
+    fieldFormPanel.includes('Adicionar seção') &&
+    fieldFormPanel.includes('Enviar formulário') &&
+    fieldFormPanel.includes("addEventListener('beforeunload'"),
+  'O formulário de campo da OE-007.003 deve permanecer integrado, progressivo e protegido contra perda.'
 );
 assert(
   !fieldPreparationPanel.includes('Veículo previsto') &&
@@ -84,4 +97,4 @@ assert(
   'O gate de produção deve executar as homologações de código dos Módulos 001, 002, 003, 006 e 007.'
 );
 
-console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e Módulo 007 integrado até OE-007.002.');
+console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e Módulo 007 integrado até OE-007.003.');

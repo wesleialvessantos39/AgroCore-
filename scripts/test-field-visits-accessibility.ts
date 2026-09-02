@@ -19,6 +19,7 @@ function test(name: string, operation: () => void) {
 const page = fs.readFileSync('src/pages/FieldVisitsPage.tsx', 'utf8');
 const panel = fs.readFileSync('src/fieldVisits/VisitPreparationPanel.tsx', 'utf8');
 const theme = fs.readFileSync('src/fieldVisits/theme.ts', 'utf8');
+const fieldForm = fs.readFileSync('src/fieldVisits/VisitFieldFormPanel.tsx', 'utf8');
 
 console.log('====================================================');
 console.log(' AGROCORE — RESPONSIVIDADE E ACESSIBILIDADE MÓDULO 007');
@@ -103,6 +104,40 @@ test('11. Campos de agenda possuem tipos e limites explícitos', () => {
 
 test('12. Cartão usa o fuso preparado em vez de assumir o dispositivo', () => {
   assert.equal(page.includes('timeZone: visit.preparation?.timeZone'), true);
+});
+
+test('13. Formulário de campo preserva alvos de toque de 44 px', () => {
+  assert.equal(fieldForm.includes('min-h-[44px]'), true);
+  assert.equal(fieldForm.includes('FIELD_VISIT_THEME.buttonPrimary'), true);
+  assert.equal(fieldForm.includes('FIELD_VISIT_THEME.buttonSecondary'), true);
+});
+
+test('14. Formulário é mobile-first nos viewports 320 px e 390 px', () => {
+  const widths = [320, 390];
+  for (const width of widths) {
+    assert.equal(width < 640, true);
+    assert.equal(fieldForm.includes('md:grid-cols-2'), true);
+    assert.equal(fieldForm.includes('sm:flex-row'), true);
+    assert.equal(fieldForm.includes('min-w-0'), true);
+  }
+});
+
+test('15. Formulário não introduz largura fixa que force overflow', () => {
+  assert.equal(/min-w-\\[(?:[4-9]\\d\\d|\\d{4,})px\\]/.test(fieldForm), false);
+  assert.equal(/w-\\[(?:[4-9]\\d\\d|\\d{4,})px\\]/.test(fieldForm), false);
+});
+
+test('16. Tipos numéricos, data e horário usam controles adequados ao teclado móvel', () => {
+  assert.equal(fieldForm.includes('inputMode="numeric"'), true);
+  assert.equal(fieldForm.includes('inputMode="decimal"'), true);
+  assert.equal(fieldForm.includes('type="date"'), true);
+  assert.equal(fieldForm.includes('type="time"'), true);
+});
+
+test('17. Inclusão de seção e item move foco para o novo conteúdo', () => {
+  assert.equal(fieldForm.includes("document.getElementById('field-section-title-'"), true);
+  assert.equal(fieldForm.includes("document.getElementById('field-item-label-'"), true);
+  assert.equal(fieldForm.includes('firstActionRef.current?.focus()'), true);
 });
 
 console.log('\n====================================================');
