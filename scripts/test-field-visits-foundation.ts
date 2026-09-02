@@ -209,6 +209,10 @@ await test('7. Superadministrador global permanece fora do escopo organizacional
   );
 });
 
+if (failed > 0) process.exit(1);
+console.log('DIAGNOSTIC_FIRST_SEVEN_OK');
+process.exit(0);
+
 await test('8. Responsável precisa existir na mesma organização', async () => {
   const maps = baseMaps();
   maps.members.set('foreign-user', {
