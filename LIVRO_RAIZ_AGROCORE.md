@@ -546,7 +546,8 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 
 
 ### MÓDULO 007: VISITAS, VISTORIAS E OPERAÇÃO EM CAMPO
-- **Status Geral:** OE-007.001 e OE-007.002 implementadas e revisadas contra o Plano Mestre e o Relatório Consolidado. O gate de produção do Vercel aprovou o commit `74ed52aac6dfecb87132a3eab3a361844da4ea09`, executando invariantes de release, TypeScript estrito, Módulos 006 e 007, build Vite, Service Worker e verificação de vazamentos. O Módulo 007 possui 35 provas da fundação, 37 de agenda/preparação e 12 verificações estruturais de responsividade/acessibilidade. O GitHub Actions permanece com falha externa anterior à execução e zero `steps`.
+- **Status Geral:** OE-007.001 e OE-007.002 permanecem implementadas e revisadas. A **OE-007.003 — Formulário de Campo** está implementada no código e aplicada no Supabase AgroCore, com persistência remota, RLS, versionamento, histórico append-only e bloqueio autoritativo da conclusão da visita sem formulário enviado. O Vercel dos commits atuais permanece em falha e o AgroCore CI continua encerrando antes de executar etapas (`steps=[]`), portanto a homologação de produção da OE-007.003 ainda não é declarada concluída.
+
 - **Entregas da OE-007.001 — Modelo de Visitas e Vistorias:**
   - **Domínio Tipado:** `TechnicalVisit` registra organização, tipo de atividade, situação, cliente, imóvel opcional, proposta opcional, laudo opcional, responsável, data prevista, finalidade, autoria, datas de ciclo de vida e versão otimista.
   - **Estados Controlados:** fluxo explícito `planned → confirmed → in_progress → completed`, com cancelamento permitido antes da conclusão; estados concluído e cancelado são terminais e transições inválidas são recusadas.
@@ -587,6 +588,19 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 - **CI externo:** o AgroCore CI do mesmo commit encerrou antes de executar qualquer etapa (`steps=[]`), mantendo a pendência externa já conhecida sem invalidar o gate efetivamente executado pelo Vercel.
 - **Risco/pendência real:** não foi realizada por este ambiente uma inspeção visual em aparelho físico; a cobertura atual é automatizada e estrutural. A validação física de celular, conectividade e operação de campo permanece explicitamente para OE-007.007.
 - **Decisão objetiva:** OE-007.002 está corrigida e apta para avanço arquitetural; OE-007.003 não foi iniciada nesta revisão.
+
+- **Entregas da OE-007.003 — Formulário de Campo:**
+  - **Domínio Tipado:** formulário por visita com seções configuráveis, itens tipados, obrigatoriedade, opções, resposta e observação. Tipos suportados: texto curto, texto longo, inteiro, decimal, booleano, data, horário, escolha única e múltipla escolha.
+  - **Fluxo Operacional:** rascunho disponível após confirmação da visita e durante execução; envio final permitido somente em `in_progress`; após envio o formulário se torna imutável.
+  - **Salvamento Progressivo:** rascunho remoto com debounce de 800 ms, salvamento manual, versão otimista e proteção `beforeunload` contra perda de alterações pendentes. A revisão R1 permite opções ainda incompletas durante digitação sem relaxar a validação do envio final.
+  - **Concorrência:** cada salvamento usa `expectedVersion`; versões obsoletas são recusadas e somente um escritor vence em corrida.
+  - **RBAC e Responsabilidade:** conteúdo técnico acessível somente a owner, company_admin, manager e project_designer; mutações exigem `surveys_and_visits:execute` e correspondência com o responsável atual da visita. Captador preserva acesso à visita, mas não ao conteúdo técnico do formulário; financeiro permanece fora do fluxo de campo.
+  - **Supabase:** tabelas `technical_visit_field_forms` e `technical_visit_field_form_revisions` com RLS; RPC `agrocore_save_technical_visit_field_form`; validadores privados para rascunho e envio; trigger `agrocore_require_field_form_before_completion` bloqueando conclusão sem formulário enviado.
+  - **Migrations Remotas Aplicadas:** `oe_007_003_field_forms` e `oe_007_003_field_form_draft_resilience` estão registradas no projeto Supabase AgroCore.
+  - **Interface Mobile:** painel responsivo com alvos de toque, foco acessível, anúncios ARIA, inputs adequados a teclado móvel e ausência de largura fixa que force overflow em 320/390 px.
+  - **Escopo Preservado:** fotos, evidências visuais e geolocalização permanecem fora da OE-007.003 e reservadas às ordens posteriores; frota continua reservada à OE-007.006.
+  - **Homologação Automatizada:** nova suíte `scripts/test-field-visits-field-form.ts` integrada ao `test:module-007`, além da ampliação da suíte de acessibilidade e das invariantes de release.
+  - **Produção:** o factory de produção do formulário foi explicitamente ligado ao Supabase por módulo virtual no Vite, com fallback `Unavailable` deny-by-default. O deploy Vercel atual ainda falha e não disponibiliza logs ao conector desta sessão; por isso não é registrada aprovação de produção.
 
 ---
 
