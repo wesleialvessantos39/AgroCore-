@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "prebuild": "npm run test:module-007",
+    "prebuild": "npm run test:field-visits-foundation",
     "build": "vite build && node scripts/build-sw.js && node scripts/verify-leak-free-build.js",
     "preview": "vite preview",
     "test:environment-contract": "node scripts/verify-environment-contract.js",
