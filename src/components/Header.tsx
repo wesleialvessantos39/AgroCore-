@@ -50,7 +50,7 @@ export function Header() {
           </a>
           <Link
             id="header-access-system-link"
-            to={ROUTES.SYSTEM}
+            to={ROUTES.SIGN_IN}
             className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-[#78C89A] text-[#0B3D2E] text-xs sm:text-sm font-bold hover:bg-[#60B785] transition-colors shadow-xs focus-visible:ring-2 focus-visible:ring-white shrink-0 cursor-pointer"
           >
             <span>Acessar sistema</span>

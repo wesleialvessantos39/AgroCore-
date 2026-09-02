@@ -543,7 +543,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 
 
 ### MÓDULO 007: VISITAS, VISTORIAS E OPERAÇÃO EM CAMPO
-- **Status Geral:** OE-007.001 implementada no código e com build de produção aprovado pelo Vercel no commit `0c834a1d4f94435a592de53588eadd8536c25d5f`. A suíte automatizada do módulo está definida, porém o GitHub Actions continua encerrando antes de executar qualquer `step`, portanto essa falha externa não é registrada como reprovação funcional nem como homologação do runner.
+- **Status Geral:** OE-007.001 implementada no código. Na revisão pós-implantação foram corrigidos o registro da rota `/visitas` na matriz central, o início público do PWA e a tela de autenticação de produção. A validação remota continua separando falhas reais de aplicação de indisponibilidade externa do runner.
 - **Entregas da OE-007.001 — Modelo de Visitas e Vistorias:**
   - **Domínio Tipado:** `TechnicalVisit` registra organização, tipo de atividade, situação, cliente, imóvel opcional, proposta opcional, laudo opcional, responsável, data prevista, finalidade, autoria, datas de ciclo de vida e versão otimista.
   - **Estados Controlados:** fluxo explícito `planned → confirmed → in_progress → completed`, com cancelamento permitido antes da conclusão; estados concluído e cancelado são terminais e transições inválidas são recusadas.
@@ -555,7 +555,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - **Contexto e Sessão:** `FieldVisitsProvider` integra autenticação, organização, RBAC e as fontes canônicas, cancela respostas obsoletas na troca de contexto e limpa dados voláteis pelo registro central de logout.
   - **Interface:** rota `/visitas`, navegação “Visitas e vistorias”, formulário com seletores canônicos, estado vazio real, filtros por situação e comandos de confirmar, iniciar, concluir e cancelar conforme autorização. A identidade visual permanece restrita à paleta oficial AgroCore.
   - **Escopo Preservado:** duração, endereço operacional detalhado, participantes, checklist de preparação, conflitos de agenda, roteirização, veículo, formulário de campo, fotos e geolocalização não foram antecipados; permanecem para OEs posteriores do Módulo 007.
-  - **Homologação Definida:** `scripts/test-field-visits-foundation.ts` contém 31 provas comportamentais e estruturais; `scripts/test-field-visits-theme.js` audita a paleta; `scripts/test-module-007.js` consolida fundação, tema e auditoria global de textos. O Vercel aprovou o build de produção após o hardening do factory. O runner do GitHub Actions não executou etapas, portanto as 31 provas permanecem definidas e aguardam execução efetiva pelo CI.
+  - **Homologação Definida:** `scripts/test-field-visits-foundation.ts` contém 31 provas comportamentais e estruturais e voltou ao fluxo integral, sem interrupções de diagnóstico; a prova de integração agora também exige a presença de `/visitas` na matriz central. `scripts/test-field-visits-theme.js` audita a paleta e `scripts/test-module-007.js` consolida fundação, tema e auditoria global de textos.
 
 ---
 

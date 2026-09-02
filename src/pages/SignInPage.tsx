@@ -71,8 +71,12 @@ export function SignInPage() {
       const rawFrom = (location.state as { from?: { pathname?: string } })?.from?.pathname;
       const safeDestination = getSafeRedirectUrl(rawFrom, ROUTES.SYSTEM);
       navigate(safeDestination, { replace: true });
-    } catch {
-      setErrorMessage('E-mail ou senha inválidos');
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : 'E-mail ou senha inválidos';
+      setErrorMessage(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -199,7 +203,7 @@ export function SignInPage() {
                     if (inactivityNotice) setInactivityNotice(null);
                   }}
                   placeholder="exemplo@agrocore.com.br"
-                  disabled={isSubmitting || !import.meta.env.DEV}
+                  disabled={isSubmitting}
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#CBD5E1] text-sm text-[#0F172A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#78C89A] focus:border-[#0B3D2E] transition-colors disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </div>
@@ -239,7 +243,7 @@ export function SignInPage() {
                     if (inactivityNotice) setInactivityNotice(null);
                   }}
                   placeholder="••••••••"
-                  disabled={isSubmitting || !import.meta.env.DEV}
+                  disabled={isSubmitting}
                   className="w-full pl-9 pr-11 py-2.5 rounded-xl border border-[#CBD5E1] text-sm text-[#0F172A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#78C89A] focus:border-[#0B3D2E] transition-colors disabled:bg-slate-100 disabled:text-slate-500"
                 />
                 <button
@@ -248,7 +252,7 @@ export function SignInPage() {
                   aria-label={showPassword ? 'Ocultar senha' : 'Exibir senha'}
                   aria-pressed={showPassword}
                   onClick={() => setShowPassword((prev) => !prev)}
-                  disabled={isSubmitting || !import.meta.env.DEV}
+                  disabled={isSubmitting}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer min-w-[44px] min-h-[44px] focus:outline-none focus:text-[#0B3D2E]"
                 >
                   {showPassword ? (
@@ -267,7 +271,7 @@ export function SignInPage() {
                 type="submit"
                 variant="primary"
                 size="md"
-                disabled={isSubmitting || !import.meta.env.DEV}
+                disabled={isSubmitting}
                 className="w-full flex items-center justify-center gap-2 cursor-pointer font-semibold min-h-[44px]"
               >
                 {isSubmitting ? (

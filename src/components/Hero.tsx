@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { FileCheck, Sprout, Layers, ArrowRight, ArrowDown } from 'lucide-react';
+import { ROUTES } from '../routes/paths';
 
 export function Hero() {
   return (
@@ -46,7 +47,7 @@ export function Hero() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-12">
             <Link
               id="hero-access-system-cta"
-              to="/sistema"
+              to={ROUTES.SIGN_IN}
               className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[#78C89A] text-[#0B3D2E] font-bold text-sm sm:text-base hover:bg-[#60B785] transition-all shadow-md focus-visible:ring-2 focus-visible:ring-white w-full sm:w-auto cursor-pointer"
             >
               <span>Acessar sistema</span>

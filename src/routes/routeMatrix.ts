@@ -348,6 +348,15 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Informações, versões e situação de um documento autorizado.',
   },
   {
+    path: ROUTES.FIELD_VISITS,
+    category: 'authenticated_protected',
+    name: 'Visitas e Vistorias',
+    requiresAuth: true,
+    requiredPermissions: 'surveys_and_visits:view',
+    scope: 'organization',
+    description: 'Planejamento, acompanhamento e execução autorizada de visitas e vistorias da organização.',
+  },
+  {
     path: ROUTES.MY_ACCOUNT,
     category: 'authenticated_protected',
     name: 'Minha Conta',

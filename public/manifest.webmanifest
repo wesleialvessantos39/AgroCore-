@@ -1,9 +1,9 @@
 {
-  "id": "/sistema",
+  "id": "/",
   "name": "AgroCore — Gestão e Crédito Rural",
   "short_name": "AgroCore",
   "description": "Plataforma especializada para escritórios de crédito rural e consultoria agronômica.",
-  "start_url": "/sistema",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

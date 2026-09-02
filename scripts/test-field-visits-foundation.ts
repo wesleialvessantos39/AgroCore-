@@ -209,10 +209,6 @@ await test('7. Superadministrador global permanece fora do escopo organizacional
   );
 });
 
-if (failed > 0) process.exit(1);
-console.log('DIAGNOSTIC_FIRST_SEVEN_OK');
-process.exit(0);
-
 await test('8. Responsável precisa existir na mesma organização', async () => {
   const maps = baseMaps();
   maps.members.set('foreign-user', {
@@ -348,10 +344,6 @@ await test('15. Proposta vinculada pode derivar o imóvel quando ele não foi in
   });
   assert.equal(visit.propertyId, 'property-a');
 });
-
-if (failed > 0) process.exit(1);
-console.log('DIAGNOSTIC_FIRST_HALF_OK');
-process.exit(0);
 
 await test('16. Laudo deve corresponder ao cliente e imóvel', async () => {
   const { service } = newService();
@@ -592,12 +584,15 @@ await test('28. Gateway indisponível fecha produção sem simular sucesso', asy
 await test('29. Rota, navegação, provider e barreira de build estão integrados', () => {
   const paths = fs.readFileSync('src/routes/paths.ts', 'utf8');
   const routes = fs.readFileSync('src/routes/AppRoutes.tsx', 'utf8');
+  const routeMatrix = fs.readFileSync('src/routes/routeMatrix.ts', 'utf8');
   const navigation = fs.readFileSync('src/config/navigation.ts', 'utf8');
   const app = fs.readFileSync('src/App.tsx', 'utf8');
   const leak = fs.readFileSync('scripts/verify-leak-free-build.js', 'utf8');
   assert.equal(paths.includes("FIELD_VISITS: '/visitas'"), true);
   assert.equal(routes.includes('ROUTES.FIELD_VISITS'), true);
   assert.equal(routes.includes('permission="surveys_and_visits:view"'), true);
+  assert.equal(routeMatrix.includes('path: ROUTES.FIELD_VISITS'), true);
+  assert.equal(routeMatrix.includes("requiredPermissions: 'surveys_and_visits:view'"), true);
   assert.equal(navigation.includes('nav-item-field-visits'), true);
   assert.equal(app.includes('FieldVisitsProvider'), true);
   assert.equal(leak.includes('PreviewTechnicalVisitGateway'), true);
