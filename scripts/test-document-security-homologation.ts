@@ -1560,7 +1560,7 @@ await test('Migrações documentais preservam RLS fechado sem políticas permiss
   );
   assert.equal((storageMigration.match(/create policy/gi) ?? []).length, 4);
   assert.match(storageMigration, /organization-documents/);
-  assert.match(storageMigration, /public\s*,?\s*false/i);
+  assert.match(storageMigration, /'organization-documents'[\s\S]*'organization-documents'[\s\S]*false[\s\S]*52428800/i);
   assert.match(storageMigration, /organization_memberships/);
   assert.doesNotMatch(storageMigration, /using\s*\(\s*true\s*\)/i);
   assert.doesNotMatch(storageMigration, /with\s+check\s*\(\s*true\s*\)/i);
