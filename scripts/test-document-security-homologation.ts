@@ -1165,7 +1165,7 @@ await test('Unavailable Gateways negam operações de forma segura sem simular d
         signal: dummySignal(),
         idempotencyKey: 'unavail-upl-item-001',
       }),
-    (err: unknown) => err instanceof DocumentDomainError && (err.code === 'SERVICE_UNAVAILABLE' || err.code === 'STORAGE_COMPENSATION_FAILED')
+    (err: unknown) => err instanceof DocumentDomainError && err.code === 'STORAGE_NOT_CONFIGURED'
   );
 
   await assert.rejects(
