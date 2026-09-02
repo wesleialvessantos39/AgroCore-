@@ -18,7 +18,10 @@ export interface EvaluatorContext {
   orgContext: OrganizationContextData | null;
 }
 
-export function resolveUserRole(session: AuthSession | null): UserRoleResolution {
+export function resolveUserRole(
+  session: AuthSession | null,
+  orgContext?: OrganizationContextData | null
+): UserRoleResolution {
   if (!session) {
     return {
       effectiveRole: 'none',
@@ -36,7 +39,8 @@ export function resolveUserRole(session: AuthSession | null): UserRoleResolution
   }
 
   return {
-    effectiveRole: session.organizationRole,
+    effectiveRole:
+      orgContext?.activeMembership?.organizationRole ?? session.organizationRole,
     scope: 'organization',
     isPlatformSuperAdmin: false,
   };
@@ -74,7 +78,7 @@ export function evaluatePermission(
     };
   }
 
-  const roleResolution = resolveUserRole(session);
+  const roleResolution = resolveUserRole(session, orgContext);
   const { effectiveRole, isPlatformSuperAdmin } = roleResolution;
 
   // 3. Validação do papel

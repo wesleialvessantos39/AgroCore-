@@ -41,7 +41,22 @@ export function AuthorizationProvider({ children }: AuthorizationProviderProps) 
   const isOrgLoading = org.status === 'loading';
   const isLoading = isAuthLoading || isOrgLoading;
 
-  const roleResolution = useMemo(() => resolveUserRole(session), [session]);
+  const roleResolution = useMemo(
+    () =>
+      resolveUserRole(session, {
+        status: org.status,
+        activeOrganization: org.activeOrganization,
+        activeMembership: org.activeMembership,
+        availableMemberships: org.availableMemberships,
+      }),
+    [
+      session,
+      org.status,
+      org.activeOrganization,
+      org.activeMembership,
+      org.availableMemberships,
+    ]
+  );
 
   const evaluatorContext = useMemo(
     () => ({

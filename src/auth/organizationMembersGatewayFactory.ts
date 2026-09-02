@@ -7,12 +7,20 @@ import { OrganizationMembersGateway } from './organizationMembersGateway';
 import { UnavailableOrganizationMembersGateway } from './unavailableOrganizationMembersGateway';
 import { PreviewOrganizationMembersGateway } from './preview/previewOrganizationMembersGateway';
 import { registerDomainCleanup } from './domainCleanupRegistry';
+import { getSupabaseClient } from '../infrastructure/supabaseClient';
+import { SupabaseOrganizationMembersGateway } from './supabaseOrganizationMembersGateway';
 
 let activeGatewayInstance: OrganizationMembersGateway | null = null;
 let unregisterCleanup: (() => void) | null = null;
 
 export function getOrganizationMembersGateway(): OrganizationMembersGateway {
   if (activeGatewayInstance) {
+    return activeGatewayInstance;
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    activeGatewayInstance = new SupabaseOrganizationMembersGateway(supabase);
     return activeGatewayInstance;
   }
 

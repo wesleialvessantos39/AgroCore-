@@ -1,4 +1,4 @@
-export type AuthMode = 'preview' | 'unavailable';
+export type AuthMode = 'preview' | 'supabase' | 'unavailable';
 
 export type AuthStatus = 'initializing' | 'authenticated' | 'unauthenticated';
 

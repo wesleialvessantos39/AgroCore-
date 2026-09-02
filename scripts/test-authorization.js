@@ -456,6 +456,44 @@ async function runTests() {
     }
   });
 
+  test('13A. Papel efetivo acompanha a organização ativa e não fica congelado na sessão', () => {
+    const staleOwnerSession = {
+      user: { id: 'usr-multi', email: 'multi@agrocore.test', name: 'Multi Org' },
+      platformRole: 'none',
+      organizationRole: 'owner',
+      currentRole: 'owner',
+      activeScope: 'organization',
+      isDevelopmentAccount: false,
+      lastAuthenticatedAt: new Date().toISOString(),
+    };
+
+    const managerContext = {
+      session: staleOwnerSession,
+      orgContext: {
+        status: 'active',
+        activeOrganization: { id: 'org-manager', name: 'Org Gerência', status: 'active' },
+        activeMembership: {
+          organizationId: 'org-manager',
+          userId: 'usr-multi',
+          organizationRole: 'manager',
+          status: 'active',
+        },
+        availableMemberships: [],
+      },
+    };
+
+    const role = resolveUserRole(staleOwnerSession, managerContext.orgContext);
+    assert.strictEqual(role.effectiveRole, 'manager');
+    assert.strictEqual(
+      evaluatePermission('organization:manage_governance', managerContext).granted,
+      false
+    );
+    assert.strictEqual(
+      evaluatePermission('surveys_and_visits:schedule', managerContext).granted,
+      true
+    );
+  });
+
   // 13. Rota de Acesso Negado e Metadados Centrais
   test('13. Rota /acesso-negado e metadados de página estão devidamente registrados', () => {
     assert.strictEqual(ROUTES.ACCESS_DENIED, '/acesso-negado');
