@@ -478,7 +478,7 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
     - **Homologação comportamental:** 28 provas em `scripts/test-proposal-renewals.ts`; o Módulo 005 totaliza 186 provas comportamentais nas seis suítes de domínio, além das auditorias de texto público e tema.
 
 ### MÓDULO 006: GESTÃO DOCUMENTAL E ANEXOS TÉCNICOS
-- **Status Geral:** Em desenvolvimento; OE-006.001 a OE-006.006 implementadas e homologadas localmente no código. As migrações de Storage, versionamento, checklists e conformidade estão versionadas e deverão ser aplicadas somente ao projeto Supabase próprio do AgroCore.
+- **Status Geral:** OE-006.001 a OE-006.006 homologadas localmente; OE-006.007 implementada e integrada à homologação consolidada. A execução remota do AgroCore CI no commit `0b980aaca3fb5e98227b4045564a354b991a302f` falhou antes de iniciar qualquer etapa do job, portanto a OE-006.007 ainda não é declarada homologada. O build Vercel desse commit foi aprovado. As migrações de Storage, versionamento, checklists e conformidade continuam versionadas e deverão ser aplicadas somente ao projeto Supabase próprio do AgroCore.
 - **Entregas da OE-006.001:**
   - **Agregado Referencial Canônico:** `DocumentReference` possui organização, entidade lógica, categoria, nome de exibição, MIME permitido, tamanho opcional, escopo de acesso, situação, versão, datas, autoria e checksum SHA-256 interno. Referências legadas podem permanecer `metadata_only`; envios confirmados usam `stored`.
   - **Fontes Canônicas:** referências aceitam exclusivamente clientes, imóveis, solicitações de laudo, laudos e propostas já existentes na mesma organização. A interface usa seletores derivados dessas fontes e não oferece campo livre para identificadores internos.
@@ -534,6 +534,12 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
   - **Concorrência de Interface e Entrada Pública:** trocas de organização, usuário ou token invalidam respostas assíncronas anteriores e impedem consumo/exportação duplicados. A função pública interrompe a leitura acima de 256 bytes mesmo quando a requisição omite `Content-Length`.
   - **Produção Fechada:** a factory de preview não entra no bundle de produção. A migração e a função `document-share` estão versionadas, mas ainda dependem de aplicação e implantação no projeto Supabase específico do AgroCore.
   - **Homologação:** 19 provas específicas em `scripts/test-document-compliance.ts` cobrem RBAC, política de alerta, tokens, limites, revogação, consumo atômico, validade, seleção exata, ZIP, auditoria, isolamento entre organizações e integrantes, integridade estrutural das migrações, RLS, Edge Function, concorrência de interface, separação do bundle e rotas. O Módulo 006 totaliza 130 provas comportamentais, além das auditorias de texto e tema; lint, build, Service Worker e a matriz integral dos Módulos 001–006 passaram localmente.
+- **Entregas da OE-006.007 (implementadas; homologação final pendente do runner):**
+  - **Bateria Ofensiva:** `scripts/test-document-security-homologation.ts` adiciona 21 provas automatizadas para isolamento multiempresa, IDOR/BOLA, RBAC dos perfis, Storage privado, arquivos incompatíveis, órfãos e compensação, concorrência, idempotência, checklists, compartilhamento, exportação, RLS, migrations, rotas e deny-by-default.
+  - **Hardening de Arquivos:** `src/documents/documentStoragePolicy.ts` passou a rejeitar nomes acima de 255 caracteres, caracteres de controle, barras, `..`, ausência de extensão, extensão incompatível com o MIME declarado e arquivos pequenos demais para validação de assinatura, mantendo verificação de magic bytes para os formatos permitidos.
+  - **Integração Oficial:** `package.json` expõe `test:document-security` e `scripts/test-module-006.js` executa a bateria da OE-006.007 antes das auditorias de texto e tema; o agregador agora cobre OE-006.001 a OE-006.007.
+  - **CI e Evidência Remota:** o push de integração disparou o AgroCore CI, porém o job terminou antes de executar qualquer `step` e sem logs de teste disponíveis. Esse estado externo não é registrado como reprovação funcional da suíte nem como homologação. Separadamente, o status Vercel do commit de integração concluiu com sucesso.
+  - **Contagem:** permanecem 130 provas comportamentais já homologadas até OE-006.006 e foram adicionadas 21 provas da OE-006.007, totalizando 151 provas automatizadas definidas para o módulo. As 21 novas provas somente entram na contagem de homologação após execução efetiva e aprovação do runner.
 
 ---
 
@@ -578,10 +584,11 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:document-versioning` | Valida linhagem, autoria, histórico, versão atual única, concorrência, compensação, comparação segura e estrutura da migração (6 provas) |
 | `npm run test:proposal-checklists` | Valida modelos versionados, aplicação por proposta, estados, RBAC, escopos, vínculo documental, histórico, concorrência, expiração derivada, agenda, rotas e RLS (19 provas) |
 | `npm run test:document-compliance` | Valida alertas, validade, compartilhamento temporário, revogação, consumo atômico, exportação exata, ZIP, auditoria, isolamento, migrações, RLS, função pública e concorrência de interface (19 provas) |
+| `npm run test:document-security` | Executa a bateria ofensiva da OE-006.007: isolamento multiempresa, IDOR/BOLA, RBAC, arquivos, órfãos, concorrência, checklists, compartilhamento, exportação, RLS, migrations e deny-by-default (21 provas) |
 | `npm run test:environment-contract` | Impede campos de chaves no exemplo de ambiente e dependência de secrets no AgroCore CI |
 | `npm run test:documents-ui-copy` | Impede linguagem interna e códigos de ordem nas páginas públicas do Módulo 006 |
 | `npm run test:documents-theme` | Audita a paleta oficial, variantes proibidas e seleção controlada de arquivos no Módulo 006 |
-| `npm run test:module-006` | Homologação consolidada do Módulo 006 até OE-006.006 (130 provas comportamentais, texto público e tema) |
+| `npm run test:module-006` | Homologação consolidada do Módulo 006 até OE-006.007; agrega as 130 provas anteriormente homologadas, as 21 novas provas de segurança, texto público e tema. A homologação das 21 novas provas depende de execução efetiva do runner. |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -597,9 +604,8 @@ O repositório contém CI para pushes e pull requests. A existência do arquivo 
 Configuração recomendada: pull request obrigatório, status check do workflow AgroCore CI, branch atualizada com a base, histórico linear e aplicação a administradores.
 
 ---
-
 ## 9. DIRETRIZES PARA AS PRÓXIMAS EXECUÇÕES
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
 2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.007 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
-3. **Módulo 006 — Gestão Documental:** concluído até OE-006.006 no código. A próxima execução é a OE-006.007 — segurança e homologação documental, cobrindo RLS, Storage, arquivos maliciosos, órfãos, rede instável e isolamento. As migrações de Storage, versionamento, checklists e conformidade, além da função pública de compartilhamento, devem ser aplicadas somente quando o projeto Supabase específico do AgroCore estiver conectado.
+3. **Módulo 006 — Gestão Documental:** OE-006.007 implementada e integrada no código, com 21 novas provas de segurança adicionadas ao agregador `test:module-006`. O fechamento formal permanece condicionado à execução efetiva e aprovação de `test:document-security`/`test:module-006`, pois o AgroCore CI do commit de integração encerrou antes de iniciar qualquer etapa. A OE-007.001 somente fica liberada após esse gate. As migrações de Storage, versionamento, checklists e conformidade, além da função pública de compartilhamento, devem ser aplicadas somente quando o projeto Supabase específico do AgroCore estiver conectado.
