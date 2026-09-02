@@ -130,6 +130,13 @@ function stripPreviewPlugin(isProduction: boolean) {
           return '\0virtual:production-auth-gateway-factory';
         }
         if (
+          normalizedTarget.includes('/fieldVisits/fieldFormGatewayFactory') ||
+          id.includes('/fieldVisits/fieldFormGatewayFactory') ||
+          (importer && importer.includes('/fieldVisits/') && id === './fieldFormGatewayFactory')
+        ) {
+          return '\0virtual:production-field-form-gateway-factory';
+        }
+        if (
           normalizedTarget.includes('/fieldVisits/gatewayFactory') ||
           id.includes('/fieldVisits/gatewayFactory') ||
           (importer && importer.includes('/fieldVisits/') && id === './gatewayFactory')
@@ -375,6 +382,26 @@ function stripPreviewPlugin(isProduction: boolean) {
             return activeGateway;
           }
           export function setDocumentComplianceGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
+        `;
+      }
+
+      if (id === '\0virtual:production-field-form-gateway-factory') {
+        return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseTechnicalVisitFieldFormGateway } from '/src/fieldVisits/supabaseFieldFormGateway.ts';
+          import { UnavailableTechnicalVisitFieldFormGateway } from '/src/fieldVisits/unavailableFieldFormGateway.ts';
+          let activeGateway = null;
+          export function getTechnicalVisitFieldFormGateway() {
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseTechnicalVisitFieldFormGateway(supabase)
+              : new UnavailableTechnicalVisitFieldFormGateway();
+            return activeGateway;
+          }
+          export function setTechnicalVisitFieldFormGatewayForTesting(gateway) {
             activeGateway = gateway ?? null;
           }
         `;
