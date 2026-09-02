@@ -1,7 +1,62 @@
-import type { TechnicalVisitGateway } from '../types/technicalVisit';
+import type {
+  TechnicalVisit,
+  TechnicalVisitAuditEntry,
+  TechnicalVisitGateway,
+  TechnicalVisitListFilters,
+  TechnicalVisitWrite,
+} from '../types/technicalVisit';
 import { registerDomainCleanup } from '../auth/domainCleanupRegistry';
-import { PreviewTechnicalVisitGateway } from './preview/previewTechnicalVisitGateway';
 import { UnavailableTechnicalVisitGateway } from './unavailableGateway';
+
+class LazyDevelopmentTechnicalVisitGateway implements TechnicalVisitGateway {
+  private instancePromise: Promise<TechnicalVisitGateway> | null = null;
+
+  private load(): Promise<TechnicalVisitGateway> {
+    if (!this.instancePromise) {
+      this.instancePromise = import('./preview/previewTechnicalVisitGateway').then(
+        (module) => new module.PreviewTechnicalVisitGateway()
+      );
+    }
+    return this.instancePromise;
+  }
+
+  async listVisits(
+    organizationId: string,
+    filters?: TechnicalVisitListFilters,
+    signal?: AbortSignal
+  ): Promise<readonly TechnicalVisit[]> {
+    return (await this.load()).listVisits(organizationId, filters, signal);
+  }
+
+  async getVisitById(
+    organizationId: string,
+    visitId: string
+  ): Promise<TechnicalVisit | null> {
+    return (await this.load()).getVisitById(organizationId, visitId);
+  }
+
+  async createVisit(write: TechnicalVisitWrite): Promise<TechnicalVisit> {
+    return (await this.load()).createVisit(write);
+  }
+
+  async updateVisit(write: TechnicalVisitWrite): Promise<TechnicalVisit> {
+    return (await this.load()).updateVisit(write);
+  }
+
+  async listAudit(
+    organizationId: string,
+    visitId: string
+  ): Promise<readonly TechnicalVisitAuditEntry[]> {
+    return (await this.load()).listAudit(organizationId, visitId);
+  }
+
+  clearAllSessionData(): void {
+    if (this.instancePromise) {
+      void this.instancePromise.then((gateway) => gateway.clearAllSessionData());
+    }
+    this.instancePromise = null;
+  }
+}
 
 let activeGatewayInstance: TechnicalVisitGateway | null = null;
 let unregisterCleanup: (() => void) | null = null;
@@ -10,12 +65,12 @@ export function getTechnicalVisitGateway(): TechnicalVisitGateway {
   if (activeGatewayInstance) return activeGatewayInstance;
 
   if (import.meta.env.DEV) {
-    const previewInstance = new PreviewTechnicalVisitGateway();
+    const developmentGateway = new LazyDevelopmentTechnicalVisitGateway();
     if (unregisterCleanup) unregisterCleanup();
     unregisterCleanup = registerDomainCleanup(() => {
-      previewInstance.clearAllSessionData();
+      developmentGateway.clearAllSessionData();
     });
-    activeGatewayInstance = previewInstance;
+    activeGatewayInstance = developmentGateway;
     return activeGatewayInstance;
   }
 
