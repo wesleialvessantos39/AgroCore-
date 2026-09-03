@@ -1,9 +1,13 @@
 import {
   type CreateScheduleItemGatewayInput,
+  type ScheduleCollaborationRevision,
   type ScheduleGateway,
   type ScheduleItem,
   type ScheduleItemAuditEntry,
   type ScheduleItemListFilters,
+  type ScheduleMemberOption,
+  type ScheduleTransitionGatewayInput,
+  type SetScheduleCollaborationGatewayInput,
   type UpdateScheduleItemGatewayInput,
 } from '../types/schedule';
 import { registerDomainCleanup } from '../auth/domainCleanupRegistry';
@@ -59,6 +63,52 @@ class LazyDevelopmentScheduleGateway implements ScheduleGateway {
     input: UpdateScheduleItemGatewayInput
   ): Promise<ScheduleItem> {
     return (await this.load()).updateItem(input);
+  }
+
+  async listEligibleMembers(
+    organizationId: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleMemberOption[]> {
+    return (await this.load()).listEligibleMembers(
+      organizationId,
+      signal
+    );
+  }
+
+  async setCollaboration(
+    input: SetScheduleCollaborationGatewayInput
+  ): Promise<ScheduleItem> {
+    return (await this.load()).setCollaboration(input);
+  }
+
+  async completeItem(
+    input: ScheduleTransitionGatewayInput
+  ): Promise<ScheduleItem> {
+    return (await this.load()).completeItem(input);
+  }
+
+  async reopenItem(
+    input: ScheduleTransitionGatewayInput
+  ): Promise<ScheduleItem> {
+    return (await this.load()).reopenItem(input);
+  }
+
+  async cancelItem(
+    input: ScheduleTransitionGatewayInput
+  ): Promise<ScheduleItem> {
+    return (await this.load()).cancelItem(input);
+  }
+
+  async listCollaborationRevisions(
+    organizationId: string,
+    scheduleItemId: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleCollaborationRevision[]> {
+    return (await this.load()).listCollaborationRevisions(
+      organizationId,
+      scheduleItemId,
+      signal
+    );
   }
 
   async listAudit(
