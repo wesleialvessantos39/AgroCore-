@@ -18,6 +18,7 @@ import type {
   TechnicalVisitPendingItem,
   TechnicalVisitReport,
 } from '../types/technicalVisitReport';
+import type { TechnicalVisitIntegrationSnapshot } from '../types/technicalVisitIntegration';
 import type { TechnicalVisitFieldFormGateway } from '../types/technicalVisitFieldForm';
 import { assertTechnicalVisitTransition, isTechnicalVisitTerminal } from './stateMachine';
 
@@ -437,6 +438,36 @@ export class TechnicalVisitService {
       pendingItems,
       reason,
     });
+  }
+
+
+  async getIntegrationSnapshot(
+    context: TechnicalVisitApplicationContext,
+    visitId: string
+  ): Promise<TechnicalVisitIntegrationSnapshot> {
+    this.assertContext(context);
+    this.assertPermission(context, 'surveys_and_visits:view');
+    const visit = await this.requireVisit(context, visitId);
+    this.assertIntegrationAccess(context, visit);
+    return this.gateway.getIntegrationSnapshot(context.organizationId, visitId);
+  }
+
+  private assertIntegrationAccess(
+    context: TechnicalVisitApplicationContext,
+    visit: TechnicalVisit
+  ): void {
+    const role = context.actor.role;
+    const management =
+      role === 'owner' || role === 'company_admin' || role === 'manager';
+    const assignedDesigner =
+      role === 'project_designer' &&
+      visit.responsibleUserId === context.actor.userId;
+    if (!management && !assignedDesigner) {
+      throw new TechnicalVisitDomainError(
+        'PERMISSION_DENIED',
+        'Você não possui autorização para consultar as integrações operacionais desta visita.'
+      );
+    }
   }
 
   private assertReportAccess(
