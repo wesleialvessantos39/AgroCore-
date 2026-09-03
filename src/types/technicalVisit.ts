@@ -1,3 +1,7 @@
+import type {
+  TechnicalVisitPendingItem,
+  TechnicalVisitReport,
+} from './technicalVisitReport';
 import type { Permission } from './authorization';
 import type { OrganizationRole } from './auth';
 
@@ -230,6 +234,32 @@ export interface TechnicalVisitWrite {
   readonly expectedVersion: number | null;
 }
 
+export interface CompleteTechnicalVisitGatewayInput {
+  readonly organizationId: string;
+  readonly visitId: string;
+  readonly expectedVersion: number;
+  readonly actorUserId: string;
+  readonly completedAt: string;
+  readonly summary: string;
+  readonly pendingItems: readonly TechnicalVisitPendingItem[];
+}
+
+export interface ReviseTechnicalVisitReportGatewayInput {
+  readonly organizationId: string;
+  readonly visitId: string;
+  readonly expectedReportVersion: number;
+  readonly actorUserId: string;
+  readonly issuedAt: string;
+  readonly summary: string;
+  readonly pendingItems: readonly TechnicalVisitPendingItem[];
+  readonly reason: string;
+}
+
+export interface TechnicalVisitCompletionResult {
+  readonly visit: TechnicalVisit;
+  readonly report: TechnicalVisitReport;
+}
+
 export interface TechnicalVisitGateway {
   listVisits(
     organizationId: string,
@@ -250,6 +280,24 @@ export interface TechnicalVisitGateway {
     organizationId: string,
     visitId: TechnicalVisitId
   ): Promise<readonly TechnicalVisitAuditEntry[]>;
+
+  completeVisit(
+    input: CompleteTechnicalVisitGatewayInput
+  ): Promise<TechnicalVisitCompletionResult>;
+
+  getLatestReport(
+    organizationId: string,
+    visitId: TechnicalVisitId
+  ): Promise<TechnicalVisitReport | null>;
+
+  listReportVersions(
+    organizationId: string,
+    visitId: TechnicalVisitId
+  ): Promise<readonly TechnicalVisitReport[]>;
+
+  reviseReport(
+    input: ReviseTechnicalVisitReportGatewayInput
+  ): Promise<TechnicalVisitReport>;
 
   clearAllSessionData(): void;
 }
@@ -292,6 +340,10 @@ export type TechnicalVisitErrorCode =
   | 'INVALID_TRANSITION'
   | 'REASON_REQUIRED'
   | 'VISIT_LOCKED'
+  | 'REPORT_REQUIRED'
+  | 'REPORT_INVALID'
+  | 'REPORT_NOT_FOUND'
+  | 'REPORT_LOCKED'
   | 'CONCURRENCY_CONFLICT';
 
 export class TechnicalVisitDomainError extends Error {
