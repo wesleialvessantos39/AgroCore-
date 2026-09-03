@@ -19,7 +19,7 @@ interface EvidenceRow {
   id: string;
   organization_id: string;
   property_id: string;
-  client_id: string;
+  client_id: string | null;
   location: FieldEvidenceLocation | null;
   version: number;
   created_by_user_id: string;
@@ -123,7 +123,7 @@ export class SupabaseFieldEvidenceGateway implements FieldEvidenceGateway {
       id: row.id,
       organizationId: row.organization_id,
       propertyId: row.property_id,
-      clientId: row.client_id,
+      clientId: row.client_id ?? undefined,
       location: row.location ?? undefined,
       photos: ((data ?? []) as unknown as PhotoRow[]).map(mapPhoto),
       version: row.version,

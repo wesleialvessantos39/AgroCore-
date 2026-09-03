@@ -143,11 +143,16 @@ await test('7. Segundo imóvel do mesmo cliente recebe evidência diferente', as
   assert.notEqual(first.id, second.id);
 });
 
-await test('8. Mesmo imóvel não pode trocar silenciosamente de cliente', async () => {
+await test('8. Mesmo imóvel mantém a mesma evidência para outro cliente vinculado', async () => {
   const gateway = new PreviewFieldEvidenceGateway();
-  await gateway.initialize(input());
-  await assert.rejects(() =>
-    gateway.initialize(input({ clientId: 'client-b' }))
+  const first = await gateway.initialize(input());
+  const second = await gateway.initialize(
+    input({ clientId: 'client-b', appraisalId: 'app-coowner' })
+  );
+  assert.equal(second.id, first.id);
+  assert.equal(
+    (await gateway.getByAppraisal('org-a', 'app-coowner'))?.id,
+    first.id
   );
 });
 
@@ -259,6 +264,10 @@ const migration = fs.readFileSync(
   'supabase/migrations/20260902230000_oe_007_004_property_canonical_sync.sql',
   'utf8'
 );
+const multiClientMigration = fs.readFileSync(
+  'supabase/migrations/20260903003000_oe_007_004_property_multi_client.sql',
+  'utf8'
+);
 const requestTypes = fs.readFileSync(
   'src/types/clientRegistryRequest.ts',
   'utf8'
@@ -286,6 +295,14 @@ const permissions = fs.readFileSync(
   'utf8'
 );
 const vite = fs.readFileSync('vite.config.ts', 'utf8');
+const capturerFactory = fs.readFileSync(
+  'src/clients/capturerAssignmentGatewayFactory.ts',
+  'utf8'
+);
+const capturerSupabaseGateway = fs.readFileSync(
+  'src/clients/supabaseCapturerAssignmentGateway.ts',
+  'utf8'
+);
 
 await test('15. Banco impõe um único conjunto por organização e imóvel', () => {
   assert.equal(
@@ -572,6 +589,86 @@ await test('44. Fluxo permanece mobile-first e acessível', () => {
   assert.equal(panel.includes('sm:grid-cols-3'), true);
   assert.equal(panel.includes('role="alert"'), true);
   assert.equal(panel.includes('aria-live="polite"'), true);
+});
+
+await test('45. Autoridade da evidência R3 é o imóvel, não um cliente exclusivo', () => {
+  assert.equal(
+    multiClientMigration.includes('alter column client_id drop not null'),
+    true
+  );
+  assert.equal(
+    multiClientMigration.includes('a.client_id = any(p.client_ids)'),
+    true
+  );
+  assert.equal(
+    multiClientMigration.includes('v_result.client_id <> p_client_id'),
+    false
+  );
+  assert.equal(
+    multiClientMigration.includes('p_property_id\n  ) then'),
+    true
+  );
+});
+
+await test('46. Policies e Storage da R3 autorizam pela property_id', () => {
+  assert.equal(
+    multiClientMigration.includes(
+      'can_access_property_field_evidence(\n    organization_id,\n    property_id'
+    ),
+    true
+  );
+  assert.equal(
+    multiClientMigration.includes(
+      'can_access_property_field_evidence(\n        e.organization_id,\n        e.property_id'
+    ),
+    true
+  );
+  assert.equal(
+    multiClientMigration.includes('v_evidence.property_id'),
+    true
+  );
+});
+
+await test('47. Vínculo Cliente-Captador usa Supabase real em produção', () => {
+  assert.equal(
+    capturerFactory.includes('SupabaseClientCapturerAssignmentGateway'),
+    true
+  );
+  assert.equal(
+    capturerFactory.includes('getSupabaseClient'),
+    true
+  );
+  assert.equal(
+    capturerSupabaseGateway.includes('agrocore_assign_capturer'),
+    true
+  );
+  assert.equal(
+    capturerSupabaseGateway.includes('agrocore_transfer_capturer'),
+    true
+  );
+  assert.equal(
+    capturerSupabaseGateway.includes('agrocore_terminate_capturer_assignment'),
+    true
+  );
+  assert.equal(
+    vite.includes('SupabaseClientCapturerAssignmentGateway'),
+    true
+  );
+});
+
+await test('48. Solicitação ao captador depende do vínculo ativo canônico do cliente', () => {
+  assert.equal(
+    migration.includes('public.client_capturer_assignments'),
+    true
+  );
+  assert.equal(
+    capturerSupabaseGateway.includes("'client_capturer_assignments'"),
+    true
+  );
+  assert.equal(
+    capturerSupabaseGateway.includes(".eq('status', 'active')"),
+    true
+  );
 });
 
 console.log('\n====================================================');

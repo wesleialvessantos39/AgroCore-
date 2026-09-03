@@ -49,7 +49,8 @@ export interface FieldEvidenceSet {
   readonly id: string;
   readonly organizationId: string;
   readonly propertyId: string;
-  readonly clientId: string;
+  /** Cliente que originou o primeiro vínculo; não é autoridade da evidência. */
+  readonly clientId?: string;
   readonly location?: FieldEvidenceLocation;
   readonly photos: readonly FieldEvidencePhoto[];
   readonly version: number;

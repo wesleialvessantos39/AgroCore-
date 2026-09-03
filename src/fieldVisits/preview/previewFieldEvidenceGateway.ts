@@ -84,10 +84,6 @@ export class PreviewFieldEvidenceGateway implements FieldEvidenceGateway {
     if (existingId) {
       const current = this.sets.get(existingId);
       if (!current) throw new Error('Evidência canônica não encontrada.');
-      if (current.clientId !== input.clientId) {
-        throw new Error('O imóvel não pertence ao cliente informado.');
-      }
-
       const next: FieldEvidenceSet = {
         ...current,
         location: input.registryLocation ?? current.location,

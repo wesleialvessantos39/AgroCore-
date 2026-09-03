@@ -333,11 +333,21 @@ function stripPreviewPlugin(isProduction: boolean) {
 
       if (id === '\0virtual:production-capturer-assignment-gateway-factory') {
         return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseClientCapturerAssignmentGateway } from '/src/clients/supabaseCapturerAssignmentGateway.ts';
           import { UnavailableClientCapturerAssignmentGateway } from '/src/clients/unavailableCapturerAssignmentGateway.ts';
+          let activeGateway = null;
           export function getClientCapturerAssignmentGateway() {
-            return new UnavailableClientCapturerAssignmentGateway();
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseClientCapturerAssignmentGateway(supabase)
+              : new UnavailableClientCapturerAssignmentGateway();
+            return activeGateway;
           }
-          export function setClientCapturerAssignmentGatewayForTesting() {}
+          export function setClientCapturerAssignmentGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
         `;
       }
 

@@ -87,6 +87,12 @@ assert(
   'O build de produção da OE-007.004 deve usar o serviço seguro de fotos e localização sem depender do preview.'
 );
 assert(
+  viteConfig.includes('production-capturer-assignment-gateway-factory') &&
+    viteConfig.includes('SupabaseClientCapturerAssignmentGateway') &&
+    fieldEvidenceTests.includes('Solicitar ao captador responsável'),
+  'A OE-007.004 deve resolver o captador responsável pelo vínculo Cliente ↔ Captador persistido no Supabase.'
+);
+assert(
   fieldEvidencePanel.includes('Fotos e geolocalização') &&
     fieldEvidencePanel.includes('Usar localização do dispositivo') &&
     fieldEvidencePanel.includes('Adicionar fotos') &&
