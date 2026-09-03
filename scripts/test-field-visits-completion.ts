@@ -17,6 +17,10 @@ const transitionHardening = fs.readFileSync(
   'supabase/migrations/20260903023035_oe_007_005_transition_integrity_hardening.sql',
   'utf8'
 );
+const evidenceRaceHardening = fs.readFileSync(
+  'supabase/migrations/20260903023343_oe_007_005_report_evidence_race_hardening.sql',
+  'utf8'
+);
 const service = fs.readFileSync('src/fieldVisits/technicalVisitService.ts', 'utf8');
 const supabaseGateway = fs.readFileSync(
   'src/fieldVisits/supabaseTechnicalVisitGateway.ts',
@@ -221,6 +225,17 @@ test('27. changedFields da auditoria é calculado no servidor', () => {
     transitionHardening,
     /then p_audit -> 'changedFields'/
   );
+});
+
+test('28. Snapshot canônico não depende da corrida de criação do vínculo da visita', () => {
+  assert.match(evidenceRaceHardening, /from public\.field_evidence_sets e/i);
+  assert.match(
+    evidenceRaceHardening,
+    /e\.property_id = v_current\.property_id/
+  );
+  assert.match(evidenceRaceHardening, /'linkedToVisit', exists/);
+  assert.match(evidenceRaceHardening, /from public\.field_evidence_links l/);
+  assert.match(types, /linkedToVisit\?: boolean/);
 });
 
 console.log(`\nResultado OE-007.005: ${passed} aprovadas, ${failed} falhas.`);
