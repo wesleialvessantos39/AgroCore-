@@ -30,6 +30,7 @@ interface VisitCompletionReportPanelProps {
   readonly visit: TechnicalVisit;
   readonly canAccess: boolean;
   readonly canComplete: boolean;
+  readonly completionReady: boolean;
   readonly canRevise: boolean;
 }
 
@@ -37,6 +38,7 @@ export const VisitCompletionReportPanel: React.FC<VisitCompletionReportPanelProp
   visit,
   canAccess,
   canComplete,
+  completionReady,
   canRevise,
 }) => {
   const {
@@ -313,11 +315,21 @@ export const VisitCompletionReportPanel: React.FC<VisitCompletionReportPanelProp
             </div>
           </div>
 
+          {!completionReady && (
+            <p role="status" className="text-sm font-medium text-[#0B3D2E]">
+              Envie o formulário de campo antes de concluir e emitir o relatório.
+            </p>
+          )}
           <div className="flex justify-end">
             <button
               type="submit"
               className={FIELD_VISIT_THEME.buttonPrimary}
-              disabled={busy}
+              disabled={busy || !completionReady}
+              title={
+                completionReady
+                  ? 'Concluir visita e emitir a primeira versão do relatório'
+                  : 'Envie o formulário de campo antes de concluir'
+              }
             >
               <FileCheck2 className="h-4 w-4" aria-hidden="true" />
               Concluir e gerar relatório
