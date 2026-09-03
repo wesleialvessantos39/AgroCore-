@@ -62,6 +62,7 @@ export const ScheduleContext =
 const EMPTY_FILTERS: ScheduleItemListFilters = {
   kind: 'all',
   status: 'all',
+  viewScope: 'personal',
 };
 
 export function ScheduleProvider({
