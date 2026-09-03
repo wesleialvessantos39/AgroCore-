@@ -11,6 +11,13 @@ import {
   type TransitionTechnicalVisitInput,
   type UpdateTechnicalVisitInput,
 } from '../types/technicalVisit';
+import type {
+  CompleteTechnicalVisitInput,
+  ReviseTechnicalVisitReportInput,
+  TechnicalVisitPendingCategory,
+  TechnicalVisitPendingItem,
+  TechnicalVisitReport,
+} from '../types/technicalVisitReport';
 import type { TechnicalVisitFieldFormGateway } from '../types/technicalVisitFieldForm';
 import { assertTechnicalVisitTransition, isTechnicalVisitTerminal } from './stateMachine';
 
@@ -233,6 +240,13 @@ export class TechnicalVisitService {
       );
     }
 
+    if (input.targetStatus === 'completed') {
+      throw new TechnicalVisitDomainError(
+        'REPORT_REQUIRED',
+        'Conclua a visita pelo fluxo de relatório final.'
+      );
+    }
+
     assertTechnicalVisitTransition(current.status, input.targetStatus);
 
     if (input.targetStatus === 'confirmed' || input.targetStatus === 'cancelled') {
@@ -327,6 +341,190 @@ export class TechnicalVisitService {
       visit: next,
       audit,
       expectedVersion: input.expectedVersion,
+    });
+  }
+
+  async completeVisit(
+    context: TechnicalVisitApplicationContext,
+    visitId: string,
+    input: CompleteTechnicalVisitInput
+  ): Promise<import('../types/technicalVisit').TechnicalVisitCompletionResult> {
+    this.assertContext(context);
+    this.assertPermission(context, 'surveys_and_visits:execute');
+    const current = await this.requireVisit(context, visitId);
+
+    if (current.version !== input.expectedVersion) {
+      throw new TechnicalVisitDomainError(
+        'CONCURRENCY_CONFLICT',
+        'A visita foi alterada por outra operação. Recarregue os dados antes de concluir.'
+      );
+    }
+    if (current.status !== 'in_progress') {
+      throw new TechnicalVisitDomainError(
+        'INVALID_TRANSITION',
+        'Somente uma visita em execução pode ser concluída.'
+      );
+    }
+    if (current.responsibleUserId !== context.actor.userId) {
+      throw new TechnicalVisitDomainError(
+        'RESPONSIBLE_MISMATCH',
+        'Somente o responsável atual pode concluir esta visita.'
+      );
+    }
+    if (!this.fieldFormGateway) {
+      throw new TechnicalVisitDomainError(
+        'SERVICE_UNAVAILABLE',
+        'Serviço de formulário de campo indisponível.'
+      );
+    }
+
+    const fieldForm = await this.fieldFormGateway.getFieldForm(
+      context.organizationId,
+      visitId
+    );
+    if (!fieldForm || fieldForm.status !== 'submitted') {
+      throw new TechnicalVisitDomainError(
+        'FIELD_FORM_INCOMPLETE',
+        'Envie o formulário de campo completo antes de concluir a visita.'
+      );
+    }
+
+    const summary = this.normalizeReportSummary(input.summary);
+    const pendingItems = this.normalizePendingItems(input.pendingItems);
+    const completedAt = this.clock.now().toISOString();
+
+    return this.gateway.completeVisit({
+      organizationId: context.organizationId,
+      visitId,
+      expectedVersion: input.expectedVersion,
+      actorUserId: context.actor.userId,
+      completedAt,
+      summary,
+      pendingItems,
+    });
+  }
+
+  async getLatestReport(
+    context: TechnicalVisitApplicationContext,
+    visitId: string
+  ): Promise<TechnicalVisitReport | null> {
+    this.assertContext(context);
+    this.assertPermission(context, 'surveys_and_visits:view');
+    const visit = await this.requireVisit(context, visitId);
+    this.assertReportAccess(context, visit);
+    return this.gateway.getLatestReport(context.organizationId, visitId);
+  }
+
+  async listReportVersions(
+    context: TechnicalVisitApplicationContext,
+    visitId: string
+  ): Promise<readonly TechnicalVisitReport[]> {
+    this.assertContext(context);
+    this.assertPermission(context, 'surveys_and_visits:view');
+    const visit = await this.requireVisit(context, visitId);
+    this.assertReportAccess(context, visit);
+    return this.gateway.listReportVersions(context.organizationId, visitId);
+  }
+
+  async reviseReport(
+    context: TechnicalVisitApplicationContext,
+    visitId: string,
+    input: ReviseTechnicalVisitReportInput
+  ): Promise<TechnicalVisitReport> {
+    this.assertContext(context);
+    this.assertPermission(context, 'surveys_and_visits:view');
+    const visit = await this.requireVisit(context, visitId);
+    this.assertReportAccess(context, visit);
+    if (visit.status !== 'completed') {
+      throw new TechnicalVisitDomainError(
+        'REPORT_LOCKED',
+        'O relatório só pode receber nova versão após a conclusão da visita.'
+      );
+    }
+
+    const summary = this.normalizeReportSummary(input.summary);
+    const pendingItems = this.normalizePendingItems(input.pendingItems);
+    const reason = this.requireReason(input.reason);
+
+    return this.gateway.reviseReport({
+      organizationId: context.organizationId,
+      visitId,
+      expectedReportVersion: input.expectedReportVersion,
+      actorUserId: context.actor.userId,
+      issuedAt: this.clock.now().toISOString(),
+      summary,
+      pendingItems,
+      reason,
+    });
+  }
+
+  private assertReportAccess(
+    context: TechnicalVisitApplicationContext,
+    visit: TechnicalVisit
+  ): void {
+    const role = context.actor.role;
+    const management =
+      role === 'owner' || role === 'company_admin' || role === 'manager';
+    const assignedDesigner =
+      role === 'project_designer' &&
+      visit.responsibleUserId === context.actor.userId;
+    if (!management && !assignedDesigner) {
+      throw new TechnicalVisitDomainError(
+        'PERMISSION_DENIED',
+        'Você não possui autorização para consultar o relatório final desta visita.'
+      );
+    }
+  }
+
+  private normalizeReportSummary(summary: string): string {
+    const normalized = summary.trim();
+    if (normalized.length < 10 || normalized.length > 5000) {
+      throw new TechnicalVisitDomainError(
+        'REPORT_INVALID',
+        'O resumo final deve possuir entre 10 e 5.000 caracteres.'
+      );
+    }
+    return normalized;
+  }
+
+  private normalizePendingItems(
+    items: readonly TechnicalVisitPendingItem[]
+  ): readonly TechnicalVisitPendingItem[] {
+    if (items.length > 50) {
+      throw new TechnicalVisitDomainError(
+        'REPORT_INVALID',
+        'O relatório não pode possuir mais de 50 pendências.'
+      );
+    }
+    const categories = new Set<TechnicalVisitPendingCategory>([
+      'documentation',
+      'property_registry',
+      'evidence',
+      'technical',
+      'other',
+    ]);
+    const ids = new Set<string>();
+    return items.map((item) => {
+      const id = item.id.trim();
+      const description = item.description.trim();
+      if (
+        !id ||
+        ids.has(id) ||
+        !categories.has(item.category) ||
+        description.length < 3 ||
+        description.length > 1000
+      ) {
+        throw new TechnicalVisitDomainError(
+          'REPORT_INVALID',
+          'Revise as pendências informadas no relatório final.'
+        );
+      }
+      ids.add(id);
+      return {
+        id,
+        category: item.category,
+        description,
+      };
     });
   }
 
