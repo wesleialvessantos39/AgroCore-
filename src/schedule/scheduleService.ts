@@ -250,13 +250,6 @@ export class ScheduleService {
         'Somente o responsável atual ou a gestão pode concluir este registro.'
       );
     }
-    if (!['pending', 'in_progress', 'blocked'].includes(current.status)) {
-      throw new ScheduleDomainError(
-        'INVALID_TRANSITION',
-        'Somente registros ativos podem ser concluídos.'
-      );
-    }
-
     const normalized = normalizeScheduleTransitionInput(input);
     return this.gateway.completeItem({
       organizationId: context.organizationId,
@@ -276,13 +269,6 @@ export class ScheduleService {
   ): Promise<ScheduleItem> {
     this.assertActiveContext(context, 'schedule:manage');
     const current = await this.requireMutableItem(context, scheduleItemId);
-    if (!['completed', 'cancelled'].includes(current.status)) {
-      throw new ScheduleDomainError(
-        'INVALID_TRANSITION',
-        'Somente registros concluídos ou cancelados podem ser reabertos.'
-      );
-    }
-
     const normalized = normalizeScheduleTransitionInput(input);
     return this.gateway.reopenItem({
       organizationId: context.organizationId,
@@ -302,13 +288,6 @@ export class ScheduleService {
   ): Promise<ScheduleItem> {
     this.assertActiveContext(context, 'schedule:manage');
     const current = await this.requireMutableItem(context, scheduleItemId);
-    if (!['pending', 'in_progress', 'blocked'].includes(current.status)) {
-      throw new ScheduleDomainError(
-        'INVALID_TRANSITION',
-        'Somente registros ativos podem ser cancelados.'
-      );
-    }
-
     const normalized = normalizeScheduleTransitionInput(input);
     return this.gateway.cancelItem({
       organizationId: context.organizationId,
