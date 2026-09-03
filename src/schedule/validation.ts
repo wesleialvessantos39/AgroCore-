@@ -172,7 +172,7 @@ export function normalizeCreateScheduleItem(
 
   const startsAt = assertIsoInstant(input.startsAt, 'Início do compromisso');
   const endsAt = assertIsoInstant(input.endsAt, 'Fim do compromisso');
-  if (!startsAt || !endsAt || new Date(endsAt) <= new Date(startsAt)) {
+  if (!startsAt || !endsAt || new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
     throw new ScheduleDomainError(
       'INVALID_DATE',
       'O fim do compromisso deve ser posterior ao início.'
