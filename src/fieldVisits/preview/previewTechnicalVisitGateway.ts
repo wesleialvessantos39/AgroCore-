@@ -326,6 +326,25 @@ export class PreviewTechnicalVisitGateway implements TechnicalVisitGateway {
   }): void {
     const current = this.integrationLinks.get(input.visit.id) ?? [];
     const previous = current.find((link) => link.targetDomain === input.domain);
+
+    if (previous && previous.sourceVersion > input.visit.version) {
+      return;
+    }
+
+    if (previous && previous.sourceVersion === input.visit.version) {
+      const same =
+        previous.stableReference === input.stableReference &&
+        previous.status === input.status &&
+        JSON.stringify(previous.payload) === JSON.stringify(input.payload);
+      if (!same) {
+        throw new TechnicalVisitDomainError(
+          'CONCURRENCY_CONFLICT',
+          'Projeção de integração já registrada com conteúdo divergente.'
+        );
+      }
+      return;
+    }
+
     const next: TechnicalVisitIntegrationLink = {
       id: previous?.id ?? `integration-link-${input.visit.id}-${input.domain}`,
       organizationId: input.visit.organizationId,
