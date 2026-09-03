@@ -366,6 +366,15 @@ export const CENTRAL_ROUTE_MATRIX: readonly RouteDefinition[] = Object.freeze([
     description: 'Planejamento, acompanhamento e execução autorizada de visitas e vistorias da organização.',
   },
   {
+    path: ROUTES.SCHEDULE,
+    category: 'authenticated_protected',
+    name: 'Agenda Corporativa',
+    requiresAuth: true,
+    requiredPermissions: 'schedule:view',
+    scope: 'organization',
+    description: 'Tarefas e compromissos autorizados da organização com prazo, fuso e recorrência.',
+  },
+  {
     path: ROUTES.MY_ACCOUNT,
     category: 'authenticated_protected',
     name: 'Minha Conta',
