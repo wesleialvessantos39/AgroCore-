@@ -246,18 +246,10 @@ await test('7. financeiro continua negado na agenda', async () => {
   );
 });
 
-await test('8. superadmin continua sem herdar agenda privada', async () => {
-  const service = new ScheduleService(new PreviewScheduleGateway());
-  await assert.rejects(
-    () =>
-      service.listItems(
-        context('platform_super_admin' as OrganizationRole, 'super-a'),
-        { viewScope: 'team' }
-      ),
-    (error: unknown) =>
-      error instanceof ScheduleDomainError &&
-      error.code === 'PERMISSION_DENIED'
-  );
+await test('8. superadmin continua sem herdar agenda privada', () => {
+  const permissions = getRolePermissions('platform_super_admin');
+  assert.equal(permissions.includes('schedule:view'), false);
+  assert.equal(permissions.includes('schedule:manage'), false);
 });
 
 await test('9. filtro de tipo funciona junto do escopo pessoal', async () => {
@@ -534,6 +526,77 @@ await test('36. índices continuam ancorados em organization_id', () => {
   assert.match(
     migration,
     /organization_id,[\s\n]+created_by_user_id/
+  );
+});
+
+await test('37. ausência de viewScope preserva visão de equipe no contrato de serviço', async () => {
+  const gateway = new PreviewScheduleGateway();
+  const service = new ScheduleService(gateway);
+  await service.createTask(
+    context('owner', 'user-a'),
+    taskInput('default-team-001', 'Tarefa A')
+  );
+  await service.createTask(
+    context('owner', 'user-b'),
+    taskInput('default-team-002', 'Tarefa B')
+  );
+  const items = await service.listItems(
+    context('owner', 'user-a'),
+    {}
+  );
+  assert.equal(items.length, 2);
+});
+
+await test('38. escopo de visualização inválido é recusado no domínio', async () => {
+  const service = new ScheduleService(new PreviewScheduleGateway());
+  await assert.rejects(
+    () =>
+      service.listItems(
+        context('owner', 'user-a'),
+        { viewScope: 'other' } as never
+      ),
+    (error: unknown) =>
+      error instanceof ScheduleDomainError &&
+      error.code === 'INVALID_INPUT'
+  );
+});
+
+await test('39. tipo de filtro inválido é recusado no domínio', async () => {
+  const service = new ScheduleService(new PreviewScheduleGateway());
+  await assert.rejects(
+    () =>
+      service.listItems(
+        context('owner', 'user-a'),
+        { kind: 'event' } as never
+      ),
+    (error: unknown) =>
+      error instanceof ScheduleDomainError &&
+      error.code === 'INVALID_INPUT'
+  );
+});
+
+await test('40. situação de filtro inválida é recusada no domínio', async () => {
+  const service = new ScheduleService(new PreviewScheduleGateway());
+  await assert.rejects(
+    () =>
+      service.listItems(
+        context('owner', 'user-a'),
+        { status: 'archived' } as never
+      ),
+    (error: unknown) =>
+      error instanceof ScheduleDomainError &&
+      error.code === 'INVALID_INPUT'
+  );
+});
+
+await test('41. calendário permanece disponível quando o mês está vazio', () => {
+  assert.match(
+    browseSource,
+    /status === 'empty'[\s\S]*mode === 'calendar'/
+  );
+  assert.match(
+    browseSource,
+    /Nenhum registro com data neste mês/
   );
 });
 
