@@ -47,6 +47,18 @@ export class ScheduleService {
     }
   }
 
+  private canAccessItem(
+    context: ScheduleApplicationContext,
+    item: ScheduleItem
+  ): boolean {
+    if (context.actor.permissions.includes('schedule:manage')) return true;
+    return (
+      item.createdByUserId === context.actor.userId ||
+      item.responsibleUserId === context.actor.userId ||
+      item.participantUserIds.includes(context.actor.userId)
+    );
+  }
+
   async listItems(
     context: ScheduleApplicationContext,
     filters: ScheduleItemListFilters = {},
@@ -54,6 +66,15 @@ export class ScheduleService {
   ): Promise<readonly ScheduleItem[]> {
     this.assertActiveContext(context, 'schedule:view');
     const normalizedFilters = normalizeScheduleListFilters(filters);
+    if (
+      normalizedFilters.viewScope === 'team' &&
+      !context.actor.permissions.includes('schedule:manage')
+    ) {
+      throw new ScheduleDomainError(
+        'PERMISSION_DENIED',
+        'A visão da equipe é restrita à gestão da organização.'
+      );
+    }
     return this.gateway.listItems(
       context.organizationId,
       context.actor.userId,
@@ -75,11 +96,13 @@ export class ScheduleService {
         'Identificador de agenda inválido.'
       );
     }
-    return this.gateway.getItemById(
+    const item = await this.gateway.getItemById(
       context.organizationId,
       normalizedId,
       signal
     );
+    if (!item || !this.canAccessItem(context, item)) return null;
+    return item;
   }
 
   async createTask(
@@ -178,7 +201,7 @@ export class ScheduleService {
     context: ScheduleApplicationContext,
     signal?: AbortSignal
   ): Promise<readonly ScheduleMemberOption[]> {
-    this.assertActiveContext(context, 'schedule:view');
+    this.assertActiveContext(context, 'schedule:manage');
     return this.gateway.listEligibleMembers(
       context.organizationId,
       signal
@@ -203,7 +226,7 @@ export class ScheduleService {
       context.organizationId,
       normalizedId
     );
-    if (!current) {
+    if (!current || !this.canAccessItem(context, current)) {
       throw new ScheduleDomainError(
         'ITEM_NOT_FOUND',
         'Registro de agenda não encontrado.'
