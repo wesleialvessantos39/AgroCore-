@@ -260,25 +260,6 @@ export class TechnicalVisitService {
         );
       }
 
-      if (input.targetStatus === 'completed') {
-        if (!this.fieldFormGateway) {
-          throw new TechnicalVisitDomainError(
-            'SERVICE_UNAVAILABLE',
-            'Serviço de formulário de campo indisponível.'
-          );
-        }
-        const fieldForm = await this.fieldFormGateway.getFieldForm(
-          context.organizationId,
-          visitId
-        );
-        if (!fieldForm || fieldForm.status !== 'submitted') {
-          throw new TechnicalVisitDomainError(
-            'FIELD_FORM_INCOMPLETE',
-            'Envie o formulário de campo completo antes de concluir a visita.'
-          );
-        }
-      }
-
       if (input.targetStatus === 'in_progress') {
         if (!current.preparation) {
           throw new TechnicalVisitDomainError(
