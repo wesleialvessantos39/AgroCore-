@@ -53,6 +53,7 @@ function memberLabel(
 export interface ScheduleItemCollaborationPanelProps {
   readonly item: ScheduleItem;
   readonly members: readonly ScheduleMemberOption[];
+  readonly isMemberDirectoryAvailable: boolean;
   readonly currentUserId: string | null;
   readonly canManage: boolean;
   readonly onSetCollaboration: (
@@ -76,6 +77,7 @@ export interface ScheduleItemCollaborationPanelProps {
 export function ScheduleItemCollaborationPanel({
   item,
   members,
+  isMemberDirectoryAvailable,
   currentUserId,
   canManage,
   onSetCollaboration,
@@ -285,7 +287,7 @@ export function ScheduleItemCollaborationPanel({
 
       {manual && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {canManage && active && (
+          {canManage && active && isMemberDirectoryAvailable && (
             <button
               type="button"
               className={SCHEDULE_THEME.buttonSecondary}
@@ -348,7 +350,22 @@ export function ScheduleItemCollaborationPanel({
         </div>
       )}
 
-      {editing && canManage && active && manual && (
+      {canManage && active && manual && !isMemberDirectoryAvailable && (
+        <div
+          role="status"
+          className={SCHEDULE_THEME.surfaceSoft + ' mt-4 p-3 text-sm'}
+        >
+          O diretório de integrantes está indisponível. A atribuição fica
+          bloqueada até que a lista canônica da organização possa ser
+          carregada com segurança.
+        </div>
+      )}
+
+      {editing &&
+        canManage &&
+        active &&
+        manual &&
+        isMemberDirectoryAvailable && (
         <form
           onSubmit={submitCollaboration}
           className={SCHEDULE_THEME.surfaceSoft + ' mt-4 p-4'}
