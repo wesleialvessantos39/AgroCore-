@@ -126,6 +126,7 @@ function recurrenceDescription(item: ScheduleItem): string {
 function ScheduleItemCard({
   item,
   members,
+  isMemberDirectoryAvailable,
   currentUserId,
   canManage,
   onSetCollaboration,
@@ -135,6 +136,7 @@ function ScheduleItemCard({
 }: {
   readonly item: ScheduleItem;
   readonly members: readonly ScheduleMemberOption[];
+  readonly isMemberDirectoryAvailable: boolean;
   readonly currentUserId: string | null;
   readonly canManage: boolean;
   readonly onSetCollaboration: (
@@ -212,6 +214,7 @@ function ScheduleItemCard({
       <ScheduleItemCollaborationPanel
         item={item}
         members={members}
+        isMemberDirectoryAvailable={isMemberDirectoryAvailable}
         currentUserId={currentUserId}
         canManage={canManage}
         onSetCollaboration={onSetCollaboration}
@@ -241,6 +244,7 @@ export interface ScheduleBrowsePanelProps {
   readonly filters: ScheduleItemListFilters;
   readonly isLoading: boolean;
   readonly members: readonly ScheduleMemberOption[];
+  readonly isMemberDirectoryAvailable: boolean;
   readonly currentUserId: string | null;
   readonly canManage: boolean;
   readonly onFiltersChange: (
@@ -497,6 +501,7 @@ export function ScheduleBrowsePanel({
                 key={item.id}
                 item={item}
                 members={members}
+                isMemberDirectoryAvailable={isMemberDirectoryAvailable}
                 currentUserId={currentUserId}
                 canManage={canManage}
                 onSetCollaboration={onSetCollaboration}
@@ -661,6 +666,7 @@ export function ScheduleBrowsePanel({
                       key={item.id}
                       item={item}
                       members={members}
+                      isMemberDirectoryAvailable={isMemberDirectoryAvailable}
                       currentUserId={currentUserId}
                       canManage={canManage}
                       onSetCollaboration={onSetCollaboration}
