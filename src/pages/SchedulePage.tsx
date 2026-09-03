@@ -40,6 +40,10 @@ const STATUS_LABEL: Record<ScheduleItem['status'], string> = {
   cancelled: 'Cancelado',
 };
 
+const WEEKDAY_LABEL: readonly string[] = [
+  'Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb',
+];
+
 const RECURRENCE_LABEL: Record<
   ScheduleRecurrenceFrequency,
   string
@@ -91,12 +95,18 @@ function recurrenceDescription(item: ScheduleItem): string {
     item.recurrence.interval === 1
       ? base
       : `${base}, a cada ${item.recurrence.interval} intervalos`;
+  const weekdays =
+    item.recurrence.frequency === 'weekly'
+      ? ` · ${item.recurrence.weekdays
+          .map((day) => WEEKDAY_LABEL[day] ?? String(day))
+          .join(', ')}`
+      : '';
   return item.recurrence.endsAt
-    ? `${interval} · até ${formatScheduleInstant(
+    ? `${interval}${weekdays} · até ${formatScheduleInstant(
         item.recurrence.endsAt,
         item.timeZone
       )}`
-    : interval;
+    : interval + weekdays;
 }
 
 export function SchedulePage() {
@@ -124,6 +134,7 @@ export function SchedulePage() {
   const [recurrenceFrequency, setRecurrenceFrequency] =
     useState<ScheduleRecurrenceFrequency>('none');
   const [recurrenceInterval, setRecurrenceInterval] = useState(1);
+  const [recurrenceWeekdays, setRecurrenceWeekdays] = useState<number[]>([]);
   const [recurrenceEndsLocal, setRecurrenceEndsLocal] =
     useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -147,6 +158,7 @@ export function SchedulePage() {
         endsAtLocal,
         recurrenceFrequency,
         recurrenceInterval,
+        recurrenceWeekdays,
         recurrenceEndsLocal,
       }),
     [
@@ -158,6 +170,7 @@ export function SchedulePage() {
       recurrenceEndsLocal,
       recurrenceFrequency,
       recurrenceInterval,
+      recurrenceWeekdays,
       startsAtLocal,
       timeZone,
       title,
@@ -196,6 +209,7 @@ export function SchedulePage() {
     setEndsAtLocal('');
     setRecurrenceFrequency('none');
     setRecurrenceInterval(1);
+    setRecurrenceWeekdays([]);
     setRecurrenceEndsLocal('');
     commandRef.current = null;
     setActionError(null);
@@ -234,7 +248,10 @@ export function SchedulePage() {
       const recurrence = {
         frequency: recurrenceFrequency,
         interval: recurrenceInterval,
-        weekdays: [] as readonly number[],
+        weekdays:
+          recurrenceFrequency === 'weekly'
+            ? [...recurrenceWeekdays].sort((a, b) => a - b)
+            : [],
         endsAt: recurrenceEndsAt,
       } as const;
 
@@ -456,12 +473,12 @@ export function SchedulePage() {
               <select
                 className={SCHEDULE_THEME.input}
                 value={recurrenceFrequency}
-                onChange={(event) =>
-                  setRecurrenceFrequency(
-                    event.target
-                      .value as ScheduleRecurrenceFrequency
-                  )
-                }
+                onChange={(event) => {
+                  const next =
+                    event.target.value as ScheduleRecurrenceFrequency;
+                  setRecurrenceFrequency(next);
+                  if (next !== 'weekly') setRecurrenceWeekdays([]);
+                }}
               >
                 {Object.entries(RECURRENCE_LABEL).map(
                   ([value, label]) => (
@@ -492,6 +509,42 @@ export function SchedulePage() {
                     }
                   />
                 </label>
+                {recurrenceFrequency === 'weekly' && (
+                  <fieldset className="min-w-0 md:col-span-2">
+                    <legend className="text-sm font-medium">
+                      Dias da semana
+                    </legend>
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                      {WEEKDAY_LABEL.map((label, day) => {
+                        const checked = recurrenceWeekdays.includes(day);
+                        return (
+                          <label
+                            key={day}
+                            className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border border-[#0B3D2E]/20 bg-white px-3 py-2 text-sm font-medium focus-within:ring-2 focus-within:ring-[#78C89A]"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setRecurrenceWeekdays((current) =>
+                                  checked
+                                    ? current.filter((value) => value !== day)
+                                    : [...current, day]
+                                )
+                              }
+                            />
+                            <span>{label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {recurrenceWeekdays.length === 0 && (
+                      <p className="mt-2 text-sm text-[#0B3D2E]/70" role="status">
+                        Selecione pelo menos um dia para a recorrência semanal.
+                      </p>
+                    )}
+                  </fieldset>
+                )}
                 <label className="min-w-0 space-y-1.5 text-sm font-medium md:col-span-2">
                   <span>Encerrar recorrência em</span>
                   <input
@@ -519,7 +572,11 @@ export function SchedulePage() {
             <button
               type="submit"
               className={SCHEDULE_THEME.buttonPrimary}
-              disabled={submitting}
+              disabled={
+                submitting ||
+                (recurrenceFrequency === 'weekly' &&
+                  recurrenceWeekdays.length === 0)
+              }
             >
               {submitting ? 'Registrando...' : 'Registrar'}
             </button>
