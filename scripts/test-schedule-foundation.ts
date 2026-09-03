@@ -98,6 +98,14 @@ const fkHardening = fs.readFileSync(
   'supabase/migrations/20260903155402_oe_008_001_schedule_fk_hardening.sql',
   'utf8'
 );
+const commandHardening = fs.readFileSync(
+  'supabase/migrations/20260903175453_oe_008_001_command_idempotency_hardening.sql',
+  'utf8'
+);
+const supabaseGateway = fs.readFileSync(
+  'src/schedule/supabaseScheduleGateway.ts',
+  'utf8'
+);
 const page = fs.readFileSync('src/pages/SchedulePage.tsx', 'utf8');
 const paths = fs.readFileSync('src/routes/paths.ts', 'utf8');
 const routeMatrix = fs.readFileSync(
@@ -228,6 +236,7 @@ await test('12. versão obsoleta perde a corrida de atualização', async () => 
     dueAt: created.kind === 'task' ? created.dueAt : null,
     recurrence: created.recurrence,
     expectedVersion: created.version,
+    idempotencyKey: 'update-write-001',
     reason: 'Ajuste do título',
   });
   await assert.rejects(
@@ -241,6 +250,7 @@ await test('12. versão obsoleta perde a corrida de atualização', async () => 
         dueAt: created.kind === 'task' ? created.dueAt : null,
         recurrence: created.recurrence,
         expectedVersion: created.version,
+        idempotencyKey: 'update-write-002',
         reason: 'Tentativa concorrente',
       }),
     (error: unknown) =>
@@ -265,6 +275,7 @@ await test('13. atualização gera auditoria append-only', async () => {
     dueAt: created.kind === 'task' ? created.dueAt : null,
     recurrence: created.recurrence,
     expectedVersion: created.version,
+    idempotencyKey: 'audit-update-001',
     reason: 'Repriorização operacional',
   });
   const audit = await service.listAudit(ctx, created.id);
@@ -457,7 +468,34 @@ await test('28. recorrência rejeita dias semanais duplicados', () => {
   );
 });
 
-await test('29. recorrência não semanal não aceita weekdays', () => {
+await test('29. recorrência semanal exige pelo menos um dia explícito', () => {
+  assert.throws(() =>
+    normalizeScheduleRecurrence(
+      {
+        frequency: 'weekly',
+        interval: 1,
+        weekdays: [],
+        endsAt: null,
+      },
+      '2026-09-10T15:00:00.000Z'
+    )
+  );
+});
+
+await test('52. recorrência semanal aceita dias únicos válidos', () => {
+  const recurrence = normalizeScheduleRecurrence(
+    {
+      frequency: 'weekly',
+      interval: 1,
+      weekdays: [1, 3, 5],
+      endsAt: null,
+    },
+    '2026-09-10T15:00:00.000Z'
+  );
+  assert.deepEqual(recurrence.weekdays, [1, 3, 5]);
+});
+
+await test('53. recorrência não semanal não aceita weekdays', () => {
   assert.throws(() =>
     normalizeScheduleRecurrence(
       {
@@ -471,7 +509,7 @@ await test('29. recorrência não semanal não aceita weekdays', () => {
   );
 });
 
-await test('30. migration cria fonte única schedule_items e auditoria', () => {
+await test('52. migration cria fonte única schedule_items e auditoria', () => {
   assert.match(migration, /create table if not exists public\.schedule_items/);
   assert.match(
     migration,
@@ -479,7 +517,7 @@ await test('30. migration cria fonte única schedule_items e auditoria', () => {
   );
 });
 
-await test('31. migration exige organization_id e FKs canônicas', () => {
+await test('53. migration exige organization_id e FKs canônicas', () => {
   assert.match(
     migration,
     /organization_id uuid not null references public\.organizations/
@@ -490,7 +528,7 @@ await test('31. migration exige organization_id e FKs canônicas', () => {
   );
 });
 
-await test('32. RLS está ativa nas tabelas do módulo', () => {
+await test('52. RLS está ativa nas tabelas do módulo', () => {
   assert.match(
     migration,
     /alter table public\.schedule_items enable row level security/
@@ -501,7 +539,7 @@ await test('32. RLS está ativa nas tabelas do módulo', () => {
   );
 });
 
-await test('33. leitura RLS depende de autorização organizacional', () => {
+await test('53. leitura RLS depende de autorização organizacional', () => {
   assert.match(
     migration,
     /agrocore_private\.can_view_schedule\(organization_id\)/
@@ -512,7 +550,7 @@ await test('33. leitura RLS depende de autorização organizacional', () => {
   );
 });
 
-await test('34. gestão backend fica restrita a owner/admin/manager', () => {
+await test('52. gestão backend fica restrita a owner/admin/manager', () => {
   assert.match(
     migration,
     /in \('owner','company_admin','manager'\)/
@@ -523,19 +561,19 @@ await test('34. gestão backend fica restrita a owner/admin/manager', () => {
   );
 });
 
-await test('35. RPCs usam SECURITY DEFINER e search_path fechado', () => {
+await test('53. RPCs usam SECURITY DEFINER e search_path fechado', () => {
   const defs = migration.match(/security definer[\s\S]*?set search_path = ''/gi);
   assert.ok((defs?.length ?? 0) >= 4);
 });
 
-await test('36. escrita direta autenticada permanece revogada', () => {
+await test('52. escrita direta autenticada permanece revogada', () => {
   assert.match(
     migration,
     /revoke insert, update, delete, truncate, references, trigger[\s\S]*schedule_items from authenticated/
   );
 });
 
-await test('37. atualização não aceita mudança de status', () => {
+await test('53. atualização não aceita mudança de status', () => {
   const start = migration.indexOf(
     'create or replace function public.agrocore_update_schedule_item'
   );
@@ -547,7 +585,7 @@ await test('37. atualização não aceita mudança de status', () => {
   assert.match(block, /v_current\.status <> 'pending'/);
 });
 
-await test('38. item de domínio não é editável manualmente', () => {
+await test('52. item de domínio não é editável manualmente', () => {
   assert.match(
     migration,
     /v_current\.origin_type <> 'manual'/
@@ -558,7 +596,7 @@ await test('38. item de domínio não é editável manualmente', () => {
   );
 });
 
-await test('39. criação pública sempre grava origem manual', () => {
+await test('53. criação pública sempre grava origem manual', () => {
   const createStart = migration.indexOf(
     'create or replace function public.agrocore_create_schedule_item'
   );
@@ -570,21 +608,21 @@ await test('39. criação pública sempre grava origem manual', () => {
   assert.doesNotMatch(createBlock, /p_payload\s*->>\s*'sourceDomain'/);
 });
 
-await test('40. não há tabela prematura de ocorrências', () => {
+await test('52. não há tabela prematura de ocorrências', () => {
   assert.doesNotMatch(
     migration,
     /create table(?: if not exists)? public\.schedule_occurrences/i
   );
 });
 
-await test('41. não há central de notificações antecipada', () => {
+await test('53. não há central de notificações antecipada', () => {
   assert.doesNotMatch(
     migration,
     /create table(?: if not exists)? public\.schedule_notifications/i
   );
 });
 
-await test('42. Módulo 007 já fornece eventos estáveis de calendário', () => {
+await test('52. Módulo 007 já fornece eventos estáveis de calendário', () => {
   assert.match(
     visitIntegrationMigration,
     /calendar\.visit_sync_requested/
@@ -595,7 +633,7 @@ await test('42. Módulo 007 já fornece eventos estáveis de calendário', () =>
   );
 });
 
-await test('43. rota /agenda está registrada e protegida', () => {
+await test('53. rota /agenda está registrada e protegida', () => {
   assert.match(paths, /SCHEDULE: '\/agenda'/);
   assert.match(routeMatrix, /path: ROUTES\.SCHEDULE/);
   assert.match(
@@ -604,7 +642,7 @@ await test('43. rota /agenda está registrada e protegida', () => {
   );
 });
 
-await test('44. navegação mostra Agenda apenas com schedule:view', () => {
+await test('52. navegação mostra Agenda apenas com schedule:view', () => {
   assert.match(navigation, /label: 'Agenda'/);
   assert.match(
     navigation,
@@ -612,31 +650,31 @@ await test('44. navegação mostra Agenda apenas com schedule:view', () => {
   );
 });
 
-await test('45. interface não exibe códigos internos de ordem', () => {
+await test('53. interface não exibe códigos internos de ordem', () => {
   assert.doesNotMatch(page, /OE-008|008\.001/i);
 });
 
-await test('46. tela começa com dados reais e estado vazio explícito', () => {
+await test('52. tela começa com dados reais e estado vazio explícito', () => {
   assert.match(page, /Nenhum registro na agenda/);
   assert.match(page, /somente registros reais da/);
   assert.doesNotMatch(page, /mock|fake|demo data|dados simulados/i);
 });
 
-await test('47. formulário não oferece participantes ou atribuição prematuramente', () => {
+await test('53. formulário não oferece participantes ou atribuição prematuramente', () => {
   assert.doesNotMatch(page, /participantUserIds|responsibleUserId/);
 });
 
-await test('48. formulário não oferece transição de conclusão/cancelamento', () => {
+await test('52. formulário não oferece transição de conclusão/cancelamento', () => {
   assert.doesNotMatch(page, /completeItem|cancelItem|reopenItem/);
 });
 
-await test('49. produção possui factory dedicado sem preview estático', () => {
+await test('53. produção possui factory dedicado sem preview estático', () => {
   assert.match(viteConfig, /production-schedule-gateway-factory/);
   assert.match(viteConfig, /SupabaseScheduleGateway/);
   assert.match(viteConfig, /UnavailableScheduleGateway/);
 });
 
-await test('50. contratos de origem preservam referência sem copiar domínio', () => {
+await test('52. contratos de origem preservam referência sem copiar domínio', () => {
   assert.match(
     migration,
     /source_domain text null/
@@ -651,7 +689,7 @@ await test('50. contratos de origem preservam referência sem copiar domínio', 
   );
 });
 
-await test('51. hardening cobre diretamente a FK da auditoria', () => {
+await test('53. hardening cobre diretamente a FK da auditoria', () => {
   assert.match(
     fkHardening,
     /schedule_item_audit_schedule_item_fk_idx/
@@ -660,6 +698,108 @@ await test('51. hardening cobre diretamente a FK da auditoria', () => {
     fkHardening,
     /on public\.schedule_item_audit \(schedule_item_id\)/
   );
+});
+
+await test('54. atualização idempotente converge no mesmo efeito', async () => {
+  const service = new ScheduleService(new PreviewScheduleGateway());
+  const ctx = context('owner');
+  const created = await service.createTask(
+    ctx,
+    taskInput('update-idem-create-001')
+  );
+  const input = {
+    kind: 'task' as const,
+    title: 'Título após retry seguro',
+    description: created.description,
+    priority: created.priority,
+    timeZone: created.timeZone,
+    dueAt: created.kind === 'task' ? created.dueAt : null,
+    recurrence: created.recurrence,
+    expectedVersion: created.version,
+    idempotencyKey: 'update-idem-command-001',
+    reason: 'Ajuste idempotente',
+  };
+  const first = await service.updateItem(ctx, created.id, input);
+  const replay = await service.updateItem(ctx, created.id, input);
+  assert.equal(first.id, replay.id);
+  assert.equal(first.version, replay.version);
+  const audit = await service.listAudit(ctx, created.id);
+  assert.equal(audit.filter((entry) => entry.action === 'updated').length, 1);
+});
+
+await test('55. mesma chave de update rejeita conteúdo divergente', async () => {
+  const service = new ScheduleService(new PreviewScheduleGateway());
+  const ctx = context('owner');
+  const created = await service.createTask(
+    ctx,
+    taskInput('update-idem-create-002')
+  );
+  const base = {
+    kind: 'task' as const,
+    description: created.description,
+    priority: created.priority,
+    timeZone: created.timeZone,
+    dueAt: created.kind === 'task' ? created.dueAt : null,
+    recurrence: created.recurrence,
+    expectedVersion: created.version,
+    idempotencyKey: 'update-idem-command-002',
+    reason: 'Ajuste idempotente',
+  };
+  await service.updateItem(ctx, created.id, {
+    ...base,
+    title: 'Primeiro conteúdo',
+  });
+  await assert.rejects(
+    () =>
+      service.updateItem(ctx, created.id, {
+        ...base,
+        title: 'Conteúdo divergente',
+      }),
+    (error: unknown) =>
+      error instanceof ScheduleDomainError &&
+      error.code === 'IDEMPOTENCY_CONFLICT'
+  );
+});
+
+await test('56. recibos idempotentes ficam no schema privado', () => {
+  assert.match(
+    commandHardening,
+    /agrocore_private\.schedule_item_command_receipts/
+  );
+  assert.match(
+    commandHardening,
+    /revoke all on agrocore_private\.schedule_item_command_receipts[\s\S]*from public, anon, authenticated/
+  );
+});
+
+await test('57. fingerprints de comandos usam SHA-256', () => {
+  assert.match(commandHardening, /extensions\.digest/);
+  assert.match(commandHardening, /'sha256'/);
+  assert.doesNotMatch(commandHardening, /md5\(/i);
+});
+
+await test('58. update remoto exige command key idempotente', () => {
+  assert.match(
+    commandHardening,
+    /p_idempotency_key text/
+  );
+  assert.match(
+    commandHardening,
+    /command_type <> 'update'/
+  );
+});
+
+await test('59. gateway remoto limita retries a falhas transitórias', () => {
+  assert.match(supabaseGateway, /executeMutationWithRetry/);
+  assert.match(supabaseGateway, /isTransientOperationError/);
+  assert.match(supabaseGateway, /\[0, 200, 600\]/);
+  assert.match(supabaseGateway, /p_idempotency_key: input\.idempotencyKey/);
+});
+
+await test('60. interface permite dias explícitos em recorrência semanal', () => {
+  assert.match(page, /Dias da semana/);
+  assert.match(page, /recurrenceWeekdays/);
+  assert.match(page, /Selecione pelo menos um dia/);
 });
 
 console.log('\n====================================================');
