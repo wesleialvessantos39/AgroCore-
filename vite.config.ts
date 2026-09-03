@@ -157,6 +157,13 @@ function stripPreviewPlugin(isProduction: boolean) {
         ) {
           return '\0virtual:production-field-visits-gateway-factory';
         }
+        if (
+          normalizedTarget.includes('/schedule/gatewayFactory') ||
+          id.includes('/schedule/gatewayFactory') ||
+          (importer && importer.includes('/schedule/') && id === './gatewayFactory')
+        ) {
+          return '\0virtual:production-schedule-gateway-factory';
+        }
       }
 
       // Em produção, intercepta qualquer import de preview e retorna stubs vazios
@@ -486,6 +493,26 @@ function stripPreviewPlugin(isProduction: boolean) {
             return activeGateway;
           }
           export function setTechnicalVisitGatewayForTesting(gateway) {
+            activeGateway = gateway ?? null;
+          }
+        `;
+      }
+
+      if (id === '\0virtual:production-schedule-gateway-factory') {
+        return `
+          import { getSupabaseClient } from '/src/infrastructure/supabaseClient.ts';
+          import { SupabaseScheduleGateway } from '/src/schedule/supabaseScheduleGateway.ts';
+          import { UnavailableScheduleGateway } from '/src/schedule/unavailableScheduleGateway.ts';
+          let activeGateway = null;
+          export function getScheduleGateway() {
+            if (activeGateway) return activeGateway;
+            const supabase = getSupabaseClient();
+            activeGateway = supabase
+              ? new SupabaseScheduleGateway(supabase)
+              : new UnavailableScheduleGateway();
+            return activeGateway;
+          }
+          export function setScheduleGatewayForTesting(gateway) {
             activeGateway = gateway ?? null;
           }
         `;
