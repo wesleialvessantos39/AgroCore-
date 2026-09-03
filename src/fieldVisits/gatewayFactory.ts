@@ -1,6 +1,9 @@
 import type {
+  CompleteTechnicalVisitGatewayInput,
+  ReviseTechnicalVisitReportGatewayInput,
   TechnicalVisit,
   TechnicalVisitAuditEntry,
+  TechnicalVisitCompletionResult,
   TechnicalVisitGateway,
   TechnicalVisitListFilters,
   TechnicalVisitWrite,
