@@ -22,6 +22,9 @@ const fieldAccessibilityTests = read('scripts/test-field-visits-accessibility.ts
 const fieldHomologationTests = read('scripts/test-field-visits-field-homologation.ts');
 const fieldConnectivityHook = read('src/fieldVisits/useFieldConnectivity.ts');
 const fieldDevicePolicy = read('src/fieldVisits/fieldDevice.ts');
+const scheduleTests = read('scripts/test-schedule-foundation.ts');
+const schedulePage = read('src/pages/SchedulePage.tsx');
+const scheduleMigration = read('supabase/migrations/20260903153944_oe_008_001_schedule_model.sql');
 const fieldPreparationPanel = read('src/fieldVisits/VisitPreparationPanel.tsx');
 const fieldFormPanel = read('src/fieldVisits/VisitFieldFormPanel.tsx');
 const fieldEvidencePanel = read('src/fieldVisits/FieldEvidencePanel.tsx');
@@ -135,6 +138,28 @@ assert(
   'A OE-007.007 deve manter conectividade, retomada de rascunho e tratamento de permissões de localização.'
 );
 assert(
+  routeMatrix.includes('path: ROUTES.SCHEDULE') &&
+    routeMatrix.includes("requiredPermissions: 'schedule:view'"),
+  'A fundação do Módulo 008 deve permanecer registrada na matriz central de rotas e RBAC.'
+);
+assert(
+  !scheduleTests.includes('process.exit(0)') &&
+    scheduleTests.includes('Resultado fundação Agenda'),
+  'A suíte inicial do Módulo 008 deve permanecer ativa e sem interrupções de diagnóstico.'
+);
+assert(
+  schedulePage.includes('Agenda corporativa') &&
+    schedulePage.includes('Novo registro') &&
+    !schedulePage.includes('OE-008'),
+  'A interface da Agenda deve permanecer funcional sem expor códigos internos de execução.'
+);
+assert(
+  scheduleMigration.includes('create table if not exists public.schedule_items') &&
+    scheduleMigration.includes('enable row level security') &&
+    scheduleMigration.includes("set search_path = ''"),
+  'A persistência da Agenda deve manter tabela autoritativa, RLS e RPCs endurecidas.'
+);
+assert(
   !Object.prototype.hasOwnProperty.call(packageJson.scripts ?? {}, 'prebuild'),
   'O build de produção não pode depender do prebuild temporário de diagnóstico.'
 );
@@ -144,8 +169,9 @@ assert(
     packageJson.scripts.build.includes('test:module-002') &&
     packageJson.scripts.build.includes('test:module-003') &&
     packageJson.scripts.build.includes('test:module-006') &&
-    packageJson.scripts.build.includes('test:module-007'),
-  'O gate de produção deve executar as homologações de código dos Módulos 001, 002, 003, 006 e 007.'
+    packageJson.scripts.build.includes('test:module-007') &&
+    packageJson.scripts.build.includes('test:module-008'),
+  'O gate de produção deve executar as homologações de código dos Módulos 001, 002, 003, 006, 007 e 008.'
 );
 
-console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e Módulo 007 integrado até OE-007.007.');
+console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e fundação do Módulo 008 integrada.');
