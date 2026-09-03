@@ -39,6 +39,7 @@ export interface ScheduleContextValue {
   readonly status: ScheduleContextStatus;
   readonly items: readonly ScheduleItem[];
   readonly eligibleMembers: readonly ScheduleMemberOption[];
+  readonly isMemberDirectoryAvailable: boolean;
   readonly currentUserId: string | null;
   readonly canManage: boolean;
   readonly filters: ScheduleItemListFilters;
@@ -109,6 +110,8 @@ export function ScheduleProvider({
   const [items, setItems] = useState<readonly ScheduleItem[]>([]);
   const [eligibleMembers, setEligibleMembers] =
     useState<readonly ScheduleMemberOption[]>([]);
+  const [isMemberDirectoryAvailable, setMemberDirectoryAvailable] =
+    useState(false);
   const [filters, setFiltersState] =
     useState<ScheduleItemListFilters>(EMPTY_FILTERS);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -160,6 +163,7 @@ export function ScheduleProvider({
     abortRef.current = null;
     setItems([]);
     setEligibleMembers([]);
+    setMemberDirectoryAvailable(false);
     setErrorMessage(null);
     setStatus('idle');
   }, []);
@@ -187,10 +191,18 @@ export function ScheduleProvider({
         ),
         service
           .listEligibleMembers(applicationContext, controller.signal)
-          .catch(() => [] as readonly ScheduleMemberOption[]),
+          .then((members) => ({
+            available: true as const,
+            members,
+          }))
+          .catch(() => ({
+            available: false as const,
+            members: [] as readonly ScheduleMemberOption[],
+          })),
       ]);
 
       const currentMember: ScheduleMemberOption | null =
+        memberResult.available &&
         applicationContext.actor.role !== 'none'
           ? {
               userId: applicationContext.actor.userId,
@@ -204,11 +216,11 @@ export function ScheduleProvider({
       const nextMembers = currentMember
         ? [
             currentMember,
-            ...memberResult.filter(
+            ...memberResult.members.filter(
               (member) => member.userId !== currentMember.userId
             ),
           ]
-        : memberResult;
+        : memberResult.members;
       if (
         controller.signal.aborted ||
         requestId !== sequenceRef.current ||
@@ -218,6 +230,7 @@ export function ScheduleProvider({
       }
       setItems(nextItems);
       setEligibleMembers(nextMembers);
+      setMemberDirectoryAvailable(memberResult.available);
       setStatus(nextItems.length === 0 ? 'empty' : 'ready');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -420,6 +433,7 @@ export function ScheduleProvider({
       status,
       items,
       eligibleMembers,
+      isMemberDirectoryAvailable,
       currentUserId: userId,
       canManage,
       filters,
@@ -448,6 +462,7 @@ export function ScheduleProvider({
       createTask,
       eligibleMembers,
       errorMessage,
+      isMemberDirectoryAvailable,
       filters,
       getAudit,
       getCollaborationRevisions,
