@@ -19,7 +19,7 @@ env:
 
 jobs:
   validate-and-test:
-    name: Lint, Build & Homologação Integral (Módulos 001 a 007)
+    name: Lint, Build & Homologação Integral (Módulos 001 a 008)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -68,6 +68,9 @@ jobs:
 
       - name: Bateria de Testes — Módulo 007 (Visitas e Vistorias)
         run: npm run test:module-007
+
+      - name: Bateria de Testes — Módulo 008 (Agenda Corporativa)
+        run: npm run test:module-008
 
       - name: Auditoria Global de Rebranding
         run: npm run test:rebranding && npm run test:ui-copy
