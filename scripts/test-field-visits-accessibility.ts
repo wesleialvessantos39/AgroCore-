@@ -21,6 +21,7 @@ const panel = fs.readFileSync('src/fieldVisits/VisitPreparationPanel.tsx', 'utf8
 const theme = fs.readFileSync('src/fieldVisits/theme.ts', 'utf8');
 const fieldForm = fs.readFileSync('src/fieldVisits/VisitFieldFormPanel.tsx', 'utf8');
 const fieldEvidence = fs.readFileSync('src/fieldVisits/FieldEvidencePanel.tsx', 'utf8');
+const integrationPanel = fs.readFileSync('src/fieldVisits/VisitIntegrationPanel.tsx', 'utf8');
 
 console.log('====================================================');
 console.log(' AGROCORE — RESPONSIVIDADE E ACESSIBILIDADE MÓDULO 007');
@@ -168,6 +169,24 @@ test('21. Coordenadas manuais usam teclado decimal em dispositivos móveis', () 
 
 test('22. Captura de foto favorece câmera do ambiente quando suportada', () => {
   assert.equal(fieldEvidence.includes('capture="environment"'), true);
+});
+
+test('23. Integrações possuem região acessível e estado de carregamento anunciável', () => {
+  assert.equal(integrationPanel.includes('aria-label="Integrações operacionais da visita"'), true);
+  assert.equal(integrationPanel.includes('role="status"'), true);
+  assert.equal(integrationPanel.includes('role="alert"'), true);
+});
+
+test('24. Painel de integrações permanece mobile-first e cresce em telas maiores', () => {
+  assert.equal(integrationPanel.includes('grid gap-3 md:grid-cols-3'), true);
+  assert.equal(integrationPanel.includes('sm:p-5'), true);
+  assert.equal(/min-w-\[(?:[4-9]\d\d|\d{4,})px\]/.test(integrationPanel), false);
+  assert.equal(/w-\[(?:[4-9]\d\d|\d{4,})px\]/.test(integrationPanel), false);
+});
+
+test('25. Integrações não dependem de hover para comunicar situação', () => {
+  assert.equal(integrationPanel.includes("link.status === 'active' ? 'Ativo' : 'Liberado'"), true);
+  assert.equal(integrationPanel.includes('EVENT_LABEL[latest.eventType]'), true);
 });
 
 console.log('\n====================================================');
