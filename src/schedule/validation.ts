@@ -3,6 +3,7 @@ import {
   ScheduleDomainError,
   type CreateScheduleItemInput,
   type ScheduleItemCreatePayload,
+  type ScheduleItemListFilters,
   type ScheduleItemUpdatePayload,
   type ScheduleRecurrenceDefinition,
   type UpdateScheduleItemInput,
@@ -53,6 +54,44 @@ function assertIsoInstant(
     );
   }
   return date.toISOString();
+}
+
+export function normalizeScheduleListFilters(
+  filters: ScheduleItemListFilters = {}
+): ScheduleItemListFilters {
+  const kind = filters.kind ?? 'all';
+  const status = filters.status ?? 'all';
+  const viewScope = filters.viewScope ?? 'team';
+
+  if (!['all', 'task', 'appointment'].includes(kind)) {
+    throw new ScheduleDomainError(
+      'INVALID_INPUT',
+      'Filtro de tipo da agenda inválido.'
+    );
+  }
+  if (
+    ![
+      'all',
+      'pending',
+      'in_progress',
+      'blocked',
+      'completed',
+      'cancelled',
+    ].includes(status)
+  ) {
+    throw new ScheduleDomainError(
+      'INVALID_INPUT',
+      'Filtro de situação da agenda inválido.'
+    );
+  }
+  if (!['personal', 'team'].includes(viewScope)) {
+    throw new ScheduleDomainError(
+      'INVALID_INPUT',
+      'Escopo de visualização da agenda inválido.'
+    );
+  }
+
+  return Object.freeze({ kind, status, viewScope });
 }
 
 export function normalizeScheduleRecurrence(
