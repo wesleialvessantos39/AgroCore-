@@ -7,19 +7,15 @@ import {
 } from 'react';
 import {
   CalendarClock,
-  CheckSquare2,
   Plus,
   RefreshCw,
 } from 'lucide-react';
 import { useAuthorization } from '../authorization/useAuthorization';
 import { useSchedule } from '../schedule/useSchedule';
-import {
-  formatScheduleInstant,
-  scheduleLocalDateTimeToUtc,
-} from '../schedule/time';
+import { scheduleLocalDateTimeToUtc } from '../schedule/time';
+import { ScheduleBrowsePanel } from '../schedule/ScheduleBrowsePanel';
 import { SCHEDULE_THEME } from '../schedule/theme';
 import type {
-  ScheduleItem,
   ScheduleItemKind,
   SchedulePriority,
   ScheduleRecurrenceFrequency,
@@ -30,14 +26,6 @@ const PRIORITY_LABEL: Record<SchedulePriority, string> = {
   medium: 'Média',
   high: 'Alta',
   urgent: 'Urgente',
-};
-
-const STATUS_LABEL: Record<ScheduleItem['status'], string> = {
-  pending: 'Pendente',
-  in_progress: 'Em andamento',
-  blocked: 'Bloqueado',
-  completed: 'Concluído',
-  cancelled: 'Cancelado',
 };
 
 const WEEKDAY_LABEL: readonly string[] = [
@@ -74,46 +62,14 @@ function secureCommandId(): string {
   return globalThis.crypto.randomUUID();
 }
 
-function itemDateLabel(item: ScheduleItem): string {
-  if (item.kind === 'task') {
-    return item.dueAt
-      ? `Prazo: ${formatScheduleInstant(item.dueAt, item.timeZone)}`
-      : 'Sem prazo definido';
-  }
-  return (
-    `${formatScheduleInstant(item.startsAt, item.timeZone)} – ` +
-    formatScheduleInstant(item.endsAt, item.timeZone)
-  );
-}
-
-function recurrenceDescription(item: ScheduleItem): string {
-  if (item.recurrence.frequency === 'none') {
-    return 'Sem recorrência';
-  }
-  const base = RECURRENCE_LABEL[item.recurrence.frequency];
-  const interval =
-    item.recurrence.interval === 1
-      ? base
-      : `${base}, a cada ${item.recurrence.interval} intervalos`;
-  const weekdays =
-    item.recurrence.frequency === 'weekly'
-      ? ` · ${item.recurrence.weekdays
-          .map((day) => WEEKDAY_LABEL[day] ?? String(day))
-          .join(', ')}`
-      : '';
-  return item.recurrence.endsAt
-    ? `${interval}${weekdays} · até ${formatScheduleInstant(
-        item.recurrence.endsAt,
-        item.timeZone
-      )}`
-    : interval + weekdays;
-}
-
 export function SchedulePage() {
   const {
     status,
     items,
+    filters,
+    isLoading,
     errorMessage,
+    setFilters,
     refresh,
     createTask,
     createAppointment,
@@ -611,95 +567,16 @@ export function SchedulePage() {
         </div>
       )}
 
-      {status === 'empty' && (
-        <div className={SCHEDULE_THEME.surface + ' p-8 text-center'}>
-          <CalendarClock
-            className="mx-auto h-8 w-8 text-[#0B3D2E]/55"
-            aria-hidden="true"
-          />
-          <h2 className="mt-3 text-lg font-semibold">
-            Nenhum registro na agenda
-          </h2>
-          <p className="mt-1 text-sm text-[#0B3D2E]/70">
-            A agenda começa vazia e exibe somente registros reais da
-            organização.
-          </p>
-        </div>
-      )}
-
-      {(status === 'ready' ||
-        (status === 'loading' && items.length > 0)) && (
-        <section aria-labelledby="schedule-records-title">
-          <div className="mb-3 flex items-center gap-2">
-            <CheckSquare2 className="h-5 w-5" aria-hidden="true" />
-            <h2
-              id="schedule-records-title"
-              className="text-lg font-semibold"
-            >
-              Tarefas e compromissos
-            </h2>
-          </div>
-          <div className="grid min-w-0 gap-4">
-            {items.map((item) => (
-              <article
-                key={item.id}
-                className={SCHEDULE_THEME.surface + ' min-w-0 p-4 sm:p-5'}
-              >
-                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap gap-2">
-                      <span className={SCHEDULE_THEME.badge}>
-                        {item.kind === 'task'
-                          ? 'Tarefa'
-                          : 'Compromisso'}
-                      </span>
-                      <span className={SCHEDULE_THEME.badge}>
-                        {STATUS_LABEL[item.status]}
-                      </span>
-                      <span className={SCHEDULE_THEME.badge}>
-                        Prioridade {PRIORITY_LABEL[item.priority]}
-                      </span>
-                    </div>
-                    <h3 className="mt-3 break-words text-base font-semibold">
-                      {item.title}
-                    </h3>
-                    {item.description && (
-                      <p className="mt-1 break-words text-sm text-[#0B3D2E]/70">
-                        {item.description}
-                      </p>
-                    )}
-                  </div>
-                  <span className="shrink-0 text-xs font-medium text-[#0B3D2E]/55">
-                    {item.origin.type === 'manual'
-                      ? 'Origem manual'
-                      : 'Origem integrada'}
-                  </span>
-                </div>
-
-                <dl className="mt-4 grid min-w-0 gap-3 text-sm md:grid-cols-3">
-                  <div className="min-w-0">
-                    <dt className="font-medium">Data</dt>
-                    <dd className="mt-1 break-words text-[#0B3D2E]/70">
-                      {itemDateLabel(item)}
-                    </dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="font-medium">Fuso</dt>
-                    <dd className="mt-1 break-words text-[#0B3D2E]/70">
-                      {item.timeZone}
-                    </dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="font-medium">Recorrência</dt>
-                    <dd className="mt-1 break-words text-[#0B3D2E]/70">
-                      {recurrenceDescription(item)}
-                    </dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        </section>
+      {(status === 'empty' ||
+        status === 'ready' ||
+        status === 'loading') && (
+        <ScheduleBrowsePanel
+          status={status}
+          items={items}
+          filters={filters}
+          isLoading={isLoading}
+          onFiltersChange={setFilters}
+        />
       )}
     </div>
   );
