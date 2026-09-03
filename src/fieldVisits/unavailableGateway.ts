@@ -1,11 +1,15 @@
 import {
   TechnicalVisitDomainError,
+  type CompleteTechnicalVisitGatewayInput,
+  type ReviseTechnicalVisitReportGatewayInput,
   type TechnicalVisit,
   type TechnicalVisitAuditEntry,
+  type TechnicalVisitCompletionResult,
   type TechnicalVisitGateway,
   type TechnicalVisitListFilters,
   type TechnicalVisitWrite,
 } from '../types/technicalVisit';
+import type { TechnicalVisitReport } from '../types/technicalVisitReport';
 
 export class UnavailableTechnicalVisitGateway implements TechnicalVisitGateway {
   private fail(): never {
@@ -42,6 +46,32 @@ export class UnavailableTechnicalVisitGateway implements TechnicalVisitGateway {
     _organizationId: string,
     _visitId: string
   ): Promise<readonly TechnicalVisitAuditEntry[]> {
+    return this.fail();
+  }
+
+  async completeVisit(
+    _input: CompleteTechnicalVisitGatewayInput
+  ): Promise<TechnicalVisitCompletionResult> {
+    return this.fail();
+  }
+
+  async getLatestReport(
+    _organizationId: string,
+    _visitId: string
+  ): Promise<TechnicalVisitReport | null> {
+    return this.fail();
+  }
+
+  async listReportVersions(
+    _organizationId: string,
+    _visitId: string
+  ): Promise<readonly TechnicalVisitReport[]> {
+    return this.fail();
+  }
+
+  async reviseReport(
+    _input: ReviseTechnicalVisitReportGatewayInput
+  ): Promise<TechnicalVisitReport> {
     return this.fail();
   }
 
