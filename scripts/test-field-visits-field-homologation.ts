@@ -455,9 +455,10 @@ await test('49. Homologação de campo não antecipa IndexedDB/fila offline do M
   assert.doesNotMatch(sources, /indexedDB|offlineQueue|syncQueue|mutationQueue/i);
 });
 
-await test('50. Gate do módulo possui ponto de extensão para a OE-007.007', () => {
-  assert.match(moduleGate, /test-field-visits-integrations\.ts/);
-  assert.match(moduleGate, /test-field-visits-accessibility\.ts/);
+await test('50. Gate do módulo executa explicitamente a OE-007.007', () => {
+  assert.match(moduleGate, /test-field-visits-field-homologation\.ts/);
+  assert.match(packageJson, /test:field-visits-field-homologation/);
+  assert.match(moduleGate, /OE-007\.001 A OE-007\.007/);
 });
 
 console.log('\n====================================================');
