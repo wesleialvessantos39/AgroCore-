@@ -13,6 +13,10 @@ const integrityHardening = fs.readFileSync(
   'supabase/migrations/20260903022512_oe_007_005_report_integrity_hardening.sql',
   'utf8'
 );
+const transitionHardening = fs.readFileSync(
+  'supabase/migrations/20260903023035_oe_007_005_transition_integrity_hardening.sql',
+  'utf8'
+);
 const service = fs.readFileSync('src/fieldVisits/technicalVisitService.ts', 'utf8');
 const supabaseGateway = fs.readFileSync(
   'src/fieldVisits/supabaseTechnicalVisitGateway.ts',
@@ -192,6 +196,31 @@ test('24. Pendências são normalizadas no servidor antes da persistência', () 
   assert.match(integrityHardening, /'id', btrim\(item ->> 'id'\)/);
   assert.match(integrityHardening, /'description', btrim\(item ->> 'description'\)/);
   assert.match(integrityHardening, /'pendingItems', v_pending_items/);
+});
+
+test('25. Transição não pode carregar alteração silenciosa de planejamento', () => {
+  assert.match(transitionHardening, /v_is_transition := v_new_status <> v_current\.status/);
+  assert.match(transitionHardening, /p_visit ->> 'clientId'.*v_current\.payload ->> 'clientId'/s);
+  assert.match(transitionHardening, /p_visit ->> 'responsibleUserId'.*v_current\.payload ->> 'responsibleUserId'/s);
+  assert.match(transitionHardening, /p_visit ->> 'purpose'.*v_current\.payload ->> 'purpose'/s);
+  assert.match(transitionHardening, /raise exception 'AGROCORE_INVALID_INPUT'/);
+});
+
+test('26. Alteração sem mudança de estado exige motivo no banco', () => {
+  assert.match(transitionHardening, /v_reason := nullif\(btrim\(coalesce\(p_audit ->> 'reason',''\)\), ''\)/);
+  assert.match(transitionHardening, /v_reason is null or length\(v_reason\) < 3/);
+  assert.match(transitionHardening, /AGROCORE_REASON_REQUIRED/);
+});
+
+test('27. changedFields da auditoria é calculado no servidor', () => {
+  assert.match(transitionHardening, /v_changed_fields jsonb := '\[\]'::jsonb/);
+  assert.match(transitionHardening, /jsonb_build_array\('clientId'\)/);
+  assert.match(transitionHardening, /jsonb_build_array\('preparation'\)/);
+  assert.match(transitionHardening, /'changedFields', v_changed_fields/);
+  assert.doesNotMatch(
+    transitionHardening,
+    /then p_audit -> 'changedFields'/
+  );
 });
 
 console.log(`\nResultado OE-007.005: ${passed} aprovadas, ${failed} falhas.`);
