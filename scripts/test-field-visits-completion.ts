@@ -168,10 +168,10 @@ test('19. Histórico de versões e motivo de revisão estão disponíveis', () =
   assert.match(types, /expectedReportVersion/);
 });
 
-test('20. Pendências permanecem no relatório sem antecipar Agenda ou Frota', () => {
+test('20. Pendências permanecem no relatório sem criar tarefas automaticamente', () => {
   assert.match(types, /TechnicalVisitPendingItem/);
   assert.doesNotMatch(types, /taskId|fleetId|calendarId/);
-  assert.match(panel, /tarefas e integrações serão tratadas nas ordens próprias/i);
+  assert.match(panel, /não criam tarefas automaticamente/i);
 });
 
 test('21. Snapshot resolve a evidência pela ligação canônica da OE-007.004', () => {
