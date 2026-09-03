@@ -343,7 +343,7 @@ await test('16. finance não consulta agenda', async () => {
   );
 });
 
-await test('17. capturer pode consultar agenda autorizada', async () => {
+await test('17. capturer não enumera registro sem vínculo pessoal', async () => {
   const gateway = new PreviewScheduleGateway();
   const service = new ScheduleService(gateway);
   await service.createTask(
@@ -351,7 +351,7 @@ await test('17. capturer pode consultar agenda autorizada', async () => {
     taskInput('view-command-001')
   );
   const items = await service.listItems(context('capturer'));
-  assert.equal(items.length, 1);
+  assert.equal(items.length, 0);
 });
 
 await test('18. preview isola itens entre organizações', async () => {
