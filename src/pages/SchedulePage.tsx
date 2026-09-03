@@ -67,6 +67,7 @@ export function SchedulePage() {
     status,
     items,
     eligibleMembers,
+    isMemberDirectoryAvailable,
     currentUserId,
     filters,
     isLoading,
@@ -582,6 +583,7 @@ export function SchedulePage() {
           filters={filters}
           isLoading={isLoading}
           members={eligibleMembers}
+          isMemberDirectoryAvailable={isMemberDirectoryAvailable}
           currentUserId={currentUserId}
           canManage={canManage}
           onFiltersChange={setFilters}
