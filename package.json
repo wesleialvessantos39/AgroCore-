@@ -70,7 +70,8 @@
     "test:schedule-foundation": "node --import tsx scripts/test-schedule-foundation.ts",
     "test:schedule-accessibility": "node --import tsx scripts/test-schedule-accessibility.ts",
     "test:schedule-theme": "node scripts/test-schedule-theme.js",
-    "test:module-008": "node --import tsx scripts/test-module-008.js"
+    "test:module-008": "node --import tsx scripts/test-module-008.js",
+    "test:schedule-views": "node --import tsx scripts/test-schedule-views.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
