@@ -21,6 +21,8 @@ import type {
 } from '../types/technicalVisitFieldForm';
 import { useFieldVisits } from './useFieldVisits';
 import { FIELD_VISIT_THEME } from './theme';
+import { useFieldConnectivity } from './useFieldConnectivity';
+import { FIELD_OFFLINE_DRAFT_MESSAGE } from './fieldDevice';
 
 const TYPE_LABELS: Readonly<Record<TechnicalVisitFieldAnswerType, string>> = {
   short_text: 'Texto curto',
@@ -79,6 +81,8 @@ export function VisitFieldFormPanel({
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const connectivity = useFieldConnectivity();
+  const isOffline = connectivity === 'offline';
 
   const sectionsRef = useRef<TechnicalVisitFieldSection[]>([]);
   const versionRef = useRef(0);
@@ -182,6 +186,10 @@ export function VisitFieldFormPanel({
 
   const persistDraft = useCallback(async () => {
     if (!editable || savingRef.current) return;
+    if (isOffline) {
+      setError(FIELD_OFFLINE_DRAFT_MESSAGE);
+      return;
+    }
     const revision = dirtyRevisionRef.current;
     const snapshot = sectionsRef.current.map((section) => ({
       ...section,
@@ -218,15 +226,15 @@ export function VisitFieldFormPanel({
       savingRef.current = false;
       setSaving(false);
     }
-  }, [editable, saveFieldFormDraft, visit.id]);
+  }, [editable, isOffline, saveFieldFormDraft, visit.id]);
 
   useEffect(() => {
-    if (!editable || !dirty || saving) return;
+    if (!editable || !dirty || saving || isOffline) return;
     const timer = window.setTimeout(() => {
       void persistDraft();
-    }, 800);
+    }, connectivity === 'online' ? 500 : 800);
     return () => window.clearTimeout(timer);
-  }, [dirty, editable, persistDraft, saving, sections]);
+  }, [connectivity, dirty, editable, isOffline, persistDraft, saving, sections]);
 
   const addSection = () => {
     try {
@@ -416,6 +424,10 @@ export function VisitFieldFormPanel({
 
   const submit = async () => {
     if (!editable || visit.status !== 'in_progress' || saving || dirty) return;
+    if (isOffline) {
+      setError(FIELD_OFFLINE_DRAFT_MESSAGE);
+      return;
+    }
     setSaving(true);
     savingRef.current = true;
     setError(null);
@@ -469,11 +481,13 @@ export function VisitFieldFormPanel({
           <span className="block text-xs text-[#0B3D2E]/70">
             {formStatus === 'submitted'
               ? 'Enviado'
-              : saving
-                ? 'Salvando alterações'
-                : dirty
-                  ? 'Alterações aguardando salvamento'
-                  : savedAt
+              : isOffline && dirty
+                ? 'Sem conexão — alterações aguardando envio'
+                : saving
+                  ? 'Salvando alterações'
+                  : dirty
+                    ? 'Alterações aguardando salvamento'
+                    : savedAt
                     ? 'Rascunho salvo'
                     : 'Sem respostas salvas'}
           </span>
@@ -525,6 +539,16 @@ export function VisitFieldFormPanel({
               </div>
             )}
           </div>
+
+          {isOffline && (
+            <div
+              role="status"
+              aria-live="polite"
+              className={FIELD_VISIT_THEME.surfaceSoft + ' mb-4 p-3 text-sm font-medium'}
+            >
+              {FIELD_OFFLINE_DRAFT_MESSAGE}
+            </div>
+          )}
 
           {error && (
             <div
