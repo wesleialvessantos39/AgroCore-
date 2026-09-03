@@ -11,6 +11,14 @@ import {
   type TechnicalVisitWrite,
 } from '../types/technicalVisit';
 import type { TechnicalVisitReport } from '../types/technicalVisitReport';
+import type {
+  TechnicalVisitIntegrationDomain,
+  TechnicalVisitIntegrationEvent,
+  TechnicalVisitIntegrationEventType,
+  TechnicalVisitIntegrationLink,
+  TechnicalVisitIntegrationLinkStatus,
+  TechnicalVisitIntegrationSnapshot,
+} from '../types/technicalVisitIntegration';
 
 interface VisitRow {
   readonly payload: TechnicalVisit;
@@ -18,6 +26,31 @@ interface VisitRow {
 
 interface AuditRow {
   readonly payload: TechnicalVisitAuditEntry;
+}
+
+interface IntegrationLinkRow {
+  readonly id: string;
+  readonly organization_id: string;
+  readonly visit_id: string;
+  readonly target_domain: TechnicalVisitIntegrationDomain;
+  readonly stable_reference: string;
+  readonly status: TechnicalVisitIntegrationLinkStatus;
+  readonly source_version: number;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+interface IntegrationEventRow {
+  readonly id: string;
+  readonly organization_id: string;
+  readonly visit_id: string;
+  readonly event_key: string;
+  readonly target_domain: TechnicalVisitIntegrationDomain;
+  readonly event_type: TechnicalVisitIntegrationEventType;
+  readonly source_version: number;
+  readonly occurred_at: string;
+  readonly payload: Readonly<Record<string, unknown>>;
 }
 
 function mapError(error: { readonly message?: string } | null): TechnicalVisitDomainError {
@@ -339,6 +372,69 @@ export class SupabaseTechnicalVisitGateway implements TechnicalVisitGateway {
       );
     }
     return data as TechnicalVisitReport;
+  }
+
+  async getIntegrationSnapshot(
+    organizationId: string,
+    visitId: string
+  ): Promise<TechnicalVisitIntegrationSnapshot> {
+    const [linksResult, eventsResult] = await Promise.all([
+      this.client
+        .from('technical_visit_integration_links')
+        .select(
+          'id,organization_id,visit_id,target_domain,stable_reference,status,source_version,payload,created_at,updated_at'
+        )
+        .eq('organization_id', organizationId)
+        .eq('visit_id', visitId)
+        .order('target_domain', { ascending: true }),
+      this.client
+        .from('technical_visit_integration_events')
+        .select(
+          'id,organization_id,visit_id,event_key,target_domain,event_type,source_version,occurred_at,payload'
+        )
+        .eq('organization_id', organizationId)
+        .eq('visit_id', visitId)
+        .order('occurred_at', { ascending: false })
+        .order('id', { ascending: false }),
+    ]);
+
+    if (linksResult.error) throw mapError(linksResult.error);
+    if (eventsResult.error) throw mapError(eventsResult.error);
+
+    const links: TechnicalVisitIntegrationLink[] = (
+      (linksResult.data ?? []) as unknown as IntegrationLinkRow[]
+    ).map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      visitId: row.visit_id,
+      targetDomain: row.target_domain,
+      stableReference: row.stable_reference,
+      status: row.status,
+      sourceVersion: row.source_version,
+      payload: row.payload,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+
+    const events: TechnicalVisitIntegrationEvent[] = (
+      (eventsResult.data ?? []) as unknown as IntegrationEventRow[]
+    ).map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      visitId: row.visit_id,
+      eventKey: row.event_key,
+      targetDomain: row.target_domain,
+      eventType: row.event_type,
+      sourceVersion: row.source_version,
+      occurredAt: row.occurred_at,
+      payload: row.payload,
+    }));
+
+    return {
+      visitId,
+      links: Object.freeze(links),
+      events: Object.freeze(events),
+    };
   }
 
   clearAllSessionData(): void {
