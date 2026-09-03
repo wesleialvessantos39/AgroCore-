@@ -490,6 +490,7 @@ export class TechnicalVisitService {
       const description = item.description.trim();
       if (
         !id ||
+        id.length > 120 ||
         ids.has(id) ||
         !categories.has(item.category) ||
         description.length < 3 ||
