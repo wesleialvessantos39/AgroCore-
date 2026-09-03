@@ -6,6 +6,8 @@ const FILES = [
   'src/fieldVisits/VisitPreparationPanel.tsx',
   'src/fieldVisits/VisitFieldFormPanel.tsx',
   'src/fieldVisits/FieldEvidencePanel.tsx',
+  'src/fieldVisits/VisitCompletionReportPanel.tsx',
+  'src/fieldVisits/VisitIntegrationPanel.tsx',
 ];
 
 const forbidden = [
