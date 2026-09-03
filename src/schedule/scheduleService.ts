@@ -351,7 +351,7 @@ export class ScheduleService {
       context.organizationId,
       normalizedId
     );
-    if (!current) {
+    if (!current || !this.canAccessItem(context, current)) {
       throw new ScheduleDomainError(
         'ITEM_NOT_FOUND',
         'Registro de agenda não encontrado.'
