@@ -272,6 +272,16 @@ export function ScheduleProvider({
   ]);
 
   useEffect(() => {
+    if (!canManage) {
+      setFiltersState((current) =>
+        current.viewScope === 'team'
+          ? { ...current, viewScope: 'personal' }
+          : current
+      );
+    }
+  }, [canManage]);
+
+  useEffect(() => {
     if (
       authStatus !== 'authenticated' ||
       organizationStatus !== 'active' ||
