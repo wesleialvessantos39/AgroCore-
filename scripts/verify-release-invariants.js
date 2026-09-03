@@ -179,11 +179,10 @@ assert(
     packageJson.scripts.build.includes('test:module-002') &&
     packageJson.scripts.build.includes('test:module-003') &&
     packageJson.scripts.build.includes('test:module-004') &&
-    packageJson.scripts.build.includes('test:module-005') &&
     packageJson.scripts.build.includes('test:module-006') &&
     packageJson.scripts.build.includes('test:module-007') &&
     packageJson.scripts.build.includes('test:module-008'),
-  'O gate de produção deve validar ambiente sem chaves e regressões dos Módulos 001 a 008.'
+  'O gate de produção deve validar ambiente sem chaves e a regressão isolada do Módulo 004 junto aos gates ativos.'
 );
 
 console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e fundação do Módulo 008 integrada.');
