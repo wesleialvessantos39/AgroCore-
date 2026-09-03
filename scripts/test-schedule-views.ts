@@ -168,14 +168,10 @@ await test('2. visão de equipe preserva todos os registros permitidos da organi
   assert.equal(items.length, 2);
 });
 
-await test('3. escopo pessoal não transforma autoria em responsabilidade', () => {
+await test('3. escopo pessoal continua incluindo registros criados pelo usuário', () => {
   assert.match(
     browseSource,
-    /Minha agenda mostra registros criados por você/
-  );
-  assert.doesNotMatch(
-    [browseSource, calendarSource].join('\n'),
-    /responsibleUserId|participantIds|assignedToUserId/
+    /Minha agenda reúne registros criados por você/
   );
 });
 
@@ -288,17 +284,30 @@ await test('10. filtro de situação continua combinável com escopo', async () 
   assert.equal(items[0]?.status, 'pending');
 });
 
-await test('11. Supabase aplica filtro pessoal no servidor', () => {
+await test('11. Supabase aplica escopo pessoal no servidor', () => {
   assert.match(
     gatewaySource,
-    /filters\.viewScope === 'personal'[\s\S]*\.eq\('created_by_user_id', actorUserId\)/
+    /filters\.viewScope === 'personal'[\s\S]*created_by_user_id\.eq\.\$\{actorUserId\}/
+  );
+  assert.match(
+    gatewaySource,
+    /responsible_user_id\.eq\.\$\{actorUserId\}/
+  );
+  assert.match(
+    gatewaySource,
+    /schedule_item_participants[\s\S]*\.eq\('user_id', actorUserId\)/
   );
 });
 
-await test('12. preview espelha o filtro pessoal do gateway remoto', () => {
+await test('12. preview espelha autoria, responsabilidade e participação', () => {
   assert.match(
     previewSource,
     /filters\.viewScope !== 'personal'[\s\S]*item\.createdByUserId === actorUserId/
+  );
+  assert.match(previewSource, /item\.responsibleUserId === actorUserId/);
+  assert.match(
+    previewSource,
+    /item\.participantUserIds\.includes\(actorUserId\)/
   );
 });
 
@@ -477,14 +486,11 @@ await test('29. navegação de mês possui ações acessíveis', () => {
   assert.match(browseSource, />Hoje</);
 });
 
-await test('30. filtros de tipo e situação são expostos sem nova mutação', () => {
+await test('30. filtros de tipo e situação continuam explícitos e independentes', () => {
   assert.match(browseSource, /<span>Tipo<\/span>/);
   assert.match(browseSource, /<span>Situação<\/span>/);
   assert.match(browseSource, /Limpar filtros/);
-  assert.doesNotMatch(
-    browseSource,
-    /completeItem|cancelItem|reopenItem|assignItem|participant/
-  );
+  assert.match(browseSource, /onFiltersChange/);
 });
 
 await test('31. controles principais mantêm alvo de toque de 44 px', () => {
@@ -504,7 +510,7 @@ await test('32. telas novas preservam apenas a paleta oficial', () => {
 await test('33. UI não exibe código interno de ordem', () => {
   assert.doesNotMatch(
     browseSource + '\n' + calendarSource,
-    /OE-008|008\.002/i
+    /OE-008|008\.00[23]/i
   );
 });
 
