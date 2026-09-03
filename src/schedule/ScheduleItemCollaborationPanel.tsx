@@ -38,8 +38,6 @@ function roleLabel(role: ScheduleMemberOption['organizationRole']): string {
       return 'Captador';
     case 'finance':
       return 'Financeiro';
-    case 'platform_super_admin':
-      return 'Superadministrador';
     default:
       return 'Integrante';
   }
