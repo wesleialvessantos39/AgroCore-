@@ -34,6 +34,11 @@ import type {
   TechnicalVisitFieldFormRevision,
   TechnicalVisitFieldSection,
 } from '../types/technicalVisitFieldForm';
+import type {
+  CompleteTechnicalVisitInput,
+  ReviseTechnicalVisitReportInput,
+  TechnicalVisitReport,
+} from '../types/technicalVisitReport';
 import { getTechnicalVisitGateway } from './gatewayFactory';
 import { TechnicalVisitService } from './technicalVisitService';
 import { TechnicalVisitPreparationService } from './preparationService';
@@ -94,6 +99,20 @@ export interface FieldVisitsContextValue {
   readonly getFieldFormRevisions: (
     visitId: string
   ) => Promise<readonly TechnicalVisitFieldFormRevision[]>;
+  readonly completeVisit: (
+    visitId: string,
+    input: CompleteTechnicalVisitInput
+  ) => Promise<import('../types/technicalVisit').TechnicalVisitCompletionResult>;
+  readonly getLatestReport: (
+    visitId: string
+  ) => Promise<TechnicalVisitReport | null>;
+  readonly getReportVersions: (
+    visitId: string
+  ) => Promise<readonly TechnicalVisitReport[]>;
+  readonly reviseReport: (
+    visitId: string,
+    input: ReviseTechnicalVisitReportInput
+  ) => Promise<TechnicalVisitReport>;
 }
 
 export const FieldVisitsContext = createContext<FieldVisitsContextValue | null>(null);
@@ -435,6 +454,31 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
     [ensureContext, fieldFormService]
   );
 
+  const completeVisit = useCallback(
+    async (visitId: string, input: CompleteTechnicalVisitInput) => {
+      const result = await service.completeVisit(ensureContext(), visitId, input);
+      await refresh();
+      return result;
+    },
+    [ensureContext, refresh, service]
+  );
+
+  const getLatestReport = useCallback(
+    (visitId: string) => service.getLatestReport(ensureContext(), visitId),
+    [ensureContext, service]
+  );
+
+  const getReportVersions = useCallback(
+    (visitId: string) => service.listReportVersions(ensureContext(), visitId),
+    [ensureContext, service]
+  );
+
+  const reviseReport = useCallback(
+    (visitId: string, input: ReviseTechnicalVisitReportInput) =>
+      service.reviseReport(ensureContext(), visitId, input),
+    [ensureContext, service]
+  );
+
   const getVisitById = useCallback(
     (visitId: string) => service.getVisitById(ensureContext(), visitId),
     [ensureContext, service]
@@ -476,20 +520,28 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
       saveFieldFormDraft,
       submitFieldForm,
       getFieldFormRevisions,
+      completeVisit,
+      getLatestReport,
+      getReportVersions,
+      reviseReport,
     }),
     [
       clearFilters,
+      completeVisit,
       createVisit,
       errorMessage,
       filters,
       getAudit,
       getFieldForm,
+      getLatestReport,
+      getReportVersions,
       getFieldFormRevisions,
       getVisitById,
       members,
       prepareVisit,
       refresh,
       responsibleMembers,
+      reviseReport,
       setFilters,
       saveFieldFormDraft,
       setChecklistItemCompletion,
