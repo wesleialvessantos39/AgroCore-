@@ -613,13 +613,13 @@ await test('45. Autoridade da evidência R3 é o imóvel, não um cliente exclus
 await test('46. Policies e Storage da R3 autorizam pela property_id', () => {
   assert.equal(
     multiClientMigration.includes(
-      'can_access_property_field_evidence(\n    organization_id,\n    property_id'
+      'can_access_property_field_evidence_by_property(\n    organization_id,\n    property_id'
     ),
     true
   );
   assert.equal(
     multiClientMigration.includes(
-      'can_access_property_field_evidence(\n        e.organization_id,\n        e.property_id'
+      'can_access_property_field_evidence_by_property(\n        e.organization_id,\n        e.property_id'
     ),
     true
   );

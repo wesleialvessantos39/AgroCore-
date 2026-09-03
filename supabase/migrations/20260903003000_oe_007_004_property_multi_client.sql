@@ -1,5 +1,6 @@
 -- AgroCore — OE-007.004 R3
 -- Autoridade definitiva por imóvel + suporte a múltiplos clientes vinculados.
+-- A função *_by_property evita alterar a assinatura nominal da função R2 já publicada.
 -- client_id permanece apenas como metadado legado/contextual e não participa
 -- de identidade, autorização ou sincronização da evidência.
 
@@ -9,7 +10,7 @@ alter table public.field_evidence_sets
 comment on column public.field_evidence_sets.client_id is
   'Contexto legado do primeiro cliente; não é autoridade. A evidência é canônica por property_id.';
 
-create or replace function agrocore_private.can_access_property_field_evidence(
+create or replace function agrocore_private.can_access_property_field_evidence_by_property(
   p_organization_id uuid,
   p_property_id uuid
 )
@@ -43,7 +44,7 @@ as $$
 $$;
 
 revoke all on function
-  agrocore_private.can_access_property_field_evidence(uuid,uuid)
+  agrocore_private.can_access_property_field_evidence_by_property(uuid,uuid)
   from public, anon, authenticated;
 
 create or replace function agrocore_private.assert_property_field_evidence_actor(
@@ -69,7 +70,7 @@ begin
     raise exception 'AGROCORE_NOT_FOUND';
   end if;
 
-  if not agrocore_private.can_access_property_field_evidence(
+  if not agrocore_private.can_access_property_field_evidence_by_property(
     p_organization_id,
     v_evidence.property_id
   ) then
@@ -91,7 +92,7 @@ on public.field_evidence_sets
 for select
 to authenticated
 using (
-  agrocore_private.can_access_property_field_evidence(
+  agrocore_private.can_access_property_field_evidence_by_property(
     organization_id,
     property_id
   )
@@ -109,7 +110,7 @@ using (
     from public.field_evidence_sets e
     where e.id = field_evidence_photos.evidence_id
       and e.organization_id = field_evidence_photos.organization_id
-      and agrocore_private.can_access_property_field_evidence(
+      and agrocore_private.can_access_property_field_evidence_by_property(
         e.organization_id,
         e.property_id
       )
@@ -128,7 +129,7 @@ using (
     from public.field_evidence_sets e
     where e.id = field_evidence_events.evidence_id
       and e.organization_id = field_evidence_events.organization_id
-      and agrocore_private.can_access_property_field_evidence(
+      and agrocore_private.can_access_property_field_evidence_by_property(
         e.organization_id,
         e.property_id
       )
@@ -147,7 +148,7 @@ using (
     from public.field_evidence_sets e
     where e.id = field_evidence_links.evidence_id
       and e.organization_id = field_evidence_links.organization_id
-      and agrocore_private.can_access_property_field_evidence(
+      and agrocore_private.can_access_property_field_evidence_by_property(
         e.organization_id,
         e.property_id
       )
@@ -207,7 +208,7 @@ begin
     raise exception 'AGROCORE_NOT_FOUND';
   end if;
 
-  if not agrocore_private.can_access_property_field_evidence(
+  if not agrocore_private.can_access_property_field_evidence_by_property(
     p_organization_id,
     p_property_id
   ) then
@@ -460,7 +461,7 @@ as $$
     from public.field_evidence_sets e
     where e.id = p_evidence_id
       and e.organization_id = p_organization_id
-      and agrocore_private.can_access_property_field_evidence(
+      and agrocore_private.can_access_property_field_evidence_by_property(
         e.organization_id,
         e.property_id
       )
@@ -484,7 +485,7 @@ using (
     from public.field_evidence_sets e
     where e.organization_id::text = split_part(name,'/',1)
       and e.id::text = split_part(name,'/',2)
-      and agrocore_private.can_access_property_field_evidence(
+      and agrocore_private.can_access_property_field_evidence_by_property(
         e.organization_id,
         e.property_id
       )
