@@ -24,10 +24,13 @@ const fieldConnectivityHook = read('src/fieldVisits/useFieldConnectivity.ts');
 const fieldDevicePolicy = read('src/fieldVisits/fieldDevice.ts');
 const scheduleTests = read('scripts/test-schedule-foundation.ts');
 const scheduleViewTests = read('scripts/test-schedule-views.ts');
+const scheduleCollaborationTests = read('scripts/test-schedule-collaboration.ts');
 const scheduleModuleGate = read('scripts/test-module-008.js');
 const schedulePage = read('src/pages/SchedulePage.tsx');
 const scheduleBrowse = read('src/schedule/ScheduleBrowsePanel.tsx');
+const scheduleCollaborationPanel = read('src/schedule/ScheduleItemCollaborationPanel.tsx');
 const scheduleViewMigration = read('supabase/migrations/20260903190345_oe_008_002_schedule_view_indexes.sql');
+const scheduleCollaborationMigration = read('supabase/migrations/20260903193026_oe_008_003_assignment_collaboration.sql');
 const scheduleMigration = read('supabase/migrations/20260903153944_oe_008_001_schedule_model.sql');
 const scheduleCommandHardening = read('supabase/migrations/20260903175453_oe_008_001_command_idempotency_hardening.sql');
 const scheduleGateway = read('src/schedule/supabaseScheduleGateway.ts');
@@ -176,6 +179,31 @@ assert(
   'A OE-008.002 deve otimizar leitura sem criar fonte canônica paralela.'
 );
 assert(
+  !scheduleCollaborationTests.includes('process.exit(0)') &&
+    scheduleCollaborationTests.includes('Resultado Atribuição e Colaboração') &&
+    scheduleModuleGate.includes("run('scripts/test-schedule-collaboration.ts')"),
+  'A suíte de atribuição e colaboração deve permanecer ativa dentro do gate do Módulo 008.'
+);
+assert(
+  scheduleCollaborationPanel.includes('Colaboração') &&
+    scheduleCollaborationPanel.includes('Concluir') &&
+    scheduleCollaborationPanel.includes('Cancelar') &&
+    scheduleCollaborationPanel.includes('Reabrir') &&
+    !scheduleCollaborationPanel.includes('OE-008'),
+  'A interface de colaboração deve manter atribuição e ciclo explícitos sem códigos internos.'
+);
+assert(
+  scheduleCollaborationMigration.includes('schedule_item_participants') &&
+    scheduleCollaborationMigration.includes('schedule_item_collaboration_revisions') &&
+    scheduleCollaborationMigration.includes('agrocore_set_schedule_collaboration') &&
+    scheduleCollaborationMigration.includes('agrocore_complete_schedule_item') &&
+    scheduleCollaborationMigration.includes('agrocore_reopen_schedule_item') &&
+    scheduleCollaborationMigration.includes('agrocore_cancel_schedule_item') &&
+    !scheduleCollaborationMigration.includes('schedule_occurrences') &&
+    !scheduleCollaborationMigration.includes('schedule_notifications'),
+  'A atribuição/ciclo deve usar persistência governada sem antecipar ocorrências ou notificações.'
+);
+assert(
   scheduleMigration.includes('create table if not exists public.schedule_items') &&
     scheduleMigration.includes('enable row level security') &&
     scheduleMigration.includes("set search_path = ''"),
@@ -206,4 +234,4 @@ assert(
   'O gate de produção deve validar ambiente sem chaves e regressões dos Módulos 001 a 008.'
 );
 
-console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e Módulo 008 integrado até listas e agenda.');
+console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e Módulo 008 integrado até atribuição e colaboração.');
