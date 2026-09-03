@@ -3,6 +3,10 @@ import type { OrganizationRole } from './auth';
 
 export type ScheduleItemKind = 'task' | 'appointment';
 export type ScheduleViewScope = 'personal' | 'team';
+export type ScheduleSourceDomain =
+  | 'technical_visit'
+  | 'appraisal'
+  | 'proposal';
 export type SchedulePriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ScheduleItemStatus =
   | 'pending'
@@ -35,7 +39,7 @@ export interface ScheduleManualOrigin {
 
 export interface ScheduleDomainEventOrigin {
   readonly type: 'domain_event';
-  readonly sourceDomain: string;
+  readonly sourceDomain: ScheduleSourceDomain;
   readonly sourceId: string;
   readonly sourceVersion: number;
   readonly sourceEventKey: string;
