@@ -18,6 +18,10 @@ const fkIndexes = fs.readFileSync(
   'supabase/migrations/20260903122147_oe_007_006_visit_fk_indexes.sql',
   'utf8'
 );
+const concurrencyHardening = fs.readFileSync(
+  'supabase/migrations/20260903122504_oe_007_006_integration_concurrency_hardening.sql',
+  'utf8'
+);
 const types = fs.readFileSync(
   'src/types/technicalVisitIntegration.ts',
   'utf8'
@@ -403,6 +407,23 @@ await test('38. FKs de visita possuem índices dedicados após o advisor', () =>
     fkIndexes,
     /technical_visit_integration_events_visit_fk_idx[\s\S]*\(visit_id\)/
   );
+});
+
+await test('39. Projeções persistentes nunca regridem source_version', () => {
+  assert.match(concurrencyHardening, /v_current\.source_version > p_source_version/);
+  assert.match(concurrencyHardening, /v_current\.source_version = p_source_version/);
+  assert.match(concurrencyHardening, /AGROCORE_IDEMPOTENCY_CONFLICT/);
+  assert.match(previewGatewaySource, /previous\.sourceVersion > input\.visit\.version/);
+  assert.match(previewGatewaySource, /previous\.sourceVersion === input\.visit\.version/);
+});
+
+await test('40. Emissão de evento serializa a chave idempotente antes da inserção', () => {
+  assert.match(concurrencyHardening, /pg_advisory_xact_lock/);
+  assert.match(
+    concurrencyHardening,
+    /p_organization_id::text \|\| ':' \|\| v_event_key/
+  );
+  assert.match(concurrencyHardening, /v_existing\.payload is distinct from p_payload/);
 });
 
 console.log(`\nResultado OE-007.006: ${passed} aprovadas, ${failed} falhas.`);
