@@ -17,10 +17,11 @@ try {
   run('scripts/test-field-visits-field-form.ts');
   run('scripts/test-field-visits-evidence.ts');
   run('scripts/test-field-visits-completion.ts');
+  run('scripts/test-field-visits-integrations.ts');
   run('scripts/test-field-visits-accessibility.ts');
   run('scripts/test-field-visits-theme.js');
   run('scripts/test-ui-copy.ts');
-  console.log('\n✅ MÓDULO 007 — OE-007.001 A OE-007.005 APROVADAS');
+  console.log('\n✅ MÓDULO 007 — OE-007.001 A OE-007.006 APROVADAS');
 } catch (error) {
   console.error('\n❌ Falha na homologação do Módulo 007.');
   process.exit(1);
