@@ -28,6 +28,11 @@ import {
 } from './fieldEvidencePolicy';
 import { getClientRegistryRequestGateway } from '../clients/clientRegistryRequestGatewayFactory';
 import { FIELD_VISIT_THEME } from './theme';
+import { useFieldConnectivity } from './useFieldConnectivity';
+import {
+  FIELD_OFFLINE_EVIDENCE_MESSAGE,
+  getGeolocationErrorMessage,
+} from './fieldDevice';
 
 const SOURCE_LABEL: Readonly<Record<FieldEvidenceLocation['source'], string>> = {
   property_reference: 'Cadastro do imóvel',
@@ -68,6 +73,8 @@ export function FieldEvidencePanel({
   const organizationId = activeOrganization?.id ?? null;
   const userId = session?.user?.id ?? null;
   const userRole = session?.organizationRole ?? 'none';
+  const connectivity = useFieldConnectivity();
+  const isOffline = connectivity === 'offline';
 
   const visitId = visit?.id;
   const appraisalId = appraisal?.id ?? visit?.appraisalId ?? undefined;
@@ -127,6 +134,12 @@ export function FieldEvidencePanel({
   );
 
   const initialize = useCallback(async () => {
+    if (isOffline) {
+      setLoading(false);
+      setMessage(FIELD_OFFLINE_EVIDENCE_MESSAGE);
+      return;
+    }
+
     if (!organizationId || !userId || !clientId) {
       setEvidence(null);
       setLoading(false);
@@ -191,6 +204,7 @@ export function FieldEvidencePanel({
     appraisalId,
     clientId,
     evidenceGateway,
+    isOffline,
     organizationId,
     properties,
     propertyId,
@@ -218,16 +232,21 @@ export function FieldEvidencePanel({
         const url = await evidenceGateway.createPhotoUrl(photo);
         return [photo.id, url] as const;
       })
-    ).then((entries) => {
-      if (!active) return;
-      setPhotoUrls(
-        Object.fromEntries(
-          entries.filter(
-            (entry): entry is readonly [string, string] => Boolean(entry[1])
+    )
+      .then((entries) => {
+        if (!active) return;
+        setPhotoUrls(
+          Object.fromEntries(
+            entries.filter(
+              (entry): entry is readonly [string, string] => Boolean(entry[1])
+            )
           )
-        )
-      );
-    });
+        );
+      })
+      .catch(() => {
+        if (!active) return;
+        setPhotoUrls({});
+      });
 
     return () => {
       active = false;
@@ -235,6 +254,11 @@ export function FieldEvidencePanel({
   }, [evidence, evidenceGateway]);
 
   const requestCapturer = async () => {
+    if (isOffline) {
+      setMessage(FIELD_OFFLINE_EVIDENCE_MESSAGE);
+      return;
+    }
+
     if (
       !organizationId ||
       !userId ||
@@ -310,6 +334,10 @@ export function FieldEvidencePanel({
   const saveLocation = useCallback(
     async (location: FieldEvidenceLocation) => {
       if (!evidence || !organizationId || !userId || !canEdit) return;
+      if (isOffline) {
+        setMessage(FIELD_OFFLINE_EVIDENCE_MESSAGE);
+        return;
+      }
 
       setWorking(true);
       setMessage(null);
@@ -333,7 +361,7 @@ export function FieldEvidencePanel({
         setWorking(false);
       }
     },
-    [canEdit, evidence, evidenceGateway, organizationId, publish, userId]
+    [canEdit, evidence, evidenceGateway, isOffline, organizationId, publish, userId]
   );
 
   const captureDeviceLocation = () => {
@@ -347,6 +375,16 @@ export function FieldEvidencePanel({
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (isOffline) {
+          setManualLatitude(String(position.coords.latitude));
+          setManualLongitude(String(position.coords.longitude));
+          setWorking(false);
+          setMessage(
+            'Localização obtida no aparelho, mas ainda não foi gravada. Reconecte e salve as coordenadas.'
+          );
+          return;
+        }
+
         void saveLocation({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -356,11 +394,9 @@ export function FieldEvidencePanel({
           capturedAt: new Date(position.timestamp).toISOString(),
         }).finally(() => setWorking(false));
       },
-      () => {
+      (error) => {
         setWorking(false);
-        setMessage(
-          'Não foi possível obter a localização. Autorize o acesso ou informe as coordenadas.'
-        );
+        setMessage(getGeolocationErrorMessage(error.code));
       },
       {
         enableHighAccuracy: true,
@@ -389,6 +425,11 @@ export function FieldEvidencePanel({
   };
 
   const uploadFiles = async (files: FileList | null) => {
+    if (isOffline) {
+      setMessage(FIELD_OFFLINE_EVIDENCE_MESSAGE);
+      return;
+    }
+
     if (
       !files ||
       !evidence ||
