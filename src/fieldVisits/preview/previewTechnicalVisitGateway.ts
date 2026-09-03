@@ -10,6 +10,14 @@ import {
   type TechnicalVisitWrite,
 } from '../../types/technicalVisit';
 import type { TechnicalVisitReport } from '../../types/technicalVisitReport';
+import type {
+  TechnicalVisitIntegrationDomain,
+  TechnicalVisitIntegrationEvent,
+  TechnicalVisitIntegrationEventType,
+  TechnicalVisitIntegrationLink,
+  TechnicalVisitIntegrationLinkStatus,
+  TechnicalVisitIntegrationSnapshot,
+} from '../../types/technicalVisitIntegration';
 
 function cloneVisit(visit: TechnicalVisit): TechnicalVisit {
   return {
@@ -55,10 +63,24 @@ function cloneReport(report: TechnicalVisitReport): TechnicalVisitReport {
   };
 }
 
+function cloneIntegrationLink(
+  link: TechnicalVisitIntegrationLink
+): TechnicalVisitIntegrationLink {
+  return { ...link, payload: { ...link.payload } };
+}
+
+function cloneIntegrationEvent(
+  event: TechnicalVisitIntegrationEvent
+): TechnicalVisitIntegrationEvent {
+  return { ...event, payload: { ...event.payload } };
+}
+
 export class PreviewTechnicalVisitGateway implements TechnicalVisitGateway {
   private readonly visits = new Map<string, TechnicalVisit>();
   private readonly audits = new Map<string, TechnicalVisitAuditEntry[]>();
   private readonly reports = new Map<string, TechnicalVisitReport[]>();
+  private readonly integrationLinks = new Map<string, TechnicalVisitIntegrationLink[]>();
+  private readonly integrationEvents = new Map<string, TechnicalVisitIntegrationEvent[]>();
 
   async listVisits(
     organizationId: string,
@@ -93,6 +115,7 @@ export class PreviewTechnicalVisitGateway implements TechnicalVisitGateway {
 
     this.visits.set(write.visit.id, cloneVisit(write.visit));
     this.appendAudit(write.audit);
+    this.syncIntegrations(write.visit, null);
     return cloneVisit(write.visit);
   }
 
@@ -111,6 +134,7 @@ export class PreviewTechnicalVisitGateway implements TechnicalVisitGateway {
 
     this.visits.set(write.visit.id, cloneVisit(write.visit));
     this.appendAudit(write.audit);
+    this.syncIntegrations(write.visit, current);
     return cloneVisit(write.visit);
   }
 
@@ -158,6 +182,7 @@ export class PreviewTechnicalVisitGateway implements TechnicalVisitGateway {
       version: current.version + 1,
     };
     this.visits.set(input.visitId, cloneVisit(completed));
+    this.syncIntegrations(completed, current);
 
     const audit: TechnicalVisitAuditEntry = {
       id: globalThis.crypto?.randomUUID?.() ?? `audit-${input.visitId}-${completed.version}`,
@@ -254,10 +279,303 @@ export class PreviewTechnicalVisitGateway implements TechnicalVisitGateway {
     return cloneReport(next);
   }
 
+  async getIntegrationSnapshot(
+    organizationId: string,
+    visitId: string
+  ): Promise<TechnicalVisitIntegrationSnapshot> {
+    const visit = this.visits.get(visitId);
+    if (!visit || visit.organizationId !== organizationId) {
+      throw new TechnicalVisitDomainError('VISIT_NOT_FOUND', 'Visita não encontrada.');
+    }
+
+    const links = (this.integrationLinks.get(visitId) ?? [])
+      .slice()
+      .sort((a, b) => a.targetDomain.localeCompare(b.targetDomain))
+      .map(cloneIntegrationLink);
+
+    const events = (this.integrationEvents.get(visitId) ?? [])
+      .slice()
+      .sort(
+        (a, b) =>
+          b.occurredAt.localeCompare(a.occurredAt) ||
+          b.id.localeCompare(a.id)
+      )
+      .map(cloneIntegrationEvent);
+
+    return {
+      visitId,
+      links: Object.freeze(links),
+      events: Object.freeze(events),
+    };
+  }
+
   clearAllSessionData(): void {
     this.visits.clear();
     this.audits.clear();
     this.reports.clear();
+    this.integrationLinks.clear();
+    this.integrationEvents.clear();
+  }
+
+  private upsertIntegrationLink(input: {
+    readonly visit: TechnicalVisit;
+    readonly domain: TechnicalVisitIntegrationDomain;
+    readonly stableReference: string;
+    readonly status: TechnicalVisitIntegrationLinkStatus;
+    readonly payload: Readonly<Record<string, unknown>>;
+  }): void {
+    const current = this.integrationLinks.get(input.visit.id) ?? [];
+    const previous = current.find((link) => link.targetDomain === input.domain);
+    const next: TechnicalVisitIntegrationLink = {
+      id: previous?.id ?? `integration-link-${input.visit.id}-${input.domain}`,
+      organizationId: input.visit.organizationId,
+      visitId: input.visit.id,
+      targetDomain: input.domain,
+      stableReference: input.stableReference,
+      status: input.status,
+      sourceVersion: input.visit.version,
+      payload: { ...input.payload },
+      createdAt: previous?.createdAt ?? input.visit.updatedAt,
+      updatedAt: input.visit.updatedAt,
+    };
+    const withoutDomain = current.filter(
+      (link) => link.targetDomain !== input.domain
+    );
+    this.integrationLinks.set(input.visit.id, [
+      ...withoutDomain,
+      cloneIntegrationLink(next),
+    ]);
+  }
+
+  private emitIntegrationEvent(input: {
+    readonly visit: TechnicalVisit;
+    readonly domain: TechnicalVisitIntegrationDomain;
+    readonly type: TechnicalVisitIntegrationEventType;
+    readonly payload: Readonly<Record<string, unknown>>;
+  }): void {
+    const eventKey =
+      `${input.visit.id}:${input.visit.version}:${input.domain}:${input.type}`;
+    const current = this.integrationEvents.get(input.visit.id) ?? [];
+    const previous = current.find((event) => event.eventKey === eventKey);
+    if (previous) {
+      const same =
+        previous.targetDomain === input.domain &&
+        previous.eventType === input.type &&
+        previous.sourceVersion === input.visit.version &&
+        JSON.stringify(previous.payload) === JSON.stringify(input.payload);
+      if (!same) {
+        throw new TechnicalVisitDomainError(
+          'CONCURRENCY_CONFLICT',
+          'Evento de integração já registrado com conteúdo divergente.'
+        );
+      }
+      return;
+    }
+
+    const event: TechnicalVisitIntegrationEvent = {
+      id: `integration-event-${eventKey}`,
+      organizationId: input.visit.organizationId,
+      visitId: input.visit.id,
+      eventKey,
+      targetDomain: input.domain,
+      eventType: input.type,
+      sourceVersion: input.visit.version,
+      occurredAt: input.visit.updatedAt,
+      payload: { ...input.payload },
+    };
+    this.integrationEvents.set(input.visit.id, [
+      ...current,
+      cloneIntegrationEvent(event),
+    ]);
+  }
+
+  private syncIntegrations(
+    visit: TechnicalVisit,
+    previous: TechnicalVisit | null
+  ): void {
+    const terminal = visit.status === 'completed' || visit.status === 'cancelled';
+    const calendarStatus: TechnicalVisitIntegrationLinkStatus =
+      terminal ? 'released' : 'active';
+    const calendarPayload: Readonly<Record<string, unknown>> = {
+      organizationId: visit.organizationId,
+      visitId: visit.id,
+      targetDomain: 'calendar',
+      stableReference: visit.id,
+      status: calendarStatus,
+      sourceVersion: visit.version,
+      scheduledFor: visit.scheduledFor,
+      responsibleUserId: visit.responsibleUserId,
+      participantUserIds: visit.preparation?.participantUserIds ?? [],
+      durationMinutes: visit.preparation?.durationMinutes ?? null,
+      timeZone: visit.preparation?.timeZone ?? null,
+      address: visit.preparation?.address ?? null,
+    };
+    this.upsertIntegrationLink({
+      visit,
+      domain: 'calendar',
+      stableReference: visit.id,
+      status: calendarStatus,
+      payload: calendarPayload,
+    });
+
+    const calendarChanged =
+      !previous ||
+      previous.scheduledFor !== visit.scheduledFor ||
+      previous.responsibleUserId !== visit.responsibleUserId ||
+      previous.status !== visit.status ||
+      JSON.stringify(previous.preparation) !== JSON.stringify(visit.preparation);
+
+    if (calendarChanged) {
+      this.emitIntegrationEvent({
+        visit,
+        domain: 'calendar',
+        type: terminal
+          ? 'calendar.visit_release_requested'
+          : 'calendar.visit_sync_requested',
+        payload: calendarPayload,
+      });
+    }
+
+    const oldProposalId = previous?.proposalId ?? null;
+    const newProposalId = visit.proposalId;
+    if (oldProposalId !== newProposalId) {
+      if (oldProposalId) {
+        const oldPayload: Readonly<Record<string, unknown>> = {
+          organizationId: visit.organizationId,
+          visitId: visit.id,
+          targetDomain: 'proposal',
+          stableReference: oldProposalId,
+          status: 'released',
+          sourceVersion: visit.version,
+          clientId: visit.clientId,
+          propertyId: visit.propertyId,
+          visitStatus: visit.status,
+        };
+        this.emitIntegrationEvent({
+          visit,
+          domain: 'proposal',
+          type: 'proposal.visit_unlinked',
+          payload: oldPayload,
+        });
+      }
+
+      if (newProposalId) {
+        const proposalPayload: Readonly<Record<string, unknown>> = {
+          organizationId: visit.organizationId,
+          visitId: visit.id,
+          targetDomain: 'proposal',
+          stableReference: newProposalId,
+          status: 'active',
+          sourceVersion: visit.version,
+          clientId: visit.clientId,
+          propertyId: visit.propertyId,
+          visitStatus: visit.status,
+        };
+        this.upsertIntegrationLink({
+          visit,
+          domain: 'proposal',
+          stableReference: newProposalId,
+          status: 'active',
+          payload: proposalPayload,
+        });
+        this.emitIntegrationEvent({
+          visit,
+          domain: 'proposal',
+          type: oldProposalId
+            ? 'proposal.visit_relinked'
+            : 'proposal.visit_linked',
+          payload: proposalPayload,
+        });
+      } else if (oldProposalId) {
+        const releasedPayload: Readonly<Record<string, unknown>> = {
+          organizationId: visit.organizationId,
+          visitId: visit.id,
+          targetDomain: 'proposal',
+          stableReference: oldProposalId,
+          status: 'released',
+          sourceVersion: visit.version,
+          clientId: visit.clientId,
+          propertyId: visit.propertyId,
+          visitStatus: visit.status,
+        };
+        this.upsertIntegrationLink({
+          visit,
+          domain: 'proposal',
+          stableReference: oldProposalId,
+          status: 'released',
+          payload: releasedPayload,
+        });
+      }
+    } else if (newProposalId) {
+      const proposalPayload: Readonly<Record<string, unknown>> = {
+        organizationId: visit.organizationId,
+        visitId: visit.id,
+        targetDomain: 'proposal',
+        stableReference: newProposalId,
+        status: 'active',
+        sourceVersion: visit.version,
+        clientId: visit.clientId,
+        propertyId: visit.propertyId,
+        visitStatus: visit.status,
+      };
+      this.upsertIntegrationLink({
+        visit,
+        domain: 'proposal',
+        stableReference: newProposalId,
+        status: 'active',
+        payload: proposalPayload,
+      });
+      if (previous?.status !== visit.status) {
+        this.emitIntegrationEvent({
+          visit,
+          domain: 'proposal',
+          type: 'proposal.visit_status_changed',
+          payload: proposalPayload,
+        });
+      }
+    }
+
+    const fleetStatus: TechnicalVisitIntegrationLinkStatus =
+      terminal ? 'released' : 'active';
+    const fleetPayload: Readonly<Record<string, unknown>> = {
+      organizationId: visit.organizationId,
+      visitId: visit.id,
+      targetDomain: 'fleet',
+      stableReference: visit.id,
+      status: fleetStatus,
+      sourceVersion: visit.version,
+      scheduledFor: visit.scheduledFor,
+      responsibleUserId: visit.responsibleUserId,
+      propertyId: visit.propertyId,
+      durationMinutes: visit.preparation?.durationMinutes ?? null,
+      address: visit.preparation?.address ?? null,
+    };
+    this.upsertIntegrationLink({
+      visit,
+      domain: 'fleet',
+      stableReference: visit.id,
+      status: fleetStatus,
+      payload: fleetPayload,
+    });
+
+    const fleetChanged =
+      !previous ||
+      previous.scheduledFor !== visit.scheduledFor ||
+      previous.responsibleUserId !== visit.responsibleUserId ||
+      previous.propertyId !== visit.propertyId ||
+      previous.status !== visit.status ||
+      JSON.stringify(previous.preparation) !== JSON.stringify(visit.preparation);
+
+    if (fleetChanged) {
+      this.emitIntegrationEvent({
+        visit,
+        domain: 'fleet',
+        type: terminal
+          ? 'fleet.visit_release_requested'
+          : 'fleet.visit_sync_requested',
+        payload: fleetPayload,
+      });
+    }
   }
 
   private appendAudit(entry: TechnicalVisitAuditEntry): void {
