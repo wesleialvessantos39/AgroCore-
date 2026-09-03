@@ -16,10 +16,14 @@ import {
 } from './calendar';
 import { formatScheduleInstant } from './time';
 import { SCHEDULE_THEME } from './theme';
+import { ScheduleItemCollaborationPanel } from './ScheduleItemCollaborationPanel';
 import type {
   ScheduleItem,
   ScheduleItemListFilters,
+  ScheduleMemberOption,
   SchedulePriority,
+  ScheduleTransitionInput,
+  SetScheduleCollaborationInput,
   ScheduleRecurrenceFrequency,
   ScheduleViewScope,
 } from '../types/schedule';
@@ -119,7 +123,37 @@ function recurrenceDescription(item: ScheduleItem): string {
     : interval + weekdays;
 }
 
-function ScheduleItemCard({ item }: { readonly item: ScheduleItem }) {
+function ScheduleItemCard({
+  item,
+  members,
+  currentUserId,
+  canManage,
+  onSetCollaboration,
+  onComplete,
+  onReopen,
+  onCancel,
+}: {
+  readonly item: ScheduleItem;
+  readonly members: readonly ScheduleMemberOption[];
+  readonly currentUserId: string | null;
+  readonly canManage: boolean;
+  readonly onSetCollaboration: (
+    scheduleItemId: string,
+    input: SetScheduleCollaborationInput
+  ) => Promise<ScheduleItem>;
+  readonly onComplete: (
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ) => Promise<ScheduleItem>;
+  readonly onReopen: (
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ) => Promise<ScheduleItem>;
+  readonly onCancel: (
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ) => Promise<ScheduleItem>;
+}) {
   return (
     <article
       className={SCHEDULE_THEME.surface + ' min-w-0 p-4 sm:p-5'}
@@ -174,6 +208,17 @@ function ScheduleItemCard({ item }: { readonly item: ScheduleItem }) {
           </dd>
         </div>
       </dl>
+
+      <ScheduleItemCollaborationPanel
+        item={item}
+        members={members}
+        currentUserId={currentUserId}
+        canManage={canManage}
+        onSetCollaboration={onSetCollaboration}
+        onComplete={onComplete}
+        onReopen={onReopen}
+        onCancel={onCancel}
+      />
     </article>
   );
 }
@@ -195,9 +240,28 @@ export interface ScheduleBrowsePanelProps {
   readonly items: readonly ScheduleItem[];
   readonly filters: ScheduleItemListFilters;
   readonly isLoading: boolean;
+  readonly members: readonly ScheduleMemberOption[];
+  readonly currentUserId: string | null;
+  readonly canManage: boolean;
   readonly onFiltersChange: (
     filters: Partial<ScheduleItemListFilters>
   ) => void;
+  readonly onSetCollaboration: (
+    scheduleItemId: string,
+    input: SetScheduleCollaborationInput
+  ) => Promise<ScheduleItem>;
+  readonly onComplete: (
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ) => Promise<ScheduleItem>;
+  readonly onReopen: (
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ) => Promise<ScheduleItem>;
+  readonly onCancel: (
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ) => Promise<ScheduleItem>;
 }
 
 export function ScheduleBrowsePanel({
@@ -205,7 +269,14 @@ export function ScheduleBrowsePanel({
   items,
   filters,
   isLoading,
+  members,
+  currentUserId,
+  canManage,
   onFiltersChange,
+  onSetCollaboration,
+  onComplete,
+  onReopen,
+  onCancel,
 }: ScheduleBrowsePanelProps) {
   const viewTimeZone = useMemo(browserTimeZone, []);
   const [mode, setMode] = useState<SchedulePresentationMode>('list');
@@ -249,8 +320,9 @@ export function ScheduleBrowsePanel({
               </h2>
             </div>
             <p className="mt-1 text-sm text-[#0B3D2E]/70">
-              Minha agenda mostra registros criados por você. Equipe mostra
-              os registros da organização que seu perfil já pode consultar.
+              Minha agenda reúne registros criados por você, sob sua
+              responsabilidade ou com sua participação. Equipe mostra os
+              registros da organização que seu perfil já pode consultar.
             </p>
           </div>
 
@@ -421,7 +493,17 @@ export function ScheduleBrowsePanel({
             aria-label="Lista de tarefas e compromissos"
           >
             {items.map((item) => (
-              <ScheduleItemCard key={item.id} item={item} />
+              <ScheduleItemCard
+                key={item.id}
+                item={item}
+                members={members}
+                currentUserId={currentUserId}
+                canManage={canManage}
+                onSetCollaboration={onSetCollaboration}
+                onComplete={onComplete}
+                onReopen={onReopen}
+                onCancel={onCancel}
+              />
             ))}
           </div>
         )}
@@ -575,7 +657,17 @@ export function ScheduleBrowsePanel({
                 </p>
                 <div className="mt-3 grid min-w-0 gap-3">
                   {calendar.undatedItems.map((item) => (
-                    <ScheduleItemCard key={item.id} item={item} />
+                    <ScheduleItemCard
+                      key={item.id}
+                      item={item}
+                      members={members}
+                      currentUserId={currentUserId}
+                      canManage={canManage}
+                      onSetCollaboration={onSetCollaboration}
+                      onComplete={onComplete}
+                      onReopen={onReopen}
+                      onCancel={onCancel}
+                    />
                   ))}
                 </div>
               </section>
