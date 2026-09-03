@@ -88,6 +88,25 @@ test('15. informações do registro usam lista descritiva semântica', () => {
   assert.match(page, /<dd/);
 });
 
+test('16. recorrência semanal usa fieldset e legend semânticos', () => {
+  assert.match(page, /<fieldset/);
+  assert.match(page, /<legend/);
+  assert.match(page, /Dias da semana/);
+});
+
+test('17. dias semanais usam checkboxes acessíveis e alvo mínimo', () => {
+  assert.match(page, /type="checkbox"/);
+  assert.match(page, /min-h-\[44px\]/);
+  assert.match(page, /focus-within:ring-2/);
+});
+
+test('18. envio semanal é bloqueado até existir dia selecionado', () => {
+  assert.match(
+    page,
+    /recurrenceFrequency === 'weekly'[\s\S]*recurrenceWeekdays\.length === 0/
+  );
+});
+
 console.log('\n====================================================');
 console.log(
   'Resultado acessibilidade Agenda: ' +
