@@ -15,9 +15,13 @@ import {
   type CreateCalendarAppointmentInput,
   type CreateCorporateTaskInput,
   type ScheduleApplicationContext,
+  type ScheduleCollaborationRevision,
   type ScheduleItem,
   type ScheduleItemAuditEntry,
   type ScheduleItemListFilters,
+  type ScheduleMemberOption,
+  type ScheduleTransitionInput,
+  type SetScheduleCollaborationInput,
   type UpdateScheduleItemInput,
 } from '../types/schedule';
 import { getScheduleGateway } from './gatewayFactory';
@@ -34,6 +38,9 @@ export type ScheduleContextStatus =
 export interface ScheduleContextValue {
   readonly status: ScheduleContextStatus;
   readonly items: readonly ScheduleItem[];
+  readonly eligibleMembers: readonly ScheduleMemberOption[];
+  readonly currentUserId: string | null;
+  readonly canManage: boolean;
   readonly filters: ScheduleItemListFilters;
   readonly isLoading: boolean;
   readonly errorMessage: string | null;
@@ -44,6 +51,9 @@ export interface ScheduleContextValue {
   readonly getAudit: (
     scheduleItemId: string
   ) => Promise<readonly ScheduleItemAuditEntry[]>;
+  readonly getCollaborationRevisions: (
+    scheduleItemId: string
+  ) => Promise<readonly ScheduleCollaborationRevision[]>;
   readonly createTask: (
     input: Omit<CreateCorporateTaskInput, 'kind'>
   ) => Promise<ScheduleItem>;
@@ -53,6 +63,22 @@ export interface ScheduleContextValue {
   readonly updateItem: (
     scheduleItemId: string,
     input: UpdateScheduleItemInput
+  ) => Promise<ScheduleItem>;
+  readonly setCollaboration: (
+    scheduleItemId: string,
+    input: SetScheduleCollaborationInput
+  ) => Promise<ScheduleItem>;
+  readonly completeItem: (
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ) => Promise<ScheduleItem>;
+  readonly reopenItem: (
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ) => Promise<ScheduleItem>;
+  readonly cancelItem: (
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
   ) => Promise<ScheduleItem>;
 }
 
@@ -81,6 +107,8 @@ export function ScheduleProvider({
   const [status, setStatus] =
     useState<ScheduleContextStatus>('idle');
   const [items, setItems] = useState<readonly ScheduleItem[]>([]);
+  const [eligibleMembers, setEligibleMembers] =
+    useState<readonly ScheduleMemberOption[]>([]);
   const [filters, setFiltersState] =
     useState<ScheduleItemListFilters>(EMPTY_FILTERS);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -92,6 +120,7 @@ export function ScheduleProvider({
   const organizationId = activeOrganization?.id ?? null;
   const userId = session?.user?.id ?? null;
   const canView = can('schedule:view');
+  const canManage = can('schedule:manage');
 
   const gateway = useMemo(() => getScheduleGateway(), []);
   const service = useMemo(() => new ScheduleService(gateway), [gateway]);
@@ -130,6 +159,7 @@ export function ScheduleProvider({
     abortRef.current?.abort();
     abortRef.current = null;
     setItems([]);
+    setEligibleMembers([]);
     setErrorMessage(null);
     setStatus('idle');
   }, []);
@@ -149,11 +179,36 @@ export function ScheduleProvider({
     setErrorMessage(null);
 
     try {
-      const nextItems = await service.listItems(
-        applicationContext,
-        filters,
-        controller.signal
-      );
+      const [nextItems, memberResult] = await Promise.all([
+        service.listItems(
+          applicationContext,
+          filters,
+          controller.signal
+        ),
+        service
+          .listEligibleMembers(applicationContext, controller.signal)
+          .catch(() => [] as readonly ScheduleMemberOption[]),
+      ]);
+
+      const currentMember: ScheduleMemberOption | null =
+        applicationContext.actor.role !== 'none'
+          ? {
+              userId: applicationContext.actor.userId,
+              organizationRole: applicationContext.actor.role,
+              displayName:
+                session?.user?.name?.trim() ||
+                'Integrante da organização',
+            }
+          : null;
+
+      const nextMembers = currentMember
+        ? [
+            currentMember,
+            ...memberResult.filter(
+              (member) => member.userId !== currentMember.userId
+            ),
+          ]
+        : memberResult;
       if (
         controller.signal.aborted ||
         requestId !== sequenceRef.current ||
@@ -162,6 +217,7 @@ export function ScheduleProvider({
         return;
       }
       setItems(nextItems);
+      setEligibleMembers(nextMembers);
       setStatus(nextItems.length === 0 ? 'empty' : 'ready');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -191,6 +247,7 @@ export function ScheduleProvider({
     organizationId,
     reset,
     service,
+    session?.user?.name,
   ]);
 
   useEffect(() => {
@@ -274,6 +331,79 @@ export function ScheduleProvider({
     [ensureContext, service]
   );
 
+  const getCollaborationRevisions = useCallback(
+    (scheduleItemId: string) =>
+      service.listCollaborationRevisions(
+        ensureContext(),
+        scheduleItemId
+      ),
+    [ensureContext, service]
+  );
+
+  const setCollaboration = useCallback(
+    async (
+      scheduleItemId: string,
+      input: SetScheduleCollaborationInput
+    ) => {
+      const updated = await service.setCollaboration(
+        ensureContext(),
+        scheduleItemId,
+        input
+      );
+      await refresh();
+      return updated;
+    },
+    [ensureContext, refresh, service]
+  );
+
+  const completeItem = useCallback(
+    async (
+      scheduleItemId: string,
+      input: ScheduleTransitionInput
+    ) => {
+      const updated = await service.completeItem(
+        ensureContext(),
+        scheduleItemId,
+        input
+      );
+      await refresh();
+      return updated;
+    },
+    [ensureContext, refresh, service]
+  );
+
+  const reopenItem = useCallback(
+    async (
+      scheduleItemId: string,
+      input: ScheduleTransitionInput
+    ) => {
+      const updated = await service.reopenItem(
+        ensureContext(),
+        scheduleItemId,
+        input
+      );
+      await refresh();
+      return updated;
+    },
+    [ensureContext, refresh, service]
+  );
+
+  const cancelItem = useCallback(
+    async (
+      scheduleItemId: string,
+      input: ScheduleTransitionInput
+    ) => {
+      const updated = await service.cancelItem(
+        ensureContext(),
+        scheduleItemId,
+        input
+      );
+      await refresh();
+      return updated;
+    },
+    [ensureContext, refresh, service]
+  );
+
   const setFilters = useCallback(
     (next: Partial<ScheduleItemListFilters>) => {
       setFiltersState((current) => ({ ...current, ...next }));
@@ -289,6 +419,9 @@ export function ScheduleProvider({
     () => ({
       status,
       items,
+      eligibleMembers,
+      currentUserId: userId,
+      canManage,
       filters,
       isLoading: status === 'loading',
       errorMessage,
@@ -297,23 +430,36 @@ export function ScheduleProvider({
       refresh,
       getItemById,
       getAudit,
+      getCollaborationRevisions,
       createTask,
       createAppointment,
       updateItem,
+      setCollaboration,
+      completeItem,
+      reopenItem,
+      cancelItem,
     }),
     [
       clearFilters,
+      canManage,
+      cancelItem,
+      completeItem,
       createAppointment,
       createTask,
+      eligibleMembers,
       errorMessage,
       filters,
       getAudit,
+      getCollaborationRevisions,
       getItemById,
       items,
       refresh,
+      reopenItem,
+      setCollaboration,
       setFilters,
       status,
       updateItem,
+      userId,
     ]
   );
 
