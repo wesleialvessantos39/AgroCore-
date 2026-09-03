@@ -94,6 +94,10 @@ const migration = fs.readFileSync(
   'supabase/migrations/20260903153944_oe_008_001_schedule_model.sql',
   'utf8'
 );
+const fkHardening = fs.readFileSync(
+  'supabase/migrations/20260903155402_oe_008_001_schedule_fk_hardening.sql',
+  'utf8'
+);
 const page = fs.readFileSync('src/pages/SchedulePage.tsx', 'utf8');
 const paths = fs.readFileSync('src/routes/paths.ts', 'utf8');
 const routeMatrix = fs.readFileSync(
@@ -644,6 +648,17 @@ await test('50. contratos de origem preservam referência sem copiar domínio', 
   assert.doesNotMatch(
     migration,
     /client_name|property_name|proposal_title/i
+  );
+});
+
+await test('51. hardening cobre diretamente a FK da auditoria', () => {
+  assert.match(
+    fkHardening,
+    /schedule_item_audit_schedule_item_fk_idx/
+  );
+  assert.match(
+    fkHardening,
+    /on public\.schedule_item_audit \(schedule_item_id\)/
   );
 });
 
