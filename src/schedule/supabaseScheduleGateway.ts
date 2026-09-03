@@ -264,6 +264,7 @@ export class SupabaseScheduleGateway implements ScheduleGateway {
 
   async listItems(
     organizationId: string,
+    actorUserId: string,
     filters: ScheduleItemListFilters = {},
     signal?: AbortSignal
   ): Promise<readonly ScheduleItem[]> {
@@ -272,6 +273,9 @@ export class SupabaseScheduleGateway implements ScheduleGateway {
       .select(ITEM_COLUMNS)
       .eq('organization_id', organizationId);
 
+    if (filters.viewScope === 'personal') {
+      request = request.eq('created_by_user_id', actorUserId);
+    }
     if (filters.kind && filters.kind !== 'all') {
       request = request.eq('item_kind', filters.kind);
     }
