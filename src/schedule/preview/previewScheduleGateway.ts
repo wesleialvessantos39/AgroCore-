@@ -38,7 +38,11 @@ export class PreviewScheduleGateway implements ScheduleGateway {
   private readonly audits = new Map<string, ScheduleItemAuditEntry[]>();
   private readonly idempotency = new Map<
     string,
-    { readonly fingerprint: string; readonly itemId: string }
+    {
+      readonly commandType: 'create' | 'update';
+      readonly fingerprint: string;
+      readonly itemId: string;
+    }
   >();
 
   async listItems(
@@ -91,7 +95,10 @@ export class PreviewScheduleGateway implements ScheduleGateway {
     const fingerprint = payloadFingerprint(input.payload);
     const previous = this.idempotency.get(idempotencyKey);
     if (previous) {
-      if (previous.fingerprint !== fingerprint) {
+      if (
+        previous.commandType !== 'create' ||
+        previous.fingerprint !== fingerprint
+      ) {
         throw new ScheduleDomainError(
           'IDEMPOTENCY_CONFLICT',
           'A operação já foi utilizada com conteúdo diferente.'
@@ -155,7 +162,11 @@ export class PreviewScheduleGateway implements ScheduleGateway {
           };
 
     this.items.set(id, cloneItem(item));
-    this.idempotency.set(idempotencyKey, { fingerprint, itemId: id });
+    this.idempotency.set(idempotencyKey, {
+      commandType: 'create',
+      fingerprint,
+      itemId: id,
+    });
 
     const audit: ScheduleItemAuditEntry = {
       id: `audit-${id}-1`,
@@ -182,6 +193,38 @@ export class PreviewScheduleGateway implements ScheduleGateway {
   async updateItem(
     input: UpdateScheduleItemGatewayInput
   ): Promise<ScheduleItem> {
+    const idempotencyKey =
+      input.organizationId + ':' + input.idempotencyKey;
+    const fingerprint = payloadFingerprint({
+      scheduleItemId: input.scheduleItemId,
+      expectedVersion: input.expectedVersion,
+      payload: input.payload,
+      reason: input.reason.trim(),
+    });
+    const previous = this.idempotency.get(idempotencyKey);
+
+    if (previous) {
+      if (
+        previous.commandType !== 'update' ||
+        previous.itemId !== input.scheduleItemId ||
+        previous.fingerprint !== fingerprint
+      ) {
+        throw new ScheduleDomainError(
+          'IDEMPOTENCY_CONFLICT',
+          'A operação já foi utilizada com conteúdo diferente.'
+        );
+      }
+
+      const replayed = this.items.get(previous.itemId);
+      if (!replayed || replayed.organizationId !== input.organizationId) {
+        throw new ScheduleDomainError(
+          'ITEM_NOT_FOUND',
+          'Registro de agenda não encontrado.'
+        );
+      }
+      return cloneItem(replayed);
+    }
+
     const current = this.items.get(input.scheduleItemId);
     if (
       !current ||
@@ -276,6 +319,11 @@ export class PreviewScheduleGateway implements ScheduleGateway {
     }
 
     this.items.set(next.id, cloneItem(next));
+    this.idempotency.set(idempotencyKey, {
+      commandType: 'update',
+      fingerprint,
+      itemId: next.id,
+    });
     const audit: ScheduleItemAuditEntry = {
       id: `audit-${next.id}-${next.version}`,
       organizationId: next.organizationId,
