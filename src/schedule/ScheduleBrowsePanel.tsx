@@ -100,6 +100,15 @@ function itemTimeLabel(item: ScheduleItem): string {
   }
 }
 
+function originLabel(item: ScheduleItem): string {
+  if (item.origin.type === 'manual') return 'Origem manual';
+  if (item.origin.sourceDomain === 'technical_visit') {
+    return 'Origem: visita técnica';
+  }
+  if (item.origin.sourceDomain === 'appraisal') return 'Origem: laudo';
+  return 'Origem: proposta';
+}
+
 function recurrenceDescription(item: ScheduleItem): string {
   if (item.recurrence.frequency === 'none') {
     return 'Sem recorrência';
@@ -184,9 +193,7 @@ function ScheduleItemCard({
           )}
         </div>
         <span className="shrink-0 text-xs font-medium text-[#0B3D2E]/55">
-          {item.origin.type === 'manual'
-            ? 'Origem manual'
-            : 'Origem integrada'}
+          {originLabel(item)}
         </span>
       </div>
 
