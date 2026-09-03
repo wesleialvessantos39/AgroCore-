@@ -66,6 +66,8 @@ export function SchedulePage() {
   const {
     status,
     items,
+    eligibleMembers,
+    currentUserId,
     filters,
     isLoading,
     errorMessage,
@@ -73,6 +75,10 @@ export function SchedulePage() {
     refresh,
     createTask,
     createAppointment,
+    setCollaboration,
+    completeItem,
+    reopenItem,
+    cancelItem,
   } = useSchedule();
   const { can } = useAuthorization();
   const canManage = can('schedule:manage');
@@ -575,7 +581,14 @@ export function SchedulePage() {
           items={items}
           filters={filters}
           isLoading={isLoading}
+          members={eligibleMembers}
+          currentUserId={currentUserId}
+          canManage={canManage}
           onFiltersChange={setFilters}
+          onSetCollaboration={setCollaboration}
+          onComplete={completeItem}
+          onReopen={reopenItem}
+          onCancel={cancelItem}
         />
       )}
     </div>
