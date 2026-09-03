@@ -7,6 +7,7 @@ import { useFieldVisits } from '../fieldVisits/useFieldVisits';
 import { FIELD_VISIT_THEME } from '../fieldVisits/theme';
 import { VisitPreparationPanel } from '../fieldVisits/VisitPreparationPanel';
 import { VisitFieldFormPanel } from '../fieldVisits/VisitFieldFormPanel';
+import { VisitCompletionReportPanel } from '../fieldVisits/VisitCompletionReportPanel';
 import {
   FieldEvidencePanel,
   appraisalEvidenceSnapshot,
@@ -462,6 +463,11 @@ export const FieldVisitsPage: React.FC = () => {
             const preparationReady =
               Boolean(visit.preparation) && pendingRequiredChecklist === 0;
             const fieldFormReady = fieldFormSubmitted[visit.id] === true;
+            const canAccessFinalReport =
+              ['owner', 'company_admin', 'manager'].includes(
+                session?.organizationRole ?? ''
+              ) ||
+              (session?.organizationRole === 'project_designer' && isResponsible);
             const canCancel =
               canSchedule &&
               (visit.status === 'planned' ||
@@ -532,22 +538,6 @@ export const FieldVisitsPage: React.FC = () => {
                         Iniciar
                       </button>
                     )}
-                    {visit.status === 'in_progress' && canExecute && isResponsible && (
-                      <button
-                        type="button"
-                        className={FIELD_VISIT_THEME.buttonPrimary}
-                        disabled={busyId === visit.id || !fieldFormReady}
-                        title={
-                          fieldFormReady
-                            ? 'Concluir visita'
-                            : 'Envie o formulário de campo antes de concluir'
-                        }
-                        onClick={() => void transition(visit, 'completed')}
-                      >
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                        Concluir
-                      </button>
-                    )}
                     {canCancel && cancelVisitId !== visit.id && (
                       <button
                         type="button"
@@ -607,6 +597,14 @@ export const FieldVisitsPage: React.FC = () => {
                     />
                   </div>
                 )}
+
+                <VisitCompletionReportPanel
+                  visit={visit}
+                  canAccess={canAccessFinalReport}
+                  canComplete={canExecute && isResponsible}
+                  completionReady={fieldFormReady}
+                  canRevise={canAccessFinalReport}
+                />
 
                 {visit.status === 'confirmed' && isResponsible && !preparationReady && (
                   <p
