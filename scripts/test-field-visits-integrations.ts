@@ -22,6 +22,10 @@ const concurrencyHardening = fs.readFileSync(
   'supabase/migrations/20260903122504_oe_007_006_integration_concurrency_hardening.sql',
   'utf8'
 );
+const stableReferenceIndex = fs.readFileSync(
+  'supabase/migrations/20260903122955_oe_007_006_stable_reference_index.sql',
+  'utf8'
+);
 const types = fs.readFileSync(
   'src/types/technicalVisitIntegration.ts',
   'utf8'
@@ -424,6 +428,13 @@ await test('40. Emissão de evento serializa a chave idempotente antes da inser�
     /p_organization_id::text \|\| ':' \|\| v_event_key/
   );
   assert.match(concurrencyHardening, /v_existing\.payload is distinct from p_payload/);
+});
+
+await test('41. Referências estáveis possuem lookup reverso multiempresa', () => {
+  assert.match(
+    stableReferenceIndex,
+    /organization_id,[\s\S]*target_domain,[\s\S]*stable_reference,[\s\S]*status/
+  );
 });
 
 console.log(`\nResultado OE-007.006: ${passed} aprovadas, ${failed} falhas.`);
