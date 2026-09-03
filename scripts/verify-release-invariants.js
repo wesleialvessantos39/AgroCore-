@@ -19,6 +19,9 @@ const fieldPreparationTests = read('scripts/test-field-visits-preparation.ts');
 const fieldFormTests = read('scripts/test-field-visits-field-form.ts');
 const fieldEvidenceTests = read('scripts/test-field-visits-evidence.ts');
 const fieldAccessibilityTests = read('scripts/test-field-visits-accessibility.ts');
+const fieldHomologationTests = read('scripts/test-field-visits-field-homologation.ts');
+const fieldConnectivityHook = read('src/fieldVisits/useFieldConnectivity.ts');
+const fieldDevicePolicy = read('src/fieldVisits/fieldDevice.ts');
 const fieldPreparationPanel = read('src/fieldVisits/VisitPreparationPanel.tsx');
 const fieldFormPanel = read('src/fieldVisits/VisitFieldFormPanel.tsx');
 const fieldEvidencePanel = read('src/fieldVisits/FieldEvidencePanel.tsx');
@@ -67,6 +70,11 @@ assert(
 assert(
   !fieldEvidenceTests.includes('process.exit(0)'),
   'A suíte da OE-007.004 não pode conter interrupções de diagnóstico.'
+);
+assert(
+  !fieldHomologationTests.includes('process.exit(0)') &&
+    fieldHomologationTests.includes('Resultado OE-007.007'),
+  'A suíte da OE-007.007 deve permanecer ativa e sem interrupções de diagnóstico.'
 );
 assert(
   fieldPreparationPanel.includes('Fuso horário') &&
@@ -119,6 +127,14 @@ assert(
   'A auditoria estrutural de responsividade e acessibilidade do Módulo 007 deve permanecer ativa.'
 );
 assert(
+  fieldConnectivityHook.includes("addEventListener('online'") &&
+    fieldConnectivityHook.includes("addEventListener('offline'") &&
+    fieldFormPanel.includes('FIELD_OFFLINE_DRAFT_MESSAGE') &&
+    fieldEvidencePanel.includes('FIELD_OFFLINE_EVIDENCE_MESSAGE') &&
+    fieldDevicePolicy.includes('getGeolocationErrorMessage'),
+  'A OE-007.007 deve manter conectividade, retomada de rascunho e tratamento de permissões de localização.'
+);
+assert(
   !Object.prototype.hasOwnProperty.call(packageJson.scripts ?? {}, 'prebuild'),
   'O build de produção não pode depender do prebuild temporário de diagnóstico.'
 );
@@ -132,4 +148,4 @@ assert(
   'O gate de produção deve executar as homologações de código dos Módulos 001, 002, 003, 006 e 007.'
 );
 
-console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e Módulo 007 integrado até OE-007.004.');
+console.log('✅ Invariantes de release aprovadas: entrada pública, login utilizável e Módulo 007 integrado até OE-007.007.');
