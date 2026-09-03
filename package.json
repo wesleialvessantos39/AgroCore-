@@ -64,7 +64,8 @@
     "lint": "tsc --noEmit",
     "test:field-visits-field-form": "node --import tsx scripts/test-field-visits-field-form.ts",
     "test:field-visits-evidence": "node --import tsx scripts/test-field-visits-evidence.ts",
-    "test:field-visits-completion": "node --import tsx scripts/test-field-visits-completion.ts"
+    "test:field-visits-completion": "node --import tsx scripts/test-field-visits-completion.ts",
+    "test:field-visits-integrations": "node --import tsx scripts/test-field-visits-integrations.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
