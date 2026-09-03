@@ -18,6 +18,7 @@ export class UnavailableScheduleGateway implements ScheduleGateway {
 
   async listItems(
     _organizationId: string,
+    _actorUserId: string,
     _filters?: ScheduleItemListFilters,
     _signal?: AbortSignal
   ): Promise<readonly ScheduleItem[]> {
