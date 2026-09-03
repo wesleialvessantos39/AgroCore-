@@ -9,6 +9,7 @@ import type {
 } from '../types/technicalVisitIntegration';
 import { useFieldVisits } from './useFieldVisits';
 import { FIELD_VISIT_THEME } from './theme';
+import { useFieldConnectivity } from './useFieldConnectivity';
 
 const DOMAIN_LABEL: Readonly<Record<TechnicalVisitIntegrationDomain, string>> = {
   calendar: 'Agenda',
@@ -76,6 +77,8 @@ export function VisitIntegrationPanel({
   canAccess,
 }: VisitIntegrationPanelProps) {
   const { getIntegrationSnapshot } = useFieldVisits();
+  const connectivity = useFieldConnectivity();
+  const isOffline = connectivity === 'offline';
   const [snapshot, setSnapshot] =
     useState<TechnicalVisitIntegrationSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,6 +88,14 @@ export function VisitIntegrationPanel({
     if (!canAccess) {
       setSnapshot(null);
       setErrorMessage(null);
+      return;
+    }
+
+    if (isOffline) {
+      setLoading(false);
+      setErrorMessage(
+        'Sem conexão. As integrações serão atualizadas quando a conexão voltar.'
+      );
       return;
     }
 
@@ -111,7 +122,7 @@ export function VisitIntegrationPanel({
     return () => {
       active = false;
     };
-  }, [canAccess, getIntegrationSnapshot, visit.id, visit.version]);
+  }, [canAccess, getIntegrationSnapshot, isOffline, visit.id, visit.version]);
 
   const linksByDomain = useMemo(() => {
     const map = new Map<TechnicalVisitIntegrationDomain, TechnicalVisitIntegrationLink>();
