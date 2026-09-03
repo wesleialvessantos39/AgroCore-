@@ -326,8 +326,8 @@ export function ScheduleBrowsePanel({
             </div>
             <p className="mt-1 text-sm text-[#0B3D2E]/70">
               Minha agenda reúne registros criados por você, sob sua
-              responsabilidade ou com sua participação. Equipe mostra os
-              registros da organização que seu perfil já pode consultar.
+              responsabilidade ou com sua participação. A visão da equipe
+              fica disponível somente para a gestão autorizada da organização.
             </p>
           </div>
 
@@ -337,7 +337,10 @@ export function ScheduleBrowsePanel({
                 Escopo
               </legend>
               <div
-                className="grid grid-cols-2 rounded-xl border border-[#0B3D2E]/20 bg-white p-1"
+                className={
+                  (canManage ? 'grid-cols-2 ' : 'grid-cols-1 ') +
+                  'grid rounded-xl border border-[#0B3D2E]/20 bg-white p-1'
+                }
                 role="group"
                 aria-label="Escopo da agenda"
               >
@@ -354,19 +357,21 @@ export function ScheduleBrowsePanel({
                 >
                   Minha agenda
                 </button>
-                <button
-                  type="button"
-                  className={
-                    'min-h-[44px] rounded-lg px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#78C89A] ' +
-                    (scope === 'team'
-                      ? 'bg-[#0B3D2E] text-white'
-                      : 'bg-white text-[#0B3D2E]')
-                  }
-                  aria-pressed={scope === 'team'}
-                  onClick={() => setScope('team')}
-                >
-                  Equipe
-                </button>
+                {canManage && (
+                  <button
+                    type="button"
+                    className={
+                      'min-h-[44px] rounded-lg px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#78C89A] ' +
+                      (scope === 'team'
+                        ? 'bg-[#0B3D2E] text-white'
+                        : 'bg-white text-[#0B3D2E]')
+                    }
+                    aria-pressed={scope === 'team'}
+                    onClick={() => setScope('team')}
+                  >
+                    Equipe
+                  </button>
+                )}
               </div>
             </fieldset>
 
