@@ -1,12 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   TechnicalVisitDomainError,
+  type CompleteTechnicalVisitGatewayInput,
+  type ReviseTechnicalVisitReportGatewayInput,
   type TechnicalVisit,
   type TechnicalVisitAuditEntry,
+  type TechnicalVisitCompletionResult,
   type TechnicalVisitGateway,
   type TechnicalVisitListFilters,
   type TechnicalVisitWrite,
 } from '../types/technicalVisit';
+import type { TechnicalVisitReport } from '../types/technicalVisitReport';
 
 interface VisitRow {
   readonly payload: TechnicalVisit;
@@ -18,6 +22,51 @@ interface AuditRow {
 
 function mapError(error: { readonly message?: string } | null): TechnicalVisitDomainError {
   const message = error?.message ?? '';
+  if (message.includes('AGROCORE_REPORT_REQUIRED')) {
+    return new TechnicalVisitDomainError(
+      'REPORT_REQUIRED',
+      'Conclua a visita pelo fluxo de relatório final.'
+    );
+  }
+  if (message.includes('AGROCORE_REPORT_INVALID')) {
+    return new TechnicalVisitDomainError(
+      'REPORT_INVALID',
+      'Revise o resumo e as pendências do relatório final.'
+    );
+  }
+  if (message.includes('AGROCORE_REPORT_NOT_FOUND')) {
+    return new TechnicalVisitDomainError('REPORT_NOT_FOUND', 'Relatório final não encontrado.');
+  }
+  if (message.includes('AGROCORE_REPORT_LOCKED')) {
+    return new TechnicalVisitDomainError(
+      'REPORT_LOCKED',
+      'O relatório não pode ser alterado nesta situação.'
+    );
+  }
+  if (message.includes('AGROCORE_VISIT_LOCKED')) {
+    return new TechnicalVisitDomainError(
+      'VISIT_LOCKED',
+      'A visita está encerrada e não pode ser alterada.'
+    );
+  }
+  if (message.includes('AGROCORE_PREPARATION_INCOMPLETE')) {
+    return new TechnicalVisitDomainError(
+      'PREPARATION_INCOMPLETE',
+      'Conclua a preparação obrigatória antes de iniciar a visita.'
+    );
+  }
+  if (message.includes('AGROCORE_INVALID_TRANSITION')) {
+    return new TechnicalVisitDomainError(
+      'INVALID_TRANSITION',
+      'A mudança de situação solicitada não é permitida.'
+    );
+  }
+  if (message.includes('AGROCORE_REASON_REQUIRED')) {
+    return new TechnicalVisitDomainError(
+      'REASON_REQUIRED',
+      'Informe o motivo obrigatório para esta operação.'
+    );
+  }
   if (message.includes('AGROCORE_CONCURRENCY_CONFLICT')) {
     return new TechnicalVisitDomainError(
       'CONCURRENCY_CONFLICT',
@@ -199,6 +248,97 @@ export class SupabaseTechnicalVisitGateway implements TechnicalVisitGateway {
         changedFields: [...row.payload.changedFields],
       }))
     );
+  }
+
+  async completeVisit(
+    input: CompleteTechnicalVisitGatewayInput
+  ): Promise<TechnicalVisitCompletionResult> {
+    const { data, error } = await this.client.rpc(
+      'agrocore_complete_technical_visit',
+      {
+        p_organization_id: input.organizationId,
+        p_visit_id: input.visitId,
+        p_expected_version: input.expectedVersion,
+        p_summary: input.summary,
+        p_pending_items: input.pendingItems,
+      }
+    );
+    if (error) throw mapError(error);
+    if (
+      !data ||
+      typeof data !== 'object' ||
+      !('visit' in data) ||
+      !('report' in data)
+    ) {
+      throw new TechnicalVisitDomainError(
+        'SERVICE_UNAVAILABLE',
+        'O banco não confirmou a conclusão da visita.'
+      );
+    }
+    const result = data as {
+      readonly visit: TechnicalVisit;
+      readonly report: TechnicalVisitReport;
+    };
+    return {
+      visit: result.visit,
+      report: result.report,
+    };
+  }
+
+  async getLatestReport(
+    organizationId: string,
+    visitId: string
+  ): Promise<TechnicalVisitReport | null> {
+    const { data, error } = await this.client
+      .from('technical_visit_report_versions')
+      .select('payload')
+      .eq('organization_id', organizationId)
+      .eq('visit_id', visitId)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw mapError(error);
+    return data ? (data.payload as TechnicalVisitReport) : null;
+  }
+
+  async listReportVersions(
+    organizationId: string,
+    visitId: string
+  ): Promise<readonly TechnicalVisitReport[]> {
+    const { data, error } = await this.client
+      .from('technical_visit_report_versions')
+      .select('payload')
+      .eq('organization_id', organizationId)
+      .eq('visit_id', visitId)
+      .order('version', { ascending: false });
+    if (error) throw mapError(error);
+    return Object.freeze(
+      ((data ?? []) as Array<{ payload: TechnicalVisitReport }>).map((row) => row.payload)
+    );
+  }
+
+  async reviseReport(
+    input: ReviseTechnicalVisitReportGatewayInput
+  ): Promise<TechnicalVisitReport> {
+    const { data, error } = await this.client.rpc(
+      'agrocore_create_technical_visit_report_revision',
+      {
+        p_organization_id: input.organizationId,
+        p_visit_id: input.visitId,
+        p_expected_report_version: input.expectedReportVersion,
+        p_summary: input.summary,
+        p_pending_items: input.pendingItems,
+        p_revision_reason: input.reason,
+      }
+    );
+    if (error) throw mapError(error);
+    if (!data || typeof data !== 'object') {
+      throw new TechnicalVisitDomainError(
+        'SERVICE_UNAVAILABLE',
+        'O banco não confirmou a nova versão do relatório.'
+      );
+    }
+    return data as TechnicalVisitReport;
   }
 
   clearAllSessionData(): void {
