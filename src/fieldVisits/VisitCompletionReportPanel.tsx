@@ -250,7 +250,7 @@ export const VisitCompletionReportPanel: React.FC<VisitCompletionReportPanelProp
               <div>
                 <p className="text-sm font-medium">Pendências registradas</p>
                 <p className="text-xs text-[#0B3D2E]/65">
-                  Pendências ficam no relatório; tarefas e integrações serão tratadas nas ordens próprias.
+                  Pendências ficam registradas no relatório e não criam tarefas automaticamente.
                 </p>
               </div>
               <button
