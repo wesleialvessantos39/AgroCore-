@@ -179,14 +179,18 @@ export function ScheduleItemCollaborationPanel({
     setSubmitting(true);
     setErrorMessage(null);
     try {
-      await onSetCollaboration(item.id, {
+      const updated = await onSetCollaboration(item.id, {
         responsibleUserId: responsibleUserId || null,
         participantUserIds,
         expectedVersion: item.version,
         idempotencyKey: collaborationCommandId(),
         reason: collaborationReason,
       });
-      closeEditing();
+      setResponsibleUserId(updated.responsibleUserId ?? '');
+      setParticipantUserIds([...updated.participantUserIds]);
+      setCollaborationReason('');
+      collaborationCommandRef.current = null;
+      setEditing(false);
     } catch (error) {
       setErrorMessage(
         error instanceof Error
