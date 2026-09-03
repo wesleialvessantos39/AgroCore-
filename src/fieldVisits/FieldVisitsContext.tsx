@@ -39,6 +39,7 @@ import type {
   ReviseTechnicalVisitReportInput,
   TechnicalVisitReport,
 } from '../types/technicalVisitReport';
+import type { TechnicalVisitIntegrationSnapshot } from '../types/technicalVisitIntegration';
 import { getTechnicalVisitGateway } from './gatewayFactory';
 import { TechnicalVisitService } from './technicalVisitService';
 import { TechnicalVisitPreparationService } from './preparationService';
@@ -113,6 +114,9 @@ export interface FieldVisitsContextValue {
     visitId: string,
     input: ReviseTechnicalVisitReportInput
   ) => Promise<TechnicalVisitReport>;
+  readonly getIntegrationSnapshot: (
+    visitId: string
+  ) => Promise<TechnicalVisitIntegrationSnapshot>;
 }
 
 export const FieldVisitsContext = createContext<FieldVisitsContextValue | null>(null);
@@ -479,6 +483,12 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
     [ensureContext, service]
   );
 
+  const getIntegrationSnapshot = useCallback(
+    (visitId: string) =>
+      service.getIntegrationSnapshot(ensureContext(), visitId),
+    [ensureContext, service]
+  );
+
   const getVisitById = useCallback(
     (visitId: string) => service.getVisitById(ensureContext(), visitId),
     [ensureContext, service]
@@ -524,6 +534,7 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
       getLatestReport,
       getReportVersions,
       reviseReport,
+      getIntegrationSnapshot,
     }),
     [
       clearFilters,
@@ -533,6 +544,7 @@ export function FieldVisitsProvider({ children }: { readonly children: ReactNode
       filters,
       getAudit,
       getFieldForm,
+      getIntegrationSnapshot,
       getLatestReport,
       getReportVersions,
       getFieldFormRevisions,
