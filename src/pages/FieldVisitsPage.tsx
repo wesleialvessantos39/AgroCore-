@@ -8,6 +8,7 @@ import { FIELD_VISIT_THEME } from '../fieldVisits/theme';
 import { VisitPreparationPanel } from '../fieldVisits/VisitPreparationPanel';
 import { VisitFieldFormPanel } from '../fieldVisits/VisitFieldFormPanel';
 import { VisitCompletionReportPanel } from '../fieldVisits/VisitCompletionReportPanel';
+import { VisitIntegrationPanel } from '../fieldVisits/VisitIntegrationPanel';
 import {
   FieldEvidencePanel,
   appraisalEvidenceSnapshot,
@@ -597,6 +598,11 @@ export const FieldVisitsPage: React.FC = () => {
                     />
                   </div>
                 )}
+
+                <VisitIntegrationPanel
+                  visit={visit}
+                  canAccess={canAccessFinalReport}
+                />
 
                 <VisitCompletionReportPanel
                   visit={visit}
