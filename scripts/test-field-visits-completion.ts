@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const migration = fs.readFileSync(
-  'supabase/migrations/20260903022000_oe_007_005_visit_completion_reports.sql',
+  'supabase/migrations/20260903021023_oe_007_005_visit_completion_reports.sql',
   'utf8'
 );
 const service = fs.readFileSync('src/fieldVisits/technicalVisitService.ts', 'utf8');
