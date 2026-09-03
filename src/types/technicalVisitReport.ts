@@ -24,6 +24,7 @@ export interface TechnicalVisitReportEvidenceSnapshot {
   readonly propertyId: string;
   readonly location: unknown;
   readonly photoCount: number;
+  readonly linkedToVisit?: boolean;
 }
 
 export interface TechnicalVisitReportSnapshot {
