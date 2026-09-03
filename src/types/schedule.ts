@@ -53,6 +53,10 @@ interface ScheduleItemBase {
   readonly timeZone: string;
   readonly recurrence: ScheduleRecurrenceDefinition;
   readonly origin: ScheduleOrigin;
+  readonly responsibleUserId: string | null;
+  readonly participantUserIds: readonly string[];
+  readonly completedAt: string | null;
+  readonly cancelledAt: string | null;
   readonly createdByUserId: string;
   readonly createdAt: string;
   readonly updatedByUserId: string;
@@ -88,13 +92,45 @@ export interface ScheduleItemAuditEntry {
   readonly reason: string | null;
 }
 
+export interface ScheduleMemberOption {
+  readonly userId: string;
+  readonly organizationRole: Exclude<OrganizationRole, 'none'>;
+  readonly displayName: string;
+}
+
+export interface ScheduleCollaborationRevision {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly scheduleItemId: string;
+  readonly itemVersion: number;
+  readonly responsibleUserId: string | null;
+  readonly participantUserIds: readonly string[];
+  readonly actorUserId: string;
+  readonly occurredAt: string;
+  readonly reason: string;
+}
+
+export interface SetScheduleCollaborationInput {
+  readonly responsibleUserId: string | null;
+  readonly participantUserIds: readonly string[];
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
+  readonly reason: string;
+}
+
+export interface ScheduleTransitionInput {
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
+  readonly reason: string;
+}
+
 export interface ScheduleItemListFilters {
   readonly kind?: ScheduleItemKind | 'all';
   readonly status?: ScheduleItemStatus | 'all';
   /**
-   * Escopo puramente de visualização. "personal" significa registros
-   * criados pelo usuário autenticado; não equivale a responsável/participante,
-   * conceitos reservados à colaboração posterior do módulo.
+   * "personal" inclui registros criados pelo usuário, sob sua
+   * responsabilidade atual ou dos quais ele participa. "team" mantém
+   * todos os registros da organização autorizados pelo RBAC.
    */
   readonly viewScope?: ScheduleViewScope;
 }
@@ -189,6 +225,26 @@ export interface UpdateScheduleItemGatewayInput {
   readonly reason: string;
 }
 
+export interface SetScheduleCollaborationGatewayInput {
+  readonly organizationId: string;
+  readonly actorUserId: string;
+  readonly scheduleItemId: string;
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
+  readonly responsibleUserId: string | null;
+  readonly participantUserIds: readonly string[];
+  readonly reason: string;
+}
+
+export interface ScheduleTransitionGatewayInput {
+  readonly organizationId: string;
+  readonly actorUserId: string;
+  readonly scheduleItemId: string;
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
+  readonly reason: string;
+}
+
 export interface ScheduleGateway {
   listItems(
     organizationId: string,
@@ -203,6 +259,27 @@ export interface ScheduleGateway {
   ): Promise<ScheduleItem | null>;
   createItem(input: CreateScheduleItemGatewayInput): Promise<ScheduleItem>;
   updateItem(input: UpdateScheduleItemGatewayInput): Promise<ScheduleItem>;
+  listEligibleMembers(
+    organizationId: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleMemberOption[]>;
+  setCollaboration(
+    input: SetScheduleCollaborationGatewayInput
+  ): Promise<ScheduleItem>;
+  completeItem(
+    input: ScheduleTransitionGatewayInput
+  ): Promise<ScheduleItem>;
+  reopenItem(
+    input: ScheduleTransitionGatewayInput
+  ): Promise<ScheduleItem>;
+  cancelItem(
+    input: ScheduleTransitionGatewayInput
+  ): Promise<ScheduleItem>;
+  listCollaborationRevisions(
+    organizationId: string,
+    scheduleItemId: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleCollaborationRevision[]>;
   listAudit(
     organizationId: string,
     scheduleItemId: string,
@@ -232,6 +309,10 @@ export type ScheduleDomainErrorCode =
   | 'IDEMPOTENCY_CONFLICT'
   | 'SOURCE_OWNED'
   | 'STATUS_LOCKED'
+  | 'COLLABORATOR_INELIGIBLE'
+  | 'COLLABORATOR_DUPLICATE'
+  | 'RESPONSIBLE_MISMATCH'
+  | 'INVALID_TRANSITION'
   | 'NO_CHANGES'
   | 'SERVICE_UNAVAILABLE';
 
