@@ -25,6 +25,8 @@ const fieldDevicePolicy = read('src/fieldVisits/fieldDevice.ts');
 const scheduleTests = read('scripts/test-schedule-foundation.ts');
 const schedulePage = read('src/pages/SchedulePage.tsx');
 const scheduleMigration = read('supabase/migrations/20260903153944_oe_008_001_schedule_model.sql');
+const scheduleCommandHardening = read('supabase/migrations/20260903175453_oe_008_001_command_idempotency_hardening.sql');
+const scheduleGateway = read('src/schedule/supabaseScheduleGateway.ts');
 const fieldPreparationPanel = read('src/fieldVisits/VisitPreparationPanel.tsx');
 const fieldFormPanel = read('src/fieldVisits/VisitFieldFormPanel.tsx');
 const fieldEvidencePanel = read('src/fieldVisits/FieldEvidencePanel.tsx');
@@ -158,6 +160,13 @@ assert(
     scheduleMigration.includes('enable row level security') &&
     scheduleMigration.includes("set search_path = ''"),
   'A persistência da Agenda deve manter tabela autoritativa, RLS e RPCs endurecidas.'
+);
+assert(
+  scheduleCommandHardening.includes('schedule_item_command_receipts') &&
+    scheduleCommandHardening.includes("'sha256'") &&
+    scheduleCommandHardening.includes('p_idempotency_key text') &&
+    scheduleGateway.includes('executeMutationWithRetry'),
+  'A OE-008.001 deve manter retries convergentes, recibos privados e idempotência também na edição.'
 );
 assert(
   !Object.prototype.hasOwnProperty.call(packageJson.scripts ?? {}, 'prebuild'),
