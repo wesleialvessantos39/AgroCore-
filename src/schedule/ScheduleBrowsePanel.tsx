@@ -397,7 +397,7 @@ export function ScheduleBrowsePanel({
         )}
       </div>
 
-      {status === 'empty' && (
+      {status === 'empty' && mode === 'list' && (
         <div className={SCHEDULE_THEME.surface + ' p-8 text-center'}>
           <CalendarDays
             className="mx-auto h-8 w-8 text-[#0B3D2E]/55"
@@ -426,8 +426,9 @@ export function ScheduleBrowsePanel({
           </div>
         )}
 
-      {(status === 'ready' ||
-        (status === 'loading' && items.length > 0)) &&
+      {(status === 'empty' ||
+        status === 'ready' ||
+        status === 'loading') &&
         mode === 'calendar' && (
           <div className="min-w-0 space-y-4">
             <div className={SCHEDULE_THEME.surface + ' min-w-0 p-4 sm:p-5'}>
