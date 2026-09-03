@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FolderArchive,
   CalendarDays,
+  CalendarClock,
   User,
   Globe,
   type LucideIcon,
@@ -85,6 +86,13 @@ export const SYSTEM_NAV_ITEMS: readonly NavItem[] = [
     path: ROUTES.FIELD_VISITS,
     icon: CalendarDays,
     requiredPermission: 'surveys_and_visits:view',
+  },
+  {
+    id: 'nav-item-schedule',
+    label: 'Agenda',
+    path: ROUTES.SCHEDULE,
+    icon: CalendarClock,
+    requiredPermission: 'schedule:view',
   },
   {
     id: 'nav-item-my-account',
