@@ -531,7 +531,7 @@ export function VisitFieldFormPanel({
                   type="button"
                   className={FIELD_VISIT_THEME.buttonSecondary}
                   onClick={() => void persistDraft()}
-                  disabled={saving || !dirty}
+                  disabled={saving || !dirty || isOffline}
                 >
                   <Save className="h-4 w-4" aria-hidden="true" />
                   Salvar agora
