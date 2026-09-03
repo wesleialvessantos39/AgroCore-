@@ -3,6 +3,8 @@ import fs from 'node:fs';
 
 const files = [
   'src/pages/SchedulePage.tsx',
+  'src/schedule/ScheduleBrowsePanel.tsx',
+  'src/schedule/calendar.ts',
   'src/schedule/theme.ts',
 ];
 
@@ -19,6 +21,6 @@ assert.match(source, /bg-white/);
 assert.doesNotMatch(source, forbiddenFamilies);
 assert.doesNotMatch(source, /dark:/);
 assert.doesNotMatch(source, /bg-black|text-black|border-black/);
-assert.doesNotMatch(source, /OE-008|008\.001/i);
+assert.doesNotMatch(source, /OE-008|008\.00[12]/i);
 
 console.log('✅ Identidade visual da Agenda restrita à paleta oficial AgroCore.');
