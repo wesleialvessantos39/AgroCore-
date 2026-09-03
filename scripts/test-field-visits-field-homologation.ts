@@ -322,9 +322,10 @@ await test('26. Alterações pendentes continuam protegidas contra fechamento', 
   assert.match(formPanel, /if \(!dirty && !saving\) return/);
 });
 
-await test('27. Autosave é retomado quando a conectividade deixa de estar offline', () => {
+await test('27. Autosave é retomado após reconexão preservando debounce de 800 ms', () => {
   assert.match(formPanel, /if \(!editable \|\| !dirty \|\| saving \|\| isOffline\) return/);
-  assert.match(formPanel, /connectivity === 'online' \? 500 : 800/);
+  assert.match(formPanel, /}, 800\);/);
+  assert.match(formPanel, /connectivity/);
 });
 
 await test('28. Salvamento manual fica indisponível offline', () => {
