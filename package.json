@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "node scripts/verify-release-invariants.js && tsc --noEmit && npm run test:module-001 && npm run test:module-002 && npm run test:module-003 && npm run test:module-006 && npm run test:module-007 && vite build && node scripts/build-sw.js && node scripts/verify-leak-free-build.js",
+    "build": "node scripts/verify-release-invariants.js && tsc --noEmit && npm run test:module-001 && npm run test:module-002 && npm run test:module-003 && npm run test:module-006 && npm run test:module-007 && npm run test:module-008 && vite build && node scripts/build-sw.js && node scripts/verify-leak-free-build.js",
     "preview": "vite preview",
     "test:environment-contract": "node scripts/verify-environment-contract.js",
     "clean": "rm -rf dist server.js",
@@ -66,7 +66,11 @@
     "test:field-visits-evidence": "node --import tsx scripts/test-field-visits-evidence.ts",
     "test:field-visits-completion": "node --import tsx scripts/test-field-visits-completion.ts",
     "test:field-visits-integrations": "node --import tsx scripts/test-field-visits-integrations.ts",
-    "test:field-visits-field-homologation": "node --import tsx scripts/test-field-visits-field-homologation.ts"
+    "test:field-visits-field-homologation": "node --import tsx scripts/test-field-visits-field-homologation.ts",
+    "test:schedule-foundation": "node --import tsx scripts/test-schedule-foundation.ts",
+    "test:schedule-accessibility": "node --import tsx scripts/test-schedule-accessibility.ts",
+    "test:schedule-theme": "node scripts/test-schedule-theme.js",
+    "test:module-008": "node --import tsx scripts/test-module-008.js"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
