@@ -18,10 +18,11 @@ console.log('====================================================\n');
 try {
   run('scripts/test-schedule-foundation.ts');
   run('scripts/test-schedule-views.ts');
+  run('scripts/test-schedule-collaboration.ts');
   run('scripts/test-schedule-accessibility.ts');
   run('scripts/test-schedule-theme.js');
   console.log(
-    '\n✅ MÓDULO 008 — GATE AUTOMATIZADO ATÉ LISTAS E AGENDA APROVADO'
+    '\n✅ MÓDULO 008 — GATE AUTOMATIZADO ATÉ ATRIBUIÇÃO E COLABORAÇÃO APROVADO'
   );
 } catch (error) {
   console.error('\n❌ Falha na homologação do Módulo 008.');
