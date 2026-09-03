@@ -63,7 +63,7 @@ export function normalizeScheduleListFilters(
 ): ScheduleItemListFilters {
   const kind = filters.kind ?? 'all';
   const status = filters.status ?? 'all';
-  const viewScope = filters.viewScope ?? 'team';
+  const viewScope = filters.viewScope ?? 'personal';
 
   if (!['all', 'task', 'appointment'].includes(kind)) {
     throw new ScheduleDomainError(
