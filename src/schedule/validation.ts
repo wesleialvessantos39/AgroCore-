@@ -88,6 +88,12 @@ export function normalizeScheduleRecurrence(
       'Os dias semanais da recorrência são inválidos ou duplicados.'
     );
   }
+  if (input.frequency === 'weekly' && weekdays.length === 0) {
+    throw new ScheduleDomainError(
+      'INVALID_INPUT',
+      'Selecione pelo menos um dia para a recorrência semanal.'
+    );
+  }
   if (input.frequency !== 'weekly' && weekdays.length > 0) {
     throw new ScheduleDomainError(
       'INVALID_INPUT',
