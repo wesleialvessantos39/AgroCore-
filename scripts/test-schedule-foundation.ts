@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { getRolePermissions } from '../src/authorization/permissionsMatrix.ts';
 import { PreviewScheduleGateway } from '../src/schedule/preview/previewScheduleGateway.ts';
+import { SupabaseScheduleGateway } from '../src/schedule/supabaseScheduleGateway.ts';
 import { ScheduleService } from '../src/schedule/scheduleService.ts';
 import {
   isValidScheduleTimeZone,
@@ -800,6 +801,106 @@ await test('60. interface permite dias explícitos em recorrência semanal', () 
   assert.match(page, /Dias da semana/);
   assert.match(page, /recurrenceWeekdays/);
   assert.match(page, /Selecione pelo menos um dia/);
+});
+
+await test('61. retry remoto recupera falhas transitórias sem trocar a chave', async () => {
+  let attempts = 0;
+  const row = {
+    id: 'schedule-retry-1',
+    organization_id: 'org-a',
+    item_kind: 'task',
+    title: 'Tarefa com retry',
+    description: null,
+    priority: 'medium',
+    status: 'pending',
+    time_zone: 'America/Sao_Paulo',
+    due_at: '2026-09-10T15:00:00.000Z',
+    starts_at: null,
+    ends_at: null,
+    recurrence: noRecurrence,
+    origin_type: 'manual',
+    source_domain: null,
+    source_id: null,
+    source_version: null,
+    source_event_key: null,
+    created_by_user_id: 'user-owner',
+    created_at: '2026-09-03T12:00:00.000Z',
+    updated_by_user_id: 'user-owner',
+    updated_at: '2026-09-03T12:00:00.000Z',
+    version: 1,
+  };
+  const fakeClient = {
+    rpc: async (_name: string, args: Record<string, unknown>) => {
+      attempts += 1;
+      assert.equal(args.p_idempotency_key, 'retry-command-001');
+      if (attempts < 3) {
+        return {
+          data: null,
+          error: { code: 'PGRST000', message: 'Failed to fetch' },
+        };
+      }
+      return { data: row, error: null };
+    },
+  };
+  const gateway = new SupabaseScheduleGateway(fakeClient as never);
+  const item = await gateway.createItem({
+    organizationId: 'org-a',
+    actorUserId: 'user-owner',
+    payload: {
+      kind: 'task',
+      title: row.title,
+      description: null,
+      priority: 'medium',
+      timeZone: row.time_zone,
+      dueAt: row.due_at,
+      startsAt: null,
+      endsAt: null,
+      recurrence: noRecurrence,
+    },
+    idempotencyKey: 'retry-command-001',
+  });
+  assert.equal(attempts, 3);
+  assert.equal(item.id, row.id);
+});
+
+await test('62. erro de domínio remoto não é repetido automaticamente', async () => {
+  let attempts = 0;
+  const fakeClient = {
+    rpc: async () => {
+      attempts += 1;
+      return {
+        data: null,
+        error: {
+          code: 'P0001',
+          message: 'AGROCORE_SCHEDULE_FORBIDDEN',
+        },
+      };
+    },
+  };
+  const gateway = new SupabaseScheduleGateway(fakeClient as never);
+  await assert.rejects(
+    () =>
+      gateway.createItem({
+        organizationId: 'org-a',
+        actorUserId: 'user-owner',
+        payload: {
+          kind: 'task',
+          title: 'Tarefa bloqueada',
+          description: null,
+          priority: 'medium',
+          timeZone: 'America/Sao_Paulo',
+          dueAt: null,
+          startsAt: null,
+          endsAt: null,
+          recurrence: noRecurrence,
+        },
+        idempotencyKey: 'retry-command-002',
+      }),
+    (error: unknown) =>
+      error instanceof ScheduleDomainError &&
+      error.code === 'PERMISSION_DENIED'
+  );
+  assert.equal(attempts, 1);
 });
 
 console.log('\n====================================================');
