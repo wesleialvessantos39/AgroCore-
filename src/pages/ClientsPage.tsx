@@ -22,7 +22,7 @@ import {
 import { useClients } from '../clients/useClients';
 import { useOrganization } from '../organization/useOrganization';
 import { useAuthorization } from '../authorization/useAuthorization';
-import { ROUTES, getClientEditPath } from '../routes/paths';
+import { ROUTES, getClientEditPath, getClientEvidencePath } from '../routes/paths';
 import { Button } from '../components/ui/Button';
 import { maskCpf, maskCnpj, formatPhone } from '../clients/validators';
 import { ClientCapturerAssignmentModal } from '../components/appraisals/ClientCapturerAssignmentModal';
@@ -65,6 +65,7 @@ export function ClientsPage() {
 
   const canCreate = can('clients:create');
   const canEdit = can('clients:edit');
+  const canAccessEvidence = can('properties:edit') || can('client_registry_requests:fulfill');
   const canManageAssignments = can('client_capturer_assignments:manage') || can('client_capturer_assignments:view') || can('clients:edit');
 
   const [assignmentClient, setAssignmentClient] = useState<{ id: string; name: string } | null>(null);
@@ -530,7 +531,22 @@ export function ClientsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      {canAccessEvidence && (
+                        <Button
+                          id={`btn-evidence-client-${client.id}`}
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => navigate(getClientEvidencePath(client.id))}
+                          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 cursor-pointer text-[#0B3D2E] hover:bg-[#78C89A]/15 border-[#0B3D2E]/20 min-h-[40px]"
+                          title="Abrir fotos e geolocalização dos imóveis deste cliente"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-[#0B3D2E]" aria-hidden="true" />
+                          <span>Fotos e localização</span>
+                        </Button>
+                      )}
+
                       {canManageAssignments && (
                         <Button
                           id={`btn-capturer-client-${client.id}`}

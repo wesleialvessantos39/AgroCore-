@@ -268,6 +268,10 @@ const multiClientMigration = fs.readFileSync(
   'supabase/migrations/20260903003000_oe_007_004_property_multi_client.sql',
   'utf8'
 );
+const sourceBindingMigration = fs.readFileSync(
+  'supabase/migrations/20260903013000_oe_007_004_request_source_binding.sql',
+  'utf8'
+);
 const requestTypes = fs.readFileSync(
   'src/types/clientRegistryRequest.ts',
   'utf8'
@@ -282,6 +286,10 @@ const requestPanel = fs.readFileSync(
 );
 const clientEvidencePage = fs.readFileSync(
   'src/pages/ClientEvidencePage.tsx',
+  'utf8'
+);
+const clientsPage = fs.readFileSync(
+  'src/pages/ClientsPage.tsx',
   'utf8'
 );
 const propertyCreatePage = fs.readFileSync(
@@ -669,6 +677,28 @@ await test('48. Solicitação ao captador depende do vínculo ativo canônico do
     capturerSupabaseGateway.includes(".eq('status', 'active')"),
     true
   );
+});
+
+await test('49. Solicitação cadastral valida a origem real do atendimento', () => {
+  assert.equal(sourceBindingMigration.includes("p_source_type = 'visit'"), true);
+  assert.equal(
+    sourceBindingMigration.includes('v_visit.responsible_user_id <> v_actor'),
+    true
+  );
+  assert.equal(
+    sourceBindingMigration.includes("l.entity_type = 'appraisal'"),
+    true
+  );
+  assert.equal(
+    sourceBindingMigration.includes('e.property_id = p_property_id'),
+    true
+  );
+});
+
+await test('50. Área de clientes oferece acesso direto ao cadastro canônico', () => {
+  assert.equal(clientsPage.includes('getClientEvidencePath'), true);
+  assert.equal(clientsPage.includes('Fotos e localização'), true);
+  assert.equal(clientsPage.includes('btn-evidence-client-'), true);
 });
 
 console.log('\n====================================================');
