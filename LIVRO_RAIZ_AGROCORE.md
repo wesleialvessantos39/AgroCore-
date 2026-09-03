@@ -780,9 +780,11 @@ O desenvolvimento futuro do Módulo de Laudos observará as melhores práticas d
 | `npm run test:module-007` | Gate consolidado do Módulo 007 até OE-007.007: 35 + 37 + 51 + 50 + 28 + 41 + 50 = **292 provas específicas**, além de 25 verificações de acessibilidade/responsividade, tema e textos públicos. O gate completo foi executado com Vercel SUCCESS no commit `4adcbc0a0b07df3ed0e192314080129de02cfed5`. |
 | `npm run test:schedule-foundation` | Valida a OE-008.001 com 66 provas de tarefas/compromissos, sete perfis, tenant/IDOR, origem, recorrência, UTC/DST, RLS, concorrência, idempotência, retry e persistência. |
 | `npm run test:schedule-views` | Define 41 provas da OE-008.002 para visão pessoal/equipe, filtros, RBAC/tenant, calendário com fuso, lista móvel, não antecipação de ocorrências, migration e casos de erro. |
-| `npm run test:schedule-accessibility` | Executa 25 verificações estruturais de responsividade/acessibilidade da Agenda, incluindo criação, recorrência semanal, escopo pessoal/equipe, calendário semântico e lista móvel. |
-| `npm run test:schedule-theme` | Audita a identidade visual oficial da Agenda, incluindo as novas telas de listas/calendário, e impede famílias de cores não homologadas/códigos internos. |
-| `npm run test:module-008` | Gate consolidado do Módulo 008 até OE-008.002: **66 + 41 = 107 provas específicas**, além de 25 verificações de acessibilidade/responsividade e auditoria de tema. |
+| `npm run test:schedule-collaboration` | Define 64 provas da OE-008.003 para responsáveis, participantes, elegibilidade, histórico, conclusão, cancelamento, reabertura, idempotência, concorrência e fail-closed. |
+| `npm run test:schedule-reconciliation` | Define 41 provas da reconciliação OE-008.001–003 para RLS por item, menor privilégio, origem canônica e consumo da outbox do Módulo 007 sem antecipar as OEs seguintes. |
+| `npm run test:schedule-accessibility` | Executa 33 verificações estruturais de responsividade/acessibilidade da Agenda, incluindo criação, recorrência, escopos, calendário, mobile e colaboração. |
+| `npm run test:schedule-theme` | Audita a identidade visual oficial da Agenda e impede famílias de cores não homologadas ou códigos internos. |
+| `npm run test:module-008` | Gate reconciliado até OE-008.003: **66 + 41 + 64 + 41 = 212 provas específicas**, além de 33 verificações de acessibilidade/responsividade e auditoria de tema. |
 | `npm run test:rebranding` | Valida a ausência absoluta de termos e referências legadas no código |
 | `npm run test:sw-lifecycle` | Valida pré-cache, arquivos físicos e bloqueios de segurança do Service Worker |
 | `npm run test:multi-build-update` | Valida a substituição de cache entre versões sem apagar caches de terceiros |
@@ -799,6 +801,15 @@ Configuração recomendada: pull request obrigatório, status check do workflow 
 
 ---
 ## 9. DIRETRIZES PARA AS PRÓXIMAS EXECUÇÕES
+
+### Diretriz permanente de execução a partir do Módulo 008
+1. Antes de implementar ou corrigir qualquer OE dos Módulos 008–016, consultar o **Livro-Raiz e os sete arquivos mestres fornecidos pelo usuário**.
+2. Usar o Livro-Raiz como estado técnico observado, a Especificação Técnica como arquitetura-alvo e Plano/Relatórios como backlog, limites e critérios de aceite.
+3. Não criar cadastro, tabela, evento, arquivo, gateway, integração ou fonte paralela quando existir entidade canônica equivalente; referenciar os identificadores estáveis existentes e preservar `organization_id`.
+4. Não antecipar funcionalidades de OEs posteriores. Compatibilidade arquitetural não equivale a implementação antecipada.
+5. Não criar dados fictícios para demonstrar implementação e não declarar build, teste, migration, integração ou homologação sem evidência observável.
+6. Antes de avançar para a OE seguinte, auditar regressões e incorporar os resíduos comprovadamente necessários da OE anterior.
+
 
 1. **Módulo 004 — Laudos de Avaliação:** concluído até OE-004.003; emissão final em produção continua condicionada a infraestrutura persistente real e integrações futuras explicitamente fora deste preview.
 2. **Módulo 005 — Propostas de Crédito e Serviços:** concluído até OE-005.007 no escopo volátil atual; persistência real, assinatura digital, contratos, criação automática de operações downstream e integrações externas permanecem fora do escopo.
