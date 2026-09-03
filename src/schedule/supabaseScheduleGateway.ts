@@ -127,10 +127,10 @@ function mapItem(
             sourceVersion: row.source_version ?? 1,
             sourceEventKey: row.source_event_key ?? '',
           } as const),
-    responsibleUserId: row.responsible_user_id,
+    responsibleUserId: row.responsible_user_id ?? null,
     participantUserIds: [...participantUserIds].sort(),
-    completedAt: row.completed_at,
-    cancelledAt: row.cancelled_at,
+    completedAt: row.completed_at ?? null,
+    cancelledAt: row.cancelled_at ?? null,
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
     updatedByUserId: row.updated_by_user_id,
@@ -502,7 +502,7 @@ export class SupabaseScheduleGateway implements ScheduleGateway {
         'O banco não confirmou a criação do registro de agenda.'
       );
     }
-    return this.hydrateMutationRow(row);
+    return mapItem(row, []);
   }
 
   async updateItem(
