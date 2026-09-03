@@ -5,6 +5,8 @@ import {
   type ScheduleItemCreatePayload,
   type ScheduleItemListFilters,
   type ScheduleItemUpdatePayload,
+  type SetScheduleCollaborationInput,
+  type ScheduleTransitionInput,
   type ScheduleRecurrenceDefinition,
   type UpdateScheduleItemInput,
 } from '../types/schedule';
@@ -92,6 +94,71 @@ export function normalizeScheduleListFilters(
   }
 
   return Object.freeze({ kind, status, viewScope });
+}
+
+export function normalizeScheduleCommandReason(value: string): string {
+  const reason = value.trim();
+  if (reason.length < 3 || reason.length > 500) {
+    throw new ScheduleDomainError(
+      'INVALID_INPUT',
+      'Informe um motivo entre 3 e 500 caracteres.'
+    );
+  }
+  return reason;
+}
+
+export function normalizeScheduleExpectedVersion(value: number): number {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new ScheduleDomainError(
+      'INVALID_INPUT',
+      'A versão esperada do registro é obrigatória.'
+    );
+  }
+  return value;
+}
+
+export function normalizeScheduleCollaborationInput(
+  input: SetScheduleCollaborationInput
+): SetScheduleCollaborationInput {
+  normalizeScheduleExpectedVersion(input.expectedVersion);
+  const idempotencyKey = assertScheduleIdempotencyKey(input.idempotencyKey);
+  const reason = normalizeScheduleCommandReason(input.reason);
+  const responsibleUserId = input.responsibleUserId?.trim() || null;
+  const participants = input.participantUserIds.map((userId) =>
+    userId.trim()
+  );
+
+  if (
+    participants.length > 50 ||
+    participants.some((userId) => !userId) ||
+    new Set(participants).size !== participants.length ||
+    (responsibleUserId !== null &&
+      participants.includes(responsibleUserId))
+  ) {
+    throw new ScheduleDomainError(
+      'COLLABORATOR_DUPLICATE',
+      'Responsável e participantes devem ser únicos e válidos.'
+    );
+  }
+
+  return Object.freeze({
+    responsibleUserId,
+    participantUserIds: Object.freeze([...participants].sort()),
+    expectedVersion: input.expectedVersion,
+    idempotencyKey,
+    reason,
+  });
+}
+
+export function normalizeScheduleTransitionInput(
+  input: ScheduleTransitionInput
+): ScheduleTransitionInput {
+  normalizeScheduleExpectedVersion(input.expectedVersion);
+  return Object.freeze({
+    expectedVersion: input.expectedVersion,
+    idempotencyKey: assertScheduleIdempotencyKey(input.idempotencyKey),
+    reason: normalizeScheduleCommandReason(input.reason),
+  });
 }
 
 export function normalizeScheduleRecurrence(
