@@ -124,6 +124,11 @@ const scheduleServiceSource = fs.readFileSync(
   'utf8'
 );
 const page = fs.readFileSync('src/pages/SchedulePage.tsx', 'utf8');
+const browse = fs.readFileSync(
+  'src/schedule/ScheduleBrowsePanel.tsx',
+  'utf8'
+);
+const renderedSchedule = page + '\n' + browse;
 const paths = fs.readFileSync('src/routes/paths.ts', 'utf8');
 const routeMatrix = fs.readFileSync(
   'src/routes/routeMatrix.ts',
@@ -668,21 +673,30 @@ await test('46. navegação mostra Agenda apenas com schedule:view', () => {
 });
 
 await test('47. interface não exibe códigos internos de ordem', () => {
-  assert.doesNotMatch(page, /OE-008|008\.001/i);
+  assert.doesNotMatch(renderedSchedule, /OE-008|008\.00[12]/i);
 });
 
 await test('48. tela começa com dados reais e estado vazio explícito', () => {
-  assert.match(page, /Nenhum registro na agenda/);
-  assert.match(page, /somente registros reais da/);
-  assert.doesNotMatch(page, /mock|fake|demo data|dados simulados/i);
+  assert.match(renderedSchedule, /Nenhum registro encontrado/);
+  assert.match(renderedSchedule, /Ajuste o escopo ou os filtros/);
+  assert.doesNotMatch(
+    renderedSchedule,
+    /mock|fake|demo data|dados simulados/i
+  );
 });
 
 await test('49. formulário não oferece participantes ou atribuição prematuramente', () => {
-  assert.doesNotMatch(page, /participantUserIds|responsibleUserId/);
+  assert.doesNotMatch(
+    renderedSchedule,
+    /participantUserIds|responsibleUserId/
+  );
 });
 
 await test('50. formulário não oferece transição de conclusão/cancelamento', () => {
-  assert.doesNotMatch(page, /completeItem|cancelItem|reopenItem/);
+  assert.doesNotMatch(
+    renderedSchedule,
+    /completeItem|cancelItem|reopenItem/
+  );
 });
 
 await test('51. produção possui factory dedicado sem preview estático', () => {
