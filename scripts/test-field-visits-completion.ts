@@ -5,6 +5,10 @@ const migration = fs.readFileSync(
   'supabase/migrations/20260903021023_oe_007_005_visit_completion_reports.sql',
   'utf8'
 );
+const hardening = fs.readFileSync(
+  'supabase/migrations/20260903022428_oe_007_005_report_hardening.sql',
+  'utf8'
+);
 const service = fs.readFileSync('src/fieldVisits/technicalVisitService.ts', 'utf8');
 const supabaseGateway = fs.readFileSync(
   'src/fieldVisits/supabaseTechnicalVisitGateway.ts',
@@ -115,10 +119,13 @@ test('13. RPC genérico não consegue concluir sem relatório', () => {
   assert.match(service, /REPORT_REQUIRED/);
 });
 
-test('14. Serviço valida resumo e pendências antes da escrita', () => {
+test('14. Serviço e banco validam resumo, pendências e identificadores', () => {
   assert.match(service, /normalizeReportSummary/);
   assert.match(service, /normalizePendingItems/);
   assert.match(service, /items\.length > 50/);
+  assert.match(service, /id\.length > 120/);
+  assert.match(hardening, /technical_visit_report_versions_issued_by_idx/);
+  assert.match(hardening, /item ->> 'id'.*120/s);
 });
 
 test('15. Gateway Supabase usa os RPCs canônicos da OE-007.005', () => {
