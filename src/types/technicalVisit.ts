@@ -2,6 +2,7 @@ import type {
   TechnicalVisitPendingItem,
   TechnicalVisitReport,
 } from './technicalVisitReport';
+import type { TechnicalVisitIntegrationSnapshot } from './technicalVisitIntegration';
 import type { Permission } from './authorization';
 import type { OrganizationRole } from './auth';
 
@@ -298,6 +299,11 @@ export interface TechnicalVisitGateway {
   reviseReport(
     input: ReviseTechnicalVisitReportGatewayInput
   ): Promise<TechnicalVisitReport>;
+
+  getIntegrationSnapshot(
+    organizationId: string,
+    visitId: TechnicalVisitId
+  ): Promise<TechnicalVisitIntegrationSnapshot>;
 
   clearAllSessionData(): void;
 }
