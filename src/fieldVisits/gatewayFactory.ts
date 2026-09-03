@@ -9,6 +9,7 @@ import type {
   TechnicalVisitWrite,
 } from '../types/technicalVisit';
 import type { TechnicalVisitReport } from '../types/technicalVisitReport';
+import type { TechnicalVisitIntegrationSnapshot } from '../types/technicalVisitIntegration';
 import { registerDomainCleanup } from '../auth/domainCleanupRegistry';
 import { UnavailableTechnicalVisitGateway } from './unavailableGateway';
 import { getSupabaseClient } from '../infrastructure/supabaseClient';
@@ -80,6 +81,13 @@ class LazyDevelopmentTechnicalVisitGateway implements TechnicalVisitGateway {
     input: ReviseTechnicalVisitReportGatewayInput
   ): Promise<TechnicalVisitReport> {
     return (await this.load()).reviseReport(input);
+  }
+
+  async getIntegrationSnapshot(
+    organizationId: string,
+    visitId: string
+  ): Promise<TechnicalVisitIntegrationSnapshot> {
+    return (await this.load()).getIntegrationSnapshot(organizationId, visitId);
   }
 
   clearAllSessionData(): void {
