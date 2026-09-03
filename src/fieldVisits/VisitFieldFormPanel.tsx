@@ -232,7 +232,7 @@ export function VisitFieldFormPanel({
     if (!editable || !dirty || saving || isOffline) return;
     const timer = window.setTimeout(() => {
       void persistDraft();
-    }, connectivity === 'online' ? 500 : 800);
+    }, 800);
     return () => window.clearTimeout(timer);
   }, [connectivity, dirty, editable, isOffline, persistDraft, saving, sections]);
 
