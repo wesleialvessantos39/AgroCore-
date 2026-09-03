@@ -272,7 +272,7 @@ export function FieldEvidencePanel({
         note:
           scope === 'property_registration'
             ? 'Cadastrar o imóvel do cliente e completar fotos e geolocalização.'
-            : 'Completar o cadastro canônico de fotos e geolocalização do imóvel.',
+            : 'Completar o cadastro de fotos e geolocalização do imóvel.',
       });
 
       setRequestNotice(
@@ -473,8 +473,9 @@ export function FieldEvidencePanel({
             <Camera className="h-5 w-5" aria-hidden="true" />
             Fotos e geolocalização do imóvel
           </h3>
+          {/* Fonte canônica única do imóvel */}
           <p className="mt-1 text-sm text-[#0B3D2E]/70">
-            Fonte canônica única do imóvel. Cliente, laudo e visita/vistoria
+            Fonte única do imóvel. Cliente, laudo e visita/vistoria
             exibem exatamente este mesmo cadastro.
           </p>
         </div>

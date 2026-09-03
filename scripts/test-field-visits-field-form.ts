@@ -550,9 +550,10 @@ await test('29. Conclusão da visita falha sem formulário enviado', async () =>
   );
   await assert.rejects(
     () =>
-      visitService.transitionVisit(context(), entity.id, {
-        targetStatus: 'completed',
+      visitService.completeVisit(context(), entity.id, {
         expectedVersion: entity.version,
+        summary: 'Resumo da visita técnica realizada.',
+        pendingItems: [],
       }),
     (error: unknown) =>
       error instanceof TechnicalVisitDomainError &&
@@ -569,11 +570,12 @@ await test('30. Conclusão da visita funciona após formulário enviado', async 
     undefined,
     fieldFormGateway
   );
-  const completed = await visitService.transitionVisit(context(), entity.id, {
-    targetStatus: 'completed',
+  const completion = await visitService.completeVisit(context(), entity.id, {
     expectedVersion: entity.version,
+    summary: 'Resumo da visita técnica realizada.',
+    pendingItems: [],
   });
-  assert.equal(completed.status, 'completed');
+  assert.equal(completion.visit.status, 'completed');
 });
 
 await test('31. IDOR entre organizações não revela formulário', async () => {

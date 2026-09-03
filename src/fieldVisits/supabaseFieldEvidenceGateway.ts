@@ -143,11 +143,10 @@ export class SupabaseFieldEvidenceGateway implements FieldEvidenceGateway {
       .from('field_evidence_sets')
       .select(EVIDENCE_COLUMNS)
       .eq('organization_id', organizationId)
-      .eq('id', evidenceId)
-      .maybeSingle();
+      .eq('id', evidenceId);
     if (signal) request = request.abortSignal(signal);
 
-    const { data, error } = await request;
+    const { data, error } = await request.maybeSingle();
     if (error) throw mapError(error);
     return data ? this.load(data as unknown as EvidenceRow) : null;
   }
@@ -161,11 +160,10 @@ export class SupabaseFieldEvidenceGateway implements FieldEvidenceGateway {
       .from('field_evidence_sets')
       .select(EVIDENCE_COLUMNS)
       .eq('organization_id', organizationId)
-      .eq('property_id', propertyId)
-      .maybeSingle();
+      .eq('property_id', propertyId);
     if (signal) request = request.abortSignal(signal);
 
-    const { data, error } = await request;
+    const { data, error } = await request.maybeSingle();
     if (error) throw mapError(error);
     return data ? this.load(data as unknown as EvidenceRow) : null;
   }
@@ -181,11 +179,10 @@ export class SupabaseFieldEvidenceGateway implements FieldEvidenceGateway {
       .select('evidence_id')
       .eq('organization_id', organizationId)
       .eq('entity_type', entityType)
-      .eq('entity_id', entityId)
-      .maybeSingle();
+      .eq('entity_id', entityId);
     if (signal) request = request.abortSignal(signal);
 
-    const { data, error } = await request;
+    const { data, error } = await request.maybeSingle();
     if (error) throw mapError(error);
     const link = data as unknown as LinkRow | null;
     return link

@@ -159,8 +159,8 @@ test('19. Fotos e geolocalização são mobile-first em 320 px e 390 px', () => 
 });
 
 test('20. Evidências não introduzem largura fixa que force overflow', () => {
-  assert.equal(/min-w-\\[(?:[4-9]\\d\\d|\\d{4,})px\\]/.test(fieldEvidence), false);
-  assert.equal(/w-\\[(?:[4-9]\\d\\d|\\d{4,})px\\]/.test(fieldEvidence), false);
+  assert.equal(/min-w-\[(?:[4-9]\d\d|\d{4,})px\]/.test(fieldEvidence), false);
+  assert.equal(/w-\[(?:[4-9]\d\d|\d{4,})px\]/.test(fieldEvidence), false);
 });
 
 test('21. Coordenadas manuais usam teclado decimal em dispositivos móveis', () => {

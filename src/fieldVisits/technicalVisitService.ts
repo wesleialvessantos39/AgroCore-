@@ -294,7 +294,7 @@ export class TechnicalVisitService {
       updatedAt: now,
       confirmedAt: input.targetStatus === 'confirmed' ? now : current.confirmedAt,
       startedAt: input.targetStatus === 'in_progress' ? now : current.startedAt,
-      completedAt: input.targetStatus === 'completed' ? now : current.completedAt,
+      completedAt: current.completedAt,
       cancelledAt: input.targetStatus === 'cancelled' ? now : current.cancelledAt,
       cancellationReason:
         input.targetStatus === 'cancelled' ? reason : current.cancellationReason,
@@ -304,7 +304,6 @@ export class TechnicalVisitService {
     const changedFields = ['status'];
     if (input.targetStatus === 'confirmed') changedFields.push('confirmedAt');
     if (input.targetStatus === 'in_progress') changedFields.push('startedAt');
-    if (input.targetStatus === 'completed') changedFields.push('completedAt');
     if (input.targetStatus === 'cancelled') {
       changedFields.push('cancelledAt', 'cancellationReason');
     }

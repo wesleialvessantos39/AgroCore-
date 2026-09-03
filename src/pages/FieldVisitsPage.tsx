@@ -380,13 +380,13 @@ export const FieldVisitsPage: React.FC = () => {
         </form>
       )}
 
-      <section id="field-visits-filter-section" className={FIELD_VISIT_THEME.surface + ' p-4 sm:p-5'}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <label htmlFor="field-visits-filter-status" className="w-full flex-1 space-y-1.5 text-sm font-medium">
+      <section id="field-visits-filter-section" className={FIELD_VISIT_THEME.surface + ' w-full p-4 sm:p-5'}>
+        <div className="w-full flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <label htmlFor="field-visits-filter-status" className="block w-full flex-1 min-w-0 space-y-1.5 text-sm font-medium">
             <span className="block">Situação</span>
             <select
               id="field-visits-filter-status"
-              className={FIELD_VISIT_THEME.input + ' cursor-pointer'}
+              className={FIELD_VISIT_THEME.input + ' block w-full min-w-0 max-w-full cursor-pointer'}
               value={filters.status ?? 'all'}
               onChange={(event) =>
                 setFilters({ status: event.target.value as TechnicalVisitStatus | 'all' })
