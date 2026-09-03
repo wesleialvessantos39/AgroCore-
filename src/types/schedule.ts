@@ -2,6 +2,7 @@ import type { Permission } from './authorization';
 import type { OrganizationRole } from './auth';
 
 export type ScheduleItemKind = 'task' | 'appointment';
+export type ScheduleViewScope = 'personal' | 'team';
 export type SchedulePriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ScheduleItemStatus =
   | 'pending'
@@ -90,6 +91,12 @@ export interface ScheduleItemAuditEntry {
 export interface ScheduleItemListFilters {
   readonly kind?: ScheduleItemKind | 'all';
   readonly status?: ScheduleItemStatus | 'all';
+  /**
+   * Escopo puramente de visualização. "personal" significa registros
+   * criados pelo usuário autenticado; não equivale a responsável/participante,
+   * conceitos reservados à colaboração posterior do módulo.
+   */
+  readonly viewScope?: ScheduleViewScope;
 }
 
 interface ScheduleCreateBase {
@@ -185,6 +192,7 @@ export interface UpdateScheduleItemGatewayInput {
 export interface ScheduleGateway {
   listItems(
     organizationId: string,
+    actorUserId: string,
     filters?: ScheduleItemListFilters,
     signal?: AbortSignal
   ): Promise<readonly ScheduleItem[]>;
