@@ -151,11 +151,15 @@ export class ScheduleService {
     }
 
     const payload = normalizeUpdateScheduleItem(input);
+    const idempotencyKey = assertScheduleIdempotencyKey(
+      input.idempotencyKey
+    );
     return this.gateway.updateItem({
       organizationId: context.organizationId,
       actorUserId: context.actor.userId,
       scheduleItemId: normalizedId,
       expectedVersion: input.expectedVersion,
+      idempotencyKey,
       payload,
       reason: input.reason.trim(),
     });
