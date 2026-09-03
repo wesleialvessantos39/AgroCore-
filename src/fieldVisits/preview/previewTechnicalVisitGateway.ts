@@ -182,7 +182,7 @@ export class PreviewTechnicalVisitGateway implements TechnicalVisitGateway {
       summary: input.summary,
       pendingItems: input.pendingItems.map((item) => ({ ...item })),
       snapshot: {
-        visit: { ...completed },
+        visit: { ...completed } as unknown as Readonly<Record<string, unknown>>,
         fieldForm: null,
         fieldEvidence: null,
       },
