@@ -6,8 +6,12 @@ const browse = fs.readFileSync(
   'src/schedule/ScheduleBrowsePanel.tsx',
   'utf8'
 );
+const collaboration = fs.readFileSync(
+  'src/schedule/ScheduleItemCollaborationPanel.tsx',
+  'utf8'
+);
 const theme = fs.readFileSync('src/schedule/theme.ts', 'utf8');
-const rendered = page + '\n' + browse;
+const rendered = page + '\n' + browse + '\n' + collaboration;
 
 let passed = 0;
 let failed = 0;
@@ -147,6 +151,45 @@ test('24. controles novos mantêm alvo mínimo de toque', () => {
 test('25. atualização de filtros é anunciada sem apagar conteúdo anterior', () => {
   assert.match(browse, /Atualizando resultados/);
   assert.match(browse, /aria-live="polite"/);
+});
+
+test('26. colaboração usa expansão anunciada por aria-expanded', () => {
+  assert.match(collaboration, /aria-expanded=\{editing\}/);
+});
+
+test('27. participantes usam fieldset e legend semânticos', () => {
+  assert.match(collaboration, /<fieldset/);
+  assert.match(collaboration, /Participantes/);
+});
+
+test('28. participantes usam checkboxes com alvo mínimo de toque', () => {
+  assert.match(collaboration, /type="checkbox"/);
+  assert.match(collaboration, /min-h-\[44px\]/);
+  assert.match(collaboration, /focus-within:ring-2/);
+});
+
+test('29. erros de colaboração são anunciados como alertas', () => {
+  assert.match(collaboration, /role="alert"/);
+});
+
+test('30. confirmação de ciclo usa aria-labelledby', () => {
+  assert.match(collaboration, /aria-labelledby=/);
+  assert.match(collaboration, /schedule-action-/);
+});
+
+test('31. ações destrutivas exigem confirmação explícita', () => {
+  assert.match(collaboration, /Confirmar cancelamento/);
+  assert.match(collaboration, /Confirmar reabertura/);
+  assert.match(collaboration, />Confirmar</);
+});
+
+test('32. formulários de colaboração e ciclo possuem motivo obrigatório', () => {
+  assert.ok((collaboration.match(/required/g) ?? []).length >= 2);
+  assert.ok((collaboration.match(/minLength=\{3\}/g) ?? []).length >= 2);
+});
+
+test('33. botões de colaboração preservam ícones decorativos ocultos', () => {
+  assert.ok((collaboration.match(/aria-hidden="true"/g) ?? []).length >= 4);
 });
 
 console.log('\n====================================================');
