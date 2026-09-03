@@ -482,7 +482,7 @@ await test('29. recorrência semanal exige pelo menos um dia explícito', () => 
   );
 });
 
-await test('52. recorrência semanal aceita dias únicos válidos', () => {
+await test('30. recorrência semanal aceita dias únicos válidos', () => {
   const recurrence = normalizeScheduleRecurrence(
     {
       frequency: 'weekly',
@@ -495,7 +495,7 @@ await test('52. recorrência semanal aceita dias únicos válidos', () => {
   assert.deepEqual(recurrence.weekdays, [1, 3, 5]);
 });
 
-await test('53. recorrência não semanal não aceita weekdays', () => {
+await test('31. recorrência não semanal não aceita weekdays', () => {
   assert.throws(() =>
     normalizeScheduleRecurrence(
       {
@@ -509,7 +509,7 @@ await test('53. recorrência não semanal não aceita weekdays', () => {
   );
 });
 
-await test('52. migration cria fonte única schedule_items e auditoria', () => {
+await test('32. migration cria fonte única schedule_items e auditoria', () => {
   assert.match(migration, /create table if not exists public\.schedule_items/);
   assert.match(
     migration,
@@ -517,7 +517,7 @@ await test('52. migration cria fonte única schedule_items e auditoria', () => {
   );
 });
 
-await test('53. migration exige organization_id e FKs canônicas', () => {
+await test('33. migration exige organization_id e FKs canônicas', () => {
   assert.match(
     migration,
     /organization_id uuid not null references public\.organizations/
@@ -528,7 +528,7 @@ await test('53. migration exige organization_id e FKs canônicas', () => {
   );
 });
 
-await test('52. RLS está ativa nas tabelas do módulo', () => {
+await test('34. RLS está ativa nas tabelas do módulo', () => {
   assert.match(
     migration,
     /alter table public\.schedule_items enable row level security/
@@ -539,7 +539,7 @@ await test('52. RLS está ativa nas tabelas do módulo', () => {
   );
 });
 
-await test('53. leitura RLS depende de autorização organizacional', () => {
+await test('35. leitura RLS depende de autorização organizacional', () => {
   assert.match(
     migration,
     /agrocore_private\.can_view_schedule\(organization_id\)/
@@ -550,7 +550,7 @@ await test('53. leitura RLS depende de autorização organizacional', () => {
   );
 });
 
-await test('52. gestão backend fica restrita a owner/admin/manager', () => {
+await test('36. gestão backend fica restrita a owner/admin/manager', () => {
   assert.match(
     migration,
     /in \('owner','company_admin','manager'\)/
@@ -561,19 +561,19 @@ await test('52. gestão backend fica restrita a owner/admin/manager', () => {
   );
 });
 
-await test('53. RPCs usam SECURITY DEFINER e search_path fechado', () => {
+await test('37. RPCs usam SECURITY DEFINER e search_path fechado', () => {
   const defs = migration.match(/security definer[\s\S]*?set search_path = ''/gi);
   assert.ok((defs?.length ?? 0) >= 4);
 });
 
-await test('52. escrita direta autenticada permanece revogada', () => {
+await test('38. escrita direta autenticada permanece revogada', () => {
   assert.match(
     migration,
     /revoke insert, update, delete, truncate, references, trigger[\s\S]*schedule_items from authenticated/
   );
 });
 
-await test('53. atualização não aceita mudança de status', () => {
+await test('39. atualização não aceita mudança de status', () => {
   const start = migration.indexOf(
     'create or replace function public.agrocore_update_schedule_item'
   );
@@ -585,7 +585,7 @@ await test('53. atualização não aceita mudança de status', () => {
   assert.match(block, /v_current\.status <> 'pending'/);
 });
 
-await test('52. item de domínio não é editável manualmente', () => {
+await test('40. item de domínio não é editável manualmente', () => {
   assert.match(
     migration,
     /v_current\.origin_type <> 'manual'/
@@ -596,7 +596,7 @@ await test('52. item de domínio não é editável manualmente', () => {
   );
 });
 
-await test('53. criação pública sempre grava origem manual', () => {
+await test('41. criação pública sempre grava origem manual', () => {
   const createStart = migration.indexOf(
     'create or replace function public.agrocore_create_schedule_item'
   );
@@ -608,21 +608,21 @@ await test('53. criação pública sempre grava origem manual', () => {
   assert.doesNotMatch(createBlock, /p_payload\s*->>\s*'sourceDomain'/);
 });
 
-await test('52. não há tabela prematura de ocorrências', () => {
+await test('42. não há tabela prematura de ocorrências', () => {
   assert.doesNotMatch(
     migration,
     /create table(?: if not exists)? public\.schedule_occurrences/i
   );
 });
 
-await test('53. não há central de notificações antecipada', () => {
+await test('43. não há central de notificações antecipada', () => {
   assert.doesNotMatch(
     migration,
     /create table(?: if not exists)? public\.schedule_notifications/i
   );
 });
 
-await test('52. Módulo 007 já fornece eventos estáveis de calendário', () => {
+await test('44. Módulo 007 já fornece eventos estáveis de calendário', () => {
   assert.match(
     visitIntegrationMigration,
     /calendar\.visit_sync_requested/
@@ -633,7 +633,7 @@ await test('52. Módulo 007 já fornece eventos estáveis de calendário', () =>
   );
 });
 
-await test('53. rota /agenda está registrada e protegida', () => {
+await test('45. rota /agenda está registrada e protegida', () => {
   assert.match(paths, /SCHEDULE: '\/agenda'/);
   assert.match(routeMatrix, /path: ROUTES\.SCHEDULE/);
   assert.match(
@@ -642,7 +642,7 @@ await test('53. rota /agenda está registrada e protegida', () => {
   );
 });
 
-await test('52. navegação mostra Agenda apenas com schedule:view', () => {
+await test('46. navegação mostra Agenda apenas com schedule:view', () => {
   assert.match(navigation, /label: 'Agenda'/);
   assert.match(
     navigation,
@@ -650,25 +650,25 @@ await test('52. navegação mostra Agenda apenas com schedule:view', () => {
   );
 });
 
-await test('53. interface não exibe códigos internos de ordem', () => {
+await test('47. interface não exibe códigos internos de ordem', () => {
   assert.doesNotMatch(page, /OE-008|008\.001/i);
 });
 
-await test('52. tela começa com dados reais e estado vazio explícito', () => {
+await test('48. tela começa com dados reais e estado vazio explícito', () => {
   assert.match(page, /Nenhum registro na agenda/);
   assert.match(page, /somente registros reais da/);
   assert.doesNotMatch(page, /mock|fake|demo data|dados simulados/i);
 });
 
-await test('53. formulário não oferece participantes ou atribuição prematuramente', () => {
+await test('49. formulário não oferece participantes ou atribuição prematuramente', () => {
   assert.doesNotMatch(page, /participantUserIds|responsibleUserId/);
 });
 
-await test('52. formulário não oferece transição de conclusão/cancelamento', () => {
+await test('50. formulário não oferece transição de conclusão/cancelamento', () => {
   assert.doesNotMatch(page, /completeItem|cancelItem|reopenItem/);
 });
 
-await test('53. produção possui factory dedicado sem preview estático', () => {
+await test('51. produção possui factory dedicado sem preview estático', () => {
   assert.match(viteConfig, /production-schedule-gateway-factory/);
   assert.match(viteConfig, /SupabaseScheduleGateway/);
   assert.match(viteConfig, /UnavailableScheduleGateway/);
