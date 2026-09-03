@@ -1035,6 +1035,21 @@ await test('63. editor sincroniza o resultado persistido após salvar colaboraç
   );
 });
 
+await test('64. falha do diretório canônico bloqueia atribuição na interface', () => {
+  assert.match(
+    panelSource,
+    /!isMemberDirectoryAvailable/
+  );
+  assert.match(
+    panelSource,
+    /O diretório de integrantes está indisponível/
+  );
+  assert.match(
+    contextSource,
+    /setMemberDirectoryAvailable\(memberResult\.available\)/
+  );
+});
+
 console.log('\n====================================================');
 console.log(
   'Resultado Atribuição e Colaboração: ' +
