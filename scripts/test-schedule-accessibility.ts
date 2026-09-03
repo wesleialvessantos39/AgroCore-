@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const page = fs.readFileSync('src/pages/SchedulePage.tsx', 'utf8');
+const browse = fs.readFileSync(
+  'src/schedule/ScheduleBrowsePanel.tsx',
+  'utf8'
+);
 const theme = fs.readFileSync('src/schedule/theme.ts', 'utf8');
+const rendered = page + '\n' + browse;
 
 let passed = 0;
 let failed = 0;
@@ -71,11 +76,11 @@ test('11. título e descrição possuem limites de entrada', () => {
 });
 
 test('12. cartões quebram conteúdo longo em vez de forçar largura', () => {
-  assert.match(page, /break-words/);
+  assert.match(rendered, /break-words/);
 });
 
 test('13. interface não usa tabela larga para fundação móvel', () => {
-  assert.doesNotMatch(page, /<table|overflow-x-auto/i);
+  assert.doesNotMatch(rendered, /<table|overflow-x-auto/i);
 });
 
 test('14. formulário se reorganiza em duas colunas apenas em viewport maior', () => {
@@ -83,9 +88,9 @@ test('14. formulário se reorganiza em duas colunas apenas em viewport maior', (
 });
 
 test('15. informações do registro usam lista descritiva semântica', () => {
-  assert.match(page, /<dl/);
-  assert.match(page, /<dt/);
-  assert.match(page, /<dd/);
+  assert.match(rendered, /<dl/);
+  assert.match(rendered, /<dt/);
+  assert.match(rendered, /<dd/);
 });
 
 test('16. recorrência semanal usa fieldset e legend semânticos', () => {
@@ -105,6 +110,43 @@ test('18. envio semanal é bloqueado até existir dia selecionado', () => {
     page,
     /recurrenceFrequency === 'weekly'[\s\S]*recurrenceWeekdays\.length === 0/
   );
+});
+
+test('19. escopo pessoal/equipe usa botões pressionáveis', () => {
+  assert.match(browse, /aria-label="Escopo da agenda"/);
+  assert.match(browse, /aria-pressed=/);
+});
+
+test('20. modo lista/calendário usa grupo acessível', () => {
+  assert.match(browse, /aria-label="Modo de exibição"/);
+  assert.match(browse, />Lista</);
+  assert.match(browse, />Calendário</);
+});
+
+test('21. calendário desktop possui papéis semânticos', () => {
+  assert.match(browse, /role="grid"/);
+  assert.match(browse, /role="columnheader"/);
+  assert.match(browse, /role="gridcell"/);
+});
+
+test('22. lista móvel substitui a grade em telas pequenas', () => {
+  assert.match(browse, /Agenda mensal em lista para celular/);
+  assert.match(browse, /md:hidden/);
+  assert.match(browse, /hidden[\s\S]*md:grid/);
+});
+
+test('23. navegação mensal possui rótulos para leitor de tela', () => {
+  assert.match(browse, /aria-label="Mês anterior"/);
+  assert.match(browse, /aria-label="Próximo mês"/);
+});
+
+test('24. controles novos mantêm alvo mínimo de toque', () => {
+  assert.match(browse, /min-h-\[44px\]/);
+});
+
+test('25. atualização de filtros é anunciada sem apagar conteúdo anterior', () => {
+  assert.match(browse, /Atualizando resultados/);
+  assert.match(browse, /aria-live="polite"/);
 });
 
 console.log('\n====================================================');
