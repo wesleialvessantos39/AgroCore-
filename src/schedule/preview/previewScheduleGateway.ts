@@ -47,6 +47,7 @@ export class PreviewScheduleGateway implements ScheduleGateway {
 
   async listItems(
     organizationId: string,
+    actorUserId: string,
     filters: ScheduleItemListFilters = {},
     signal?: AbortSignal
   ): Promise<readonly ScheduleItem[]> {
@@ -55,6 +56,11 @@ export class PreviewScheduleGateway implements ScheduleGateway {
     }
     return Array.from(this.items.values())
       .filter((item) => item.organizationId === organizationId)
+      .filter(
+        (item) =>
+          filters.viewScope !== 'personal' ||
+          item.createdByUserId === actorUserId
+      )
       .filter(
         (item) =>
           !filters.kind ||
