@@ -123,6 +123,7 @@ interface ScheduleUpdateBase {
   readonly timeZone: string;
   readonly recurrence: ScheduleRecurrenceDefinition;
   readonly expectedVersion: number;
+  readonly idempotencyKey: string;
   readonly reason: string;
 }
 
@@ -176,6 +177,7 @@ export interface UpdateScheduleItemGatewayInput {
   readonly actorUserId: string;
   readonly scheduleItemId: string;
   readonly expectedVersion: number;
+  readonly idempotencyKey: string;
   readonly payload: ScheduleItemUpdatePayload;
   readonly reason: string;
 }
