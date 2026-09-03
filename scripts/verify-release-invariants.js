@@ -25,12 +25,15 @@ const fieldDevicePolicy = read('src/fieldVisits/fieldDevice.ts');
 const scheduleTests = read('scripts/test-schedule-foundation.ts');
 const scheduleViewTests = read('scripts/test-schedule-views.ts');
 const scheduleCollaborationTests = read('scripts/test-schedule-collaboration.ts');
+const scheduleReconciliationTests = read('scripts/test-schedule-reconciliation.ts');
 const scheduleModuleGate = read('scripts/test-module-008.js');
 const schedulePage = read('src/pages/SchedulePage.tsx');
 const scheduleBrowse = read('src/schedule/ScheduleBrowsePanel.tsx');
 const scheduleCollaborationPanel = read('src/schedule/ScheduleItemCollaborationPanel.tsx');
 const scheduleViewMigration = read('supabase/migrations/20260903190345_oe_008_002_schedule_view_indexes.sql');
 const scheduleCollaborationMigration = read('supabase/migrations/20260903193026_oe_008_003_assignment_collaboration.sql');
+const scheduleReconciliationMigration = read('supabase/migrations/20260903204000_oe_008_001_003_requirements_reconciliation.sql');
+const scheduleReconciliationBackfill = read('supabase/migrations/20260903205500_oe_008_001_003_reconciliation_backfill.sql');
 const scheduleMigration = read('supabase/migrations/20260903153944_oe_008_001_schedule_model.sql');
 const scheduleCommandHardening = read('supabase/migrations/20260903175453_oe_008_001_command_idempotency_hardening.sql');
 const scheduleGateway = read('src/schedule/supabaseScheduleGateway.ts');
@@ -204,6 +207,28 @@ assert(
   'A atribuição/ciclo deve usar persistência governada sem antecipar ocorrências ou notificações.'
 );
 assert(
+  !scheduleReconciliationTests.includes('process.exit(0)') &&
+    scheduleReconciliationTests.includes('Resultado reconciliação 008.001–003') &&
+    scheduleModuleGate.includes("run('scripts/test-schedule-reconciliation.ts')"),
+  'A reconciliação documental das OE-008.001–003 deve permanecer ativa no gate do Módulo 008.'
+);
+assert(
+  scheduleReconciliationMigration.includes('can_view_schedule_item') &&
+    scheduleReconciliationMigration.includes('schedule_items_org_source_entity_uq') &&
+    scheduleReconciliationMigration.includes('technical_visit_integration_events') &&
+    scheduleReconciliationMigration.includes('agrocore_schedule_consume_visit_calendar_event') &&
+    scheduleReconciliationBackfill.includes('v_event.source_version > v_visit.version') &&
+    !scheduleReconciliationMigration.includes('schedule_occurrences') &&
+    !scheduleReconciliationMigration.includes('schedule_notifications'),
+  'A Agenda deve manter RLS por item e consumir a fonte canônica de visitas sem antecipar OE-008.004/005.'
+);
+assert(
+  scheduleBrowse.includes('{canManage && (') &&
+    scheduleBrowse.includes('Origem: visita técnica') &&
+    schedulePage.includes('Agenda corporativa'),
+  'Equipe deve ser exclusiva da gestão e origens canônicas devem ser apresentadas sem IDs internos.'
+);
+assert(
   scheduleMigration.includes('create table if not exists public.schedule_items') &&
     scheduleMigration.includes('enable row level security') &&
     scheduleMigration.includes("set search_path = ''"),
@@ -234,4 +259,4 @@ assert(
   'O gate de produção deve validar ambiente sem chaves e regressões dos Módulos 001 a 008.'
 );
 
-console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e Módulo 008 integrado até atribuição e colaboração.');
+console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e Módulo 008 reconciliado até OE-008.003.');
