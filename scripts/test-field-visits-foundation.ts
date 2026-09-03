@@ -559,14 +559,18 @@ await test('24. Projetista responsável executa e conclui a visita após prepara
     0
   );
 
-  const completed = await service.transitionVisit(techCtx, visit.id, {
-    targetStatus: 'completed',
+  const completion = await service.completeVisit(techCtx, visit.id, {
     expectedVersion: started.version,
+    summary: 'Vistoria concluída com formulário de campo submetido e registro final emitido.',
+    pendingItems: [],
   });
+  const completed = completion.visit;
   assert.equal(started.status, 'in_progress');
   assert.equal(completed.status, 'completed');
   assert.ok(started.startedAt);
   assert.ok(completed.completedAt);
+  assert.equal(completion.report.version, 1);
+  assert.equal(completion.report.visitId, visit.id);
 });
 
 await test('25. Cancelamento exige motivo e fica auditado', async () => {
