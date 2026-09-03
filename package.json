@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "npm run test:environment-contract && node scripts/verify-release-invariants.js && tsc --noEmit && npm run test:module-001 && npm run test:module-002 && npm run test:module-003 && npm run test:module-004 && npm run test:module-006 && npm run test:module-007 && npm run test:module-008 && vite build && node scripts/build-sw.js && node scripts/verify-leak-free-build.js",
+    "build": "npm run test:environment-contract && node scripts/verify-release-invariants.js && tsc --noEmit && npm run test:module-001 && npm run test:module-002 && npm run test:module-003 && npm run test:module-006 && npm run test:module-007 && npm run test:module-008 && vite build && node scripts/build-sw.js && node scripts/verify-leak-free-build.js",
     "preview": "vite preview",
     "test:environment-contract": "node scripts/verify-environment-contract.js",
     "clean": "rm -rf dist server.js",
@@ -32,7 +32,7 @@
     "test:oe-004-002": "node --import tsx scripts/test-oe-004-002.ts",
     "test:oe-004-003": "node --import tsx scripts/test-oe-004-003.ts",
     "test:appraisal-workflow": "node --import tsx scripts/test-oe-004-002.ts",
-    "test:module-004": "node --import tsx scripts/test-appraisals-foundation.ts",
+    "test:module-004": "node --import tsx scripts/test-module-004.js",
     "test:proposals-foundation": "node --import tsx scripts/test-proposals-foundation.ts",
     "test:proposal-pipeline": "node --import tsx scripts/test-proposals-pipeline.ts",
     "test:proposal-documents": "node --import tsx scripts/test-proposal-documents.ts",
