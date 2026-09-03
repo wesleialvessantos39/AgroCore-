@@ -1020,6 +1020,21 @@ await test('62. escopo futuro continua sem ocorrências/notificações/canais ex
   );
 });
 
+await test('63. editor sincroniza o resultado persistido após salvar colaboração', () => {
+  assert.match(
+    panelSource,
+    /const updated = await onSetCollaboration/
+  );
+  assert.match(
+    panelSource,
+    /setResponsibleUserId\(updated\.responsibleUserId \?\? ''\)/
+  );
+  assert.match(
+    panelSource,
+    /setParticipantUserIds\(\[\.\.\.updated\.participantUserIds\]\)/
+  );
+});
+
 console.log('\n====================================================');
 console.log(
   'Resultado Atribuição e Colaboração: ' +
