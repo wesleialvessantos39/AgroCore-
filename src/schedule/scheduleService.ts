@@ -48,6 +48,7 @@ export class ScheduleService {
     this.assertActiveContext(context, 'schedule:view');
     return this.gateway.listItems(
       context.organizationId,
+      context.actor.userId,
       filters,
       signal
     );
