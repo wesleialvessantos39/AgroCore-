@@ -190,6 +190,58 @@ function mapError(error: { readonly message?: string } | null): Error {
   );
 }
 
+interface SupabaseOperationError {
+  readonly message?: string;
+  readonly code?: string;
+}
+
+interface SupabaseOperationResult {
+  readonly data: unknown;
+  readonly error: SupabaseOperationError | null;
+}
+
+function isTransientOperationError(
+  error: SupabaseOperationError | null
+): boolean {
+  if (!error) return false;
+  const code = error.code ?? '';
+  if (
+    code.startsWith('08') ||
+    ['PGRST000', 'PGRST001', 'PGRST002', '53300', '57P01', '57P02', '57P03']
+      .includes(code)
+  ) {
+    return true;
+  }
+
+  return /failed to fetch|network|timeout|timed out|connection reset|connection refused|502|503|504|bad gateway|service unavailable|gateway timeout/i
+    .test(error.message ?? '');
+}
+
+async function executeMutationWithRetry(
+  operation: () => PromiseLike<SupabaseOperationResult>
+): Promise<SupabaseOperationResult> {
+  const delays = [0, 200, 600] as const;
+  let last: SupabaseOperationResult = {
+    data: null,
+    error: { message: 'Falha de comunicação com o serviço de agenda.' },
+  };
+
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt] > 0) {
+      await new Promise((resolve) =>
+        globalThis.setTimeout(resolve, delays[attempt])
+      );
+    }
+
+    last = await operation();
+    if (!last.error || !isTransientOperationError(last.error)) {
+      return last;
+    }
+  }
+
+  return last;
+}
+
 function extractRow(data: unknown): ScheduleRow | null {
   if (Array.isArray(data)) {
     return (data[0] as ScheduleRow | undefined) ?? null;
@@ -254,13 +306,12 @@ export class SupabaseScheduleGateway implements ScheduleGateway {
   async createItem(
     input: CreateScheduleItemGatewayInput
   ): Promise<ScheduleItem> {
-    const { data, error } = await this.client.rpc(
-      'agrocore_create_schedule_item',
-      {
+    const { data, error } = await executeMutationWithRetry(() =>
+      this.client.rpc('agrocore_create_schedule_item', {
         p_organization_id: input.organizationId,
         p_payload: input.payload,
         p_idempotency_key: input.idempotencyKey,
-      }
+      })
     );
     if (error) throw mapError(error);
     const row = extractRow(data);
@@ -276,15 +327,15 @@ export class SupabaseScheduleGateway implements ScheduleGateway {
   async updateItem(
     input: UpdateScheduleItemGatewayInput
   ): Promise<ScheduleItem> {
-    const { data, error } = await this.client.rpc(
-      'agrocore_update_schedule_item',
-      {
+    const { data, error } = await executeMutationWithRetry(() =>
+      this.client.rpc('agrocore_update_schedule_item', {
         p_organization_id: input.organizationId,
         p_schedule_item_id: input.scheduleItemId,
         p_expected_version: input.expectedVersion,
+        p_idempotency_key: input.idempotencyKey,
         p_payload: input.payload,
         p_reason: input.reason,
-      }
+      })
     );
     if (error) throw mapError(error);
     const row = extractRow(data);
