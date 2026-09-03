@@ -186,19 +186,26 @@ export function ScheduleProvider({
       const [nextItems, memberResult] = await Promise.all([
         service.listItems(
           applicationContext,
-          filters,
+          !canManage && filters.viewScope === 'team'
+            ? { ...filters, viewScope: 'personal' }
+            : filters,
           controller.signal
         ),
-        service
-          .listEligibleMembers(applicationContext, controller.signal)
-          .then((members) => ({
-            available: true as const,
-            members,
-          }))
-          .catch(() => ({
-            available: false as const,
-            members: [] as readonly ScheduleMemberOption[],
-          })),
+        canManage
+          ? service
+              .listEligibleMembers(applicationContext, controller.signal)
+              .then((members) => ({
+                available: true as const,
+                members,
+              }))
+              .catch(() => ({
+                available: false as const,
+                members: [] as readonly ScheduleMemberOption[],
+              }))
+          : Promise.resolve({
+              available: false as const,
+              members: [] as readonly ScheduleMemberOption[],
+            }),
       ]);
 
       const currentMember: ScheduleMemberOption | null =
@@ -255,6 +262,7 @@ export function ScheduleProvider({
     }
   }, [
     applicationContext,
+    canManage,
     canView,
     filters,
     organizationId,
@@ -419,9 +427,16 @@ export function ScheduleProvider({
 
   const setFilters = useCallback(
     (next: Partial<ScheduleItemListFilters>) => {
-      setFiltersState((current) => ({ ...current, ...next }));
+      setFiltersState((current) => ({
+        ...current,
+        ...next,
+        viewScope:
+          !canManage && next.viewScope === 'team'
+            ? 'personal'
+            : (next.viewScope ?? current.viewScope),
+      }));
     },
-    []
+    [canManage]
   );
 
   const clearFilters = useCallback(() => {
