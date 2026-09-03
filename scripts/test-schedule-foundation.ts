@@ -107,6 +107,22 @@ const supabaseGateway = fs.readFileSync(
   'src/schedule/supabaseScheduleGateway.ts',
   'utf8'
 );
+const scheduleContextSource = fs.readFileSync(
+  'src/schedule/ScheduleContext.tsx',
+  'utf8'
+);
+const scheduleGatewayFactory = fs.readFileSync(
+  'src/schedule/gatewayFactory.ts',
+  'utf8'
+);
+const schedulePreviewSource = fs.readFileSync(
+  'src/schedule/preview/previewScheduleGateway.ts',
+  'utf8'
+);
+const scheduleServiceSource = fs.readFileSync(
+  'src/schedule/scheduleService.ts',
+  'utf8'
+);
 const page = fs.readFileSync('src/pages/SchedulePage.tsx', 'utf8');
 const paths = fs.readFileSync('src/routes/paths.ts', 'utf8');
 const routeMatrix = fs.readFileSync(
@@ -901,6 +917,48 @@ await test('62. erro de domínio remoto não é repetido automaticamente', async
       error.code === 'PERMISSION_DENIED'
   );
   assert.equal(attempts, 1);
+});
+
+await test('63. limpeza de sessão remove dados voláteis do preview', async () => {
+  const gateway = new PreviewScheduleGateway();
+  const service = new ScheduleService(gateway);
+  const ctx = context('owner');
+  await service.createTask(ctx, taskInput('cleanup-command-001'));
+  assert.equal((await service.listItems(ctx)).length, 1);
+  gateway.clearAllSessionData();
+  assert.equal((await service.listItems(ctx)).length, 0);
+});
+
+await test('64. consulta por ID não enumera item de outro tenant', async () => {
+  const gateway = new PreviewScheduleGateway();
+  const service = new ScheduleService(gateway);
+  const created = await service.createTask(
+    context('owner', 'org-a'),
+    taskInput('idor-command-001')
+  );
+  const result = await service.getItemById(
+    context('owner', 'org-b'),
+    created.id
+  );
+  assert.equal(result, null);
+});
+
+await test('65. troca de contexto invalida respostas em voo', () => {
+  assert.match(scheduleContextSource, /abortRef\.current\?\.abort\(\)/);
+  assert.match(scheduleContextSource, /organizationRef\.current/);
+  assert.match(scheduleContextSource, /requestId !== sequenceRef\.current/);
+});
+
+await test('66. módulo não persiste dados de negócio em storage local', () => {
+  const source = [
+    page,
+    scheduleContextSource,
+    scheduleGatewayFactory,
+    schedulePreviewSource,
+    scheduleServiceSource,
+  ].join('\n');
+  assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB/i);
+  assert.match(scheduleGatewayFactory, /registerDomainCleanup/);
 });
 
 console.log('\n====================================================');
