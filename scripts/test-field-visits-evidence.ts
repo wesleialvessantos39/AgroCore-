@@ -384,9 +384,10 @@ await test('22. Capturas no laudo, visita e cadastro gravam no mesmo evidenceId'
   );
 });
 
-await test('23. Painel informa explicitamente a fonte canônica do imóvel', () => {
-  assert.equal(panel.includes('Fonte canônica única do imóvel'), true);
+await test('23. Painel informa explicitamente a fonte única do imóvel sem jargão técnico', () => {
+  assert.equal(panel.includes('Fonte única do imóvel'), true);
   assert.equal(panel.includes('Cliente, laudo e visita/vistoria'), true);
+  assert.equal(panel.includes('Fonte canônica única do imóvel.'), false);
 });
 
 await test('24. Projetista recebe exatamente as duas ações para pendência cadastral', () => {
