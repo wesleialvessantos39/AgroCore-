@@ -25,10 +25,16 @@ class LazyDevelopmentScheduleGateway implements ScheduleGateway {
 
   async listItems(
     organizationId: string,
+    actorUserId: string,
     filters?: ScheduleItemListFilters,
     signal?: AbortSignal
   ): Promise<readonly ScheduleItem[]> {
-    return (await this.load()).listItems(organizationId, filters, signal);
+    return (await this.load()).listItems(
+      organizationId,
+      actorUserId,
+      filters,
+      signal
+    );
   }
 
   async getItemById(
