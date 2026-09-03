@@ -215,13 +215,6 @@ export class ScheduleService {
         'Este registro pertence ao domínio de origem e não pode ter colaboração alterada manualmente.'
       );
     }
-    if (current.status === 'completed' || current.status === 'cancelled') {
-      throw new ScheduleDomainError(
-        'STATUS_LOCKED',
-        'Reabra o registro antes de alterar responsável ou participantes.'
-      );
-    }
-
     const normalized = normalizeScheduleCollaborationInput(input);
     return this.gateway.setCollaboration({
       organizationId: context.organizationId,
