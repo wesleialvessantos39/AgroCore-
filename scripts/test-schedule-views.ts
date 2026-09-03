@@ -194,38 +194,62 @@ await test('4. equipe continua isolada por organization_id', async () => {
   assert.equal(items[0]?.organizationId, 'org-a');
 });
 
-await test('5. projetista autorizado pode consultar listas sem receber gestão', async () => {
+await test('5. projetista consulta apenas escopo pessoal sem receber gestão', async () => {
   const gateway = new PreviewScheduleGateway();
   const service = new ScheduleService(gateway);
   await service.createTask(
     context('owner', 'owner-a'),
-    taskInput('designer-view-001', 'Visível')
+    taskInput('designer-view-001', 'Registro alheio')
   );
   const permissions = getRolePermissions('project_designer');
   assert.equal(permissions.includes('schedule:view'), true);
   assert.equal(permissions.includes('schedule:manage'), false);
-  const items = await service.listItems(
-    context('project_designer', 'designer-a'),
-    { viewScope: 'team' }
+  assert.deepEqual(
+    await service.listItems(
+      context('project_designer', 'designer-a'),
+      { viewScope: 'personal' }
+    ),
+    []
   );
-  assert.equal(items.length, 1);
+  await assert.rejects(
+    () =>
+      service.listItems(
+        context('project_designer', 'designer-a'),
+        { viewScope: 'team' }
+      ),
+    (error: unknown) =>
+      error instanceof ScheduleDomainError &&
+      error.code === 'PERMISSION_DENIED'
+  );
 });
 
-await test('6. captador autorizado pode consultar listas sem receber gestão', async () => {
+await test('6. captador consulta apenas escopo pessoal sem receber gestão', async () => {
   const gateway = new PreviewScheduleGateway();
   const service = new ScheduleService(gateway);
   await service.createTask(
     context('owner', 'owner-a'),
-    taskInput('capturer-view-001', 'Visível')
+    taskInput('capturer-view-001', 'Registro alheio')
   );
   const permissions = getRolePermissions('capturer');
   assert.equal(permissions.includes('schedule:view'), true);
   assert.equal(permissions.includes('schedule:manage'), false);
-  const items = await service.listItems(
-    context('capturer', 'capturer-a'),
-    { viewScope: 'team' }
+  assert.deepEqual(
+    await service.listItems(
+      context('capturer', 'capturer-a'),
+      { viewScope: 'personal' }
+    ),
+    []
   );
-  assert.equal(items.length, 1);
+  await assert.rejects(
+    () =>
+      service.listItems(
+        context('capturer', 'capturer-a'),
+        { viewScope: 'team' }
+      ),
+    (error: unknown) =>
+      error instanceof ScheduleDomainError &&
+      error.code === 'PERMISSION_DENIED'
+  );
 });
 
 await test('7. financeiro continua negado na agenda', async () => {
@@ -449,8 +473,9 @@ await test('23. registros de outro mês não entram na coleção mensal datada',
   assert.equal(month.datedItems.length, 0);
 });
 
-await test('24. interface oferece alternância Minha agenda e Equipe', () => {
+await test('24. interface oferece Equipe somente para gestão autorizada', () => {
   assert.match(browseSource, /Minha agenda/);
+  assert.match(browseSource, /\{canManage && \(/);
   assert.match(browseSource, />Equipe</);
   assert.match(browseSource, /aria-label="Escopo da agenda"/);
 });
@@ -535,22 +560,23 @@ await test('36. índices continuam ancorados em organization_id', () => {
   );
 });
 
-await test('37. ausência de viewScope preserva visão de equipe no contrato de serviço', async () => {
+await test('37. ausência de viewScope usa visão pessoal por menor privilégio', async () => {
   const gateway = new PreviewScheduleGateway();
   const service = new ScheduleService(gateway);
   await service.createTask(
     context('owner', 'user-a'),
-    taskInput('default-team-001', 'Tarefa A')
+    taskInput('default-personal-001', 'Tarefa A')
   );
   await service.createTask(
     context('owner', 'user-b'),
-    taskInput('default-team-002', 'Tarefa B')
+    taskInput('default-personal-002', 'Tarefa B')
   );
   const items = await service.listItems(
     context('owner', 'user-a'),
     {}
   );
-  assert.equal(items.length, 2);
+  assert.equal(items.length, 1);
+  assert.equal(items[0]?.createdByUserId, 'user-a');
 });
 
 await test('38. escopo de visualização inválido é recusado no domínio', async () => {
