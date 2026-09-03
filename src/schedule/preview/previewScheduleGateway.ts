@@ -76,9 +76,18 @@ export class PreviewScheduleGateway implements ScheduleGateway {
     organizationId: string,
     members: readonly ScheduleMemberOption[]
   ): void {
+    const allowedRoles = new Set([
+      'owner',
+      'company_admin',
+      'manager',
+      'project_designer',
+      'capturer',
+    ]);
     this.eligibleMembers.set(
       organizationId,
-      members.map((member) => ({ ...member }))
+      members
+        .filter((member) => allowedRoles.has(member.organizationRole))
+        .map((member) => ({ ...member }))
     );
   }
 
