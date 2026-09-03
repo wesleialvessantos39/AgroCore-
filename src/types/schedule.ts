@@ -1,0 +1,242 @@
+import type { Permission } from './authorization';
+import type { OrganizationRole } from './auth';
+
+export type ScheduleItemKind = 'task' | 'appointment';
+export type SchedulePriority = 'low' | 'medium' | 'high' | 'urgent';
+export type ScheduleItemStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'blocked'
+  | 'completed'
+  | 'cancelled';
+
+export type ScheduleRecurrenceFrequency =
+  | 'none'
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'yearly';
+
+export interface ScheduleRecurrenceDefinition {
+  readonly frequency: ScheduleRecurrenceFrequency;
+  readonly interval: number;
+  readonly weekdays: readonly number[];
+  readonly endsAt: string | null;
+}
+
+export interface ScheduleManualOrigin {
+  readonly type: 'manual';
+  readonly sourceDomain: null;
+  readonly sourceId: null;
+  readonly sourceVersion: null;
+  readonly sourceEventKey: null;
+}
+
+export interface ScheduleDomainEventOrigin {
+  readonly type: 'domain_event';
+  readonly sourceDomain: string;
+  readonly sourceId: string;
+  readonly sourceVersion: number;
+  readonly sourceEventKey: string;
+}
+
+export type ScheduleOrigin = ScheduleManualOrigin | ScheduleDomainEventOrigin;
+
+interface ScheduleItemBase {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly priority: SchedulePriority;
+  readonly status: ScheduleItemStatus;
+  readonly timeZone: string;
+  readonly recurrence: ScheduleRecurrenceDefinition;
+  readonly origin: ScheduleOrigin;
+  readonly createdByUserId: string;
+  readonly createdAt: string;
+  readonly updatedByUserId: string;
+  readonly updatedAt: string;
+  readonly version: number;
+}
+
+export interface CorporateTask extends ScheduleItemBase {
+  readonly kind: 'task';
+  readonly dueAt: string | null;
+  readonly startsAt: null;
+  readonly endsAt: null;
+}
+
+export interface CalendarAppointment extends ScheduleItemBase {
+  readonly kind: 'appointment';
+  readonly dueAt: null;
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
+export type ScheduleItem = CorporateTask | CalendarAppointment;
+
+export interface ScheduleItemAuditEntry {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly scheduleItemId: string;
+  readonly action: 'created' | 'updated';
+  readonly actorUserId: string;
+  readonly occurredAt: string;
+  readonly itemVersion: number;
+  readonly changedFields: readonly string[];
+  readonly reason: string | null;
+}
+
+export interface ScheduleItemListFilters {
+  readonly kind?: ScheduleItemKind | 'all';
+  readonly status?: ScheduleItemStatus | 'all';
+}
+
+interface ScheduleCreateBase {
+  readonly title: string;
+  readonly description?: string | null;
+  readonly priority: SchedulePriority;
+  readonly timeZone: string;
+  readonly recurrence?: ScheduleRecurrenceDefinition;
+  readonly idempotencyKey: string;
+}
+
+export interface CreateCorporateTaskInput extends ScheduleCreateBase {
+  readonly kind: 'task';
+  readonly dueAt?: string | null;
+}
+
+export interface CreateCalendarAppointmentInput extends ScheduleCreateBase {
+  readonly kind: 'appointment';
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
+export type CreateScheduleItemInput =
+  | CreateCorporateTaskInput
+  | CreateCalendarAppointmentInput;
+
+interface ScheduleUpdateBase {
+  readonly title: string;
+  readonly description?: string | null;
+  readonly priority: SchedulePriority;
+  readonly timeZone: string;
+  readonly recurrence: ScheduleRecurrenceDefinition;
+  readonly expectedVersion: number;
+  readonly reason: string;
+}
+
+export interface UpdateCorporateTaskInput extends ScheduleUpdateBase {
+  readonly kind: 'task';
+  readonly dueAt?: string | null;
+}
+
+export interface UpdateCalendarAppointmentInput extends ScheduleUpdateBase {
+  readonly kind: 'appointment';
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
+export type UpdateScheduleItemInput =
+  | UpdateCorporateTaskInput
+  | UpdateCalendarAppointmentInput;
+
+export interface ScheduleItemCreatePayload {
+  readonly kind: ScheduleItemKind;
+  readonly title: string;
+  readonly description: string | null;
+  readonly priority: SchedulePriority;
+  readonly timeZone: string;
+  readonly dueAt: string | null;
+  readonly startsAt: string | null;
+  readonly endsAt: string | null;
+  readonly recurrence: ScheduleRecurrenceDefinition;
+}
+
+export interface ScheduleItemUpdatePayload {
+  readonly title: string;
+  readonly description: string | null;
+  readonly priority: SchedulePriority;
+  readonly timeZone: string;
+  readonly dueAt: string | null;
+  readonly startsAt: string | null;
+  readonly endsAt: string | null;
+  readonly recurrence: ScheduleRecurrenceDefinition;
+}
+
+export interface CreateScheduleItemGatewayInput {
+  readonly organizationId: string;
+  readonly payload: ScheduleItemCreatePayload;
+  readonly idempotencyKey: string;
+}
+
+export interface UpdateScheduleItemGatewayInput {
+  readonly organizationId: string;
+  readonly scheduleItemId: string;
+  readonly expectedVersion: number;
+  readonly payload: ScheduleItemUpdatePayload;
+  readonly reason: string;
+}
+
+export interface ScheduleGateway {
+  listItems(
+    organizationId: string,
+    filters?: ScheduleItemListFilters,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleItem[]>;
+  getItemById(
+    organizationId: string,
+    scheduleItemId: string,
+    signal?: AbortSignal
+  ): Promise<ScheduleItem | null>;
+  createItem(input: CreateScheduleItemGatewayInput): Promise<ScheduleItem>;
+  updateItem(input: UpdateScheduleItemGatewayInput): Promise<ScheduleItem>;
+  listAudit(
+    organizationId: string,
+    scheduleItemId: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleItemAuditEntry[]>;
+  clearAllSessionData(): void;
+}
+
+export interface ScheduleApplicationContext {
+  readonly organizationId: string;
+  readonly actor: {
+    readonly userId: string;
+    readonly role: OrganizationRole;
+    readonly isActive: boolean;
+    readonly permissions: readonly Permission[];
+  };
+}
+
+export type ScheduleDomainErrorCode =
+  | 'ORGANIZATION_REQUIRED'
+  | 'PERMISSION_DENIED'
+  | 'ITEM_NOT_FOUND'
+  | 'INVALID_INPUT'
+  | 'INVALID_DATE'
+  | 'INVALID_TIME_ZONE'
+  | 'CONCURRENCY_CONFLICT'
+  | 'IDEMPOTENCY_CONFLICT'
+  | 'SOURCE_OWNED'
+  | 'STATUS_LOCKED'
+  | 'NO_CHANGES'
+  | 'SERVICE_UNAVAILABLE';
+
+export class ScheduleDomainError extends Error {
+  constructor(
+    public readonly code: ScheduleDomainErrorCode,
+    message: string
+  ) {
+    super(message);
+    this.name = 'ScheduleDomainError';
+  }
+}
+
+export const DEFAULT_SCHEDULE_RECURRENCE: ScheduleRecurrenceDefinition =
+  Object.freeze({
+    frequency: 'none',
+    interval: 1,
+    weekdays: Object.freeze([]) as readonly number[],
+    endsAt: null,
+  });
