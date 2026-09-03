@@ -14,6 +14,10 @@ const rlsFix = fs.readFileSync(
   'supabase/migrations/20260903121647_oe_007_006_rls_authorizer_access.sql',
   'utf8'
 );
+const fkIndexes = fs.readFileSync(
+  'supabase/migrations/20260903122147_oe_007_006_visit_fk_indexes.sql',
+  'utf8'
+);
 const types = fs.readFileSync(
   'src/types/technicalVisitIntegration.ts',
   'utf8'
@@ -387,6 +391,17 @@ await test('37. Limpeza de sessão remove integrações do preview', async () =>
   await assert.rejects(
     () => gateway.getIntegrationSnapshot(entity.organizationId, entity.id),
     (error: unknown) => error instanceof Error
+  );
+});
+
+await test('38. FKs de visita possuem índices dedicados após o advisor', () => {
+  assert.match(
+    fkIndexes,
+    /technical_visit_integration_links_visit_fk_idx[\s\S]*\(visit_id\)/
+  );
+  assert.match(
+    fkIndexes,
+    /technical_visit_integration_events_visit_fk_idx[\s\S]*\(visit_id\)/
   );
 });
 
