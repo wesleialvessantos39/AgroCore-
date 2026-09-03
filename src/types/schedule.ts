@@ -166,12 +166,14 @@ export interface ScheduleItemUpdatePayload {
 
 export interface CreateScheduleItemGatewayInput {
   readonly organizationId: string;
+  readonly actorUserId: string;
   readonly payload: ScheduleItemCreatePayload;
   readonly idempotencyKey: string;
 }
 
 export interface UpdateScheduleItemGatewayInput {
   readonly organizationId: string;
+  readonly actorUserId: string;
   readonly scheduleItemId: string;
   readonly expectedVersion: number;
   readonly payload: ScheduleItemUpdatePayload;
