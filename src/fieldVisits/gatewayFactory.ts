@@ -5,6 +5,7 @@ import type {
   TechnicalVisitListFilters,
   TechnicalVisitWrite,
 } from '../types/technicalVisit';
+import type { TechnicalVisitReport } from '../types/technicalVisitReport';
 import { registerDomainCleanup } from '../auth/domainCleanupRegistry';
 import { UnavailableTechnicalVisitGateway } from './unavailableGateway';
 import { getSupabaseClient } from '../infrastructure/supabaseClient';
@@ -50,6 +51,32 @@ class LazyDevelopmentTechnicalVisitGateway implements TechnicalVisitGateway {
     visitId: string
   ): Promise<readonly TechnicalVisitAuditEntry[]> {
     return (await this.load()).listAudit(organizationId, visitId);
+  }
+
+  async completeVisit(
+    input: CompleteTechnicalVisitGatewayInput
+  ): Promise<TechnicalVisitCompletionResult> {
+    return (await this.load()).completeVisit(input);
+  }
+
+  async getLatestReport(
+    organizationId: string,
+    visitId: string
+  ): Promise<TechnicalVisitReport | null> {
+    return (await this.load()).getLatestReport(organizationId, visitId);
+  }
+
+  async listReportVersions(
+    organizationId: string,
+    visitId: string
+  ): Promise<readonly TechnicalVisitReport[]> {
+    return (await this.load()).listReportVersions(organizationId, visitId);
+  }
+
+  async reviseReport(
+    input: ReviseTechnicalVisitReportGatewayInput
+  ): Promise<TechnicalVisitReport> {
+    return (await this.load()).reviseReport(input);
   }
 
   clearAllSessionData(): void {
