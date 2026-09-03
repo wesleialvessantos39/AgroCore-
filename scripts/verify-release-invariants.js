@@ -23,7 +23,11 @@ const fieldHomologationTests = read('scripts/test-field-visits-field-homologatio
 const fieldConnectivityHook = read('src/fieldVisits/useFieldConnectivity.ts');
 const fieldDevicePolicy = read('src/fieldVisits/fieldDevice.ts');
 const scheduleTests = read('scripts/test-schedule-foundation.ts');
+const scheduleViewTests = read('scripts/test-schedule-views.ts');
+const scheduleModuleGate = read('scripts/test-module-008.js');
 const schedulePage = read('src/pages/SchedulePage.tsx');
+const scheduleBrowse = read('src/schedule/ScheduleBrowsePanel.tsx');
+const scheduleViewMigration = read('supabase/migrations/20260903190345_oe_008_002_schedule_view_indexes.sql');
 const scheduleMigration = read('supabase/migrations/20260903153944_oe_008_001_schedule_model.sql');
 const scheduleCommandHardening = read('supabase/migrations/20260903175453_oe_008_001_command_idempotency_hardening.sql');
 const scheduleGateway = read('src/schedule/supabaseScheduleGateway.ts');
@@ -152,8 +156,24 @@ assert(
 assert(
   schedulePage.includes('Agenda corporativa') &&
     schedulePage.includes('Novo registro') &&
-    !schedulePage.includes('OE-008'),
-  'A interface da Agenda deve permanecer funcional sem expor códigos internos de execução.'
+    schedulePage.includes('ScheduleBrowsePanel') &&
+    scheduleBrowse.includes('Minha agenda') &&
+    scheduleBrowse.includes('Equipe') &&
+    scheduleBrowse.includes('Calendário') &&
+    !schedulePage.includes('OE-008') &&
+    !scheduleBrowse.includes('OE-008'),
+  'A Agenda deve manter criação, visão pessoal/equipe e calendário sem expor códigos internos.'
+);
+assert(
+  !scheduleViewTests.includes('process.exit(0)') &&
+    scheduleViewTests.includes('Resultado Listas e Agenda') &&
+    scheduleModuleGate.includes("run('scripts/test-schedule-views.ts')"),
+  'A suíte da OE-008.002 deve permanecer ativa dentro do gate do Módulo 008.'
+);
+assert(
+  scheduleViewMigration.includes('schedule_items_org_creator_kind_status_idx') &&
+    !scheduleViewMigration.includes('create table'),
+  'A OE-008.002 deve otimizar leitura sem criar fonte canônica paralela.'
 );
 assert(
   scheduleMigration.includes('create table if not exists public.schedule_items') &&
@@ -186,4 +206,4 @@ assert(
   'O gate de produção deve validar ambiente sem chaves e regressões dos Módulos 001 a 008.'
 );
 
-console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e fundação do Módulo 008 integrada.');
+console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e Módulo 008 integrado até listas e agenda.');
