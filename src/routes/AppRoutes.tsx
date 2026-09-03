@@ -197,6 +197,10 @@ const FieldVisitsPage = lazy(() =>
   import('../pages/FieldVisitsPage').then((module) => ({ default: module.FieldVisitsPage }))
 );
 
+const SchedulePage = lazy(() =>
+  import('../pages/SchedulePage').then((module) => ({ default: module.SchedulePage }))
+);
+
 const MyAccountPage = lazy(() =>
   import('../pages/MyAccountPage').then((module) => ({
     default: module.MyAccountPage,
@@ -672,6 +676,22 @@ export function AppRoutes() {
             }
           >
             <Route index element={<FieldVisitsPage />} />
+          </Route>
+
+          {/* Agenda Corporativa (Módulo 008) */}
+          <Route
+            path={ROUTES.SCHEDULE}
+            element={
+              <ProtectedRoute>
+                <OrganizationGate>
+                  <RequirePermission permission="schedule:view">
+                    <AppShell />
+                  </RequirePermission>
+                </OrganizationGate>
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<SchedulePage />} />
           </Route>
 
           {/* Rota Minha Conta Integrada ao AppShell e Permissão */}
