@@ -178,10 +178,12 @@ assert(
     packageJson.scripts.build.includes('test:module-001') &&
     packageJson.scripts.build.includes('test:module-002') &&
     packageJson.scripts.build.includes('test:module-003') &&
+    packageJson.scripts.build.includes('test:module-004') &&
+    packageJson.scripts.build.includes('test:module-005') &&
     packageJson.scripts.build.includes('test:module-006') &&
     packageJson.scripts.build.includes('test:module-007') &&
     packageJson.scripts.build.includes('test:module-008'),
-  'O gate diagnóstico deve validar ambiente sem chaves e a OE-008.001 atual junto aos gates previamente verdes.'
+  'O gate de produção deve validar ambiente sem chaves e regressões dos Módulos 001 a 008.'
 );
 
 console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e fundação do Módulo 008 integrada.');
