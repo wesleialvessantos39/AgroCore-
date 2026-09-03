@@ -274,6 +274,7 @@ export function ScheduleBrowsePanel({
   filters,
   isLoading,
   members,
+  isMemberDirectoryAvailable,
   currentUserId,
   canManage,
   onFiltersChange,
