@@ -4,15 +4,21 @@ import {
   type CreateCorporateTaskInput,
   type ScheduleApplicationContext,
   type ScheduleGateway,
+  type ScheduleCollaborationRevision,
   type ScheduleItem,
   type ScheduleItemAuditEntry,
   type ScheduleItemListFilters,
+  type ScheduleMemberOption,
+  type ScheduleTransitionInput,
+  type SetScheduleCollaborationInput,
   type UpdateScheduleItemInput,
 } from '../types/schedule';
 import {
   assertScheduleIdempotencyKey,
   normalizeCreateScheduleItem,
+  normalizeScheduleCollaborationInput,
   normalizeScheduleListFilters,
+  normalizeScheduleTransitionInput,
   normalizeUpdateScheduleItem,
 } from './validation';
 
@@ -166,6 +172,203 @@ export class ScheduleService {
       payload,
       reason: input.reason.trim(),
     });
+  }
+
+  async listEligibleMembers(
+    context: ScheduleApplicationContext,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleMemberOption[]> {
+    this.assertActiveContext(context, 'schedule:view');
+    return this.gateway.listEligibleMembers(
+      context.organizationId,
+      signal
+    );
+  }
+
+  async setCollaboration(
+    context: ScheduleApplicationContext,
+    scheduleItemId: string,
+    input: SetScheduleCollaborationInput
+  ): Promise<ScheduleItem> {
+    this.assertActiveContext(context, 'schedule:manage');
+    const normalizedId = scheduleItemId.trim();
+    if (!normalizedId) {
+      throw new ScheduleDomainError(
+        'INVALID_INPUT',
+        'Identificador de agenda inválido.'
+      );
+    }
+
+    const current = await this.gateway.getItemById(
+      context.organizationId,
+      normalizedId
+    );
+    if (!current) {
+      throw new ScheduleDomainError(
+        'ITEM_NOT_FOUND',
+        'Registro de agenda não encontrado.'
+      );
+    }
+    if (current.origin.type !== 'manual') {
+      throw new ScheduleDomainError(
+        'SOURCE_OWNED',
+        'Este registro pertence ao domínio de origem e não pode ter colaboração alterada manualmente.'
+      );
+    }
+    if (current.status === 'completed' || current.status === 'cancelled') {
+      throw new ScheduleDomainError(
+        'STATUS_LOCKED',
+        'Reabra o registro antes de alterar responsável ou participantes.'
+      );
+    }
+
+    const normalized = normalizeScheduleCollaborationInput(input);
+    return this.gateway.setCollaboration({
+      organizationId: context.organizationId,
+      actorUserId: context.actor.userId,
+      scheduleItemId: normalizedId,
+      expectedVersion: normalized.expectedVersion,
+      idempotencyKey: normalized.idempotencyKey,
+      responsibleUserId: normalized.responsibleUserId,
+      participantUserIds: normalized.participantUserIds,
+      reason: normalized.reason,
+    });
+  }
+
+  async completeItem(
+    context: ScheduleApplicationContext,
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ): Promise<ScheduleItem> {
+    this.assertActiveContext(context, 'schedule:view');
+    const current = await this.requireMutableItem(context, scheduleItemId);
+    const canManage = context.actor.permissions.includes('schedule:manage');
+
+    if (!canManage && current.responsibleUserId !== context.actor.userId) {
+      throw new ScheduleDomainError(
+        'RESPONSIBLE_MISMATCH',
+        'Somente o responsável atual ou a gestão pode concluir este registro.'
+      );
+    }
+    if (!['pending', 'in_progress', 'blocked'].includes(current.status)) {
+      throw new ScheduleDomainError(
+        'INVALID_TRANSITION',
+        'Somente registros ativos podem ser concluídos.'
+      );
+    }
+
+    const normalized = normalizeScheduleTransitionInput(input);
+    return this.gateway.completeItem({
+      organizationId: context.organizationId,
+      actorUserId: context.actor.userId,
+      actorCanManage: canManage,
+      scheduleItemId: current.id,
+      expectedVersion: normalized.expectedVersion,
+      idempotencyKey: normalized.idempotencyKey,
+      reason: normalized.reason,
+    });
+  }
+
+  async reopenItem(
+    context: ScheduleApplicationContext,
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ): Promise<ScheduleItem> {
+    this.assertActiveContext(context, 'schedule:manage');
+    const current = await this.requireMutableItem(context, scheduleItemId);
+    if (!['completed', 'cancelled'].includes(current.status)) {
+      throw new ScheduleDomainError(
+        'INVALID_TRANSITION',
+        'Somente registros concluídos ou cancelados podem ser reabertos.'
+      );
+    }
+
+    const normalized = normalizeScheduleTransitionInput(input);
+    return this.gateway.reopenItem({
+      organizationId: context.organizationId,
+      actorUserId: context.actor.userId,
+      actorCanManage: true,
+      scheduleItemId: current.id,
+      expectedVersion: normalized.expectedVersion,
+      idempotencyKey: normalized.idempotencyKey,
+      reason: normalized.reason,
+    });
+  }
+
+  async cancelItem(
+    context: ScheduleApplicationContext,
+    scheduleItemId: string,
+    input: ScheduleTransitionInput
+  ): Promise<ScheduleItem> {
+    this.assertActiveContext(context, 'schedule:manage');
+    const current = await this.requireMutableItem(context, scheduleItemId);
+    if (!['pending', 'in_progress', 'blocked'].includes(current.status)) {
+      throw new ScheduleDomainError(
+        'INVALID_TRANSITION',
+        'Somente registros ativos podem ser cancelados.'
+      );
+    }
+
+    const normalized = normalizeScheduleTransitionInput(input);
+    return this.gateway.cancelItem({
+      organizationId: context.organizationId,
+      actorUserId: context.actor.userId,
+      actorCanManage: true,
+      scheduleItemId: current.id,
+      expectedVersion: normalized.expectedVersion,
+      idempotencyKey: normalized.idempotencyKey,
+      reason: normalized.reason,
+    });
+  }
+
+  async listCollaborationRevisions(
+    context: ScheduleApplicationContext,
+    scheduleItemId: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleCollaborationRevision[]> {
+    this.assertActiveContext(context, 'schedule:view');
+    const item = await this.getItemById(
+      context,
+      scheduleItemId,
+      signal
+    );
+    if (!item) return [];
+    return this.gateway.listCollaborationRevisions(
+      context.organizationId,
+      item.id,
+      signal
+    );
+  }
+
+  private async requireMutableItem(
+    context: ScheduleApplicationContext,
+    scheduleItemId: string
+  ): Promise<ScheduleItem> {
+    const normalizedId = scheduleItemId.trim();
+    if (!normalizedId) {
+      throw new ScheduleDomainError(
+        'INVALID_INPUT',
+        'Identificador de agenda inválido.'
+      );
+    }
+
+    const current = await this.gateway.getItemById(
+      context.organizationId,
+      normalizedId
+    );
+    if (!current) {
+      throw new ScheduleDomainError(
+        'ITEM_NOT_FOUND',
+        'Registro de agenda não encontrado.'
+      );
+    }
+    if (current.origin.type !== 'manual') {
+      throw new ScheduleDomainError(
+        'SOURCE_OWNED',
+        'Este registro pertence ao domínio de origem e não pode ter seu ciclo alterado manualmente.'
+      );
+    }
+    return current;
   }
 
   async listAudit(
