@@ -673,7 +673,7 @@ await test('46. navegação mostra Agenda apenas com schedule:view', () => {
 });
 
 await test('47. interface não exibe códigos internos de ordem', () => {
-  assert.doesNotMatch(renderedSchedule, /OE-008|008\.00[12]/i);
+  assert.doesNotMatch(renderedSchedule, /OE-008|008\.00[123]/i);
 });
 
 await test('48. tela começa com dados reais e estado vazio explícito', () => {
@@ -685,18 +685,15 @@ await test('48. tela começa com dados reais e estado vazio explícito', () => {
   );
 });
 
-await test('49. formulário não oferece participantes ou atribuição prematuramente', () => {
-  assert.doesNotMatch(
-    renderedSchedule,
-    /participantUserIds|responsibleUserId/
-  );
+await test('49. formulário de criação permanece separado da colaboração', () => {
+  assert.doesNotMatch(page, /<span>Responsável<\/span>/);
+  assert.doesNotMatch(page, /<legend[^>]*>Participantes<\/legend>/);
 });
 
-await test('50. formulário não oferece transição de conclusão/cancelamento', () => {
-  assert.doesNotMatch(
-    renderedSchedule,
-    /completeItem|cancelItem|reopenItem/
-  );
+await test('50. formulário de criação não mistura transições de ciclo', () => {
+  assert.doesNotMatch(page, />Concluir</);
+  assert.doesNotMatch(page, />Cancelar</);
+  assert.doesNotMatch(page, />Reabrir</);
 });
 
 await test('51. produção possui factory dedicado sem preview estático', () => {
