@@ -9,6 +9,10 @@ const hardening = fs.readFileSync(
   'supabase/migrations/20260903022428_oe_007_005_report_hardening.sql',
   'utf8'
 );
+const integrityHardening = fs.readFileSync(
+  'supabase/migrations/20260903022512_oe_007_005_report_integrity_hardening.sql',
+  'utf8'
+);
 const service = fs.readFileSync('src/fieldVisits/technicalVisitService.ts', 'utf8');
 const supabaseGateway = fs.readFileSync(
   'src/fieldVisits/supabaseTechnicalVisitGateway.ts',
@@ -160,6 +164,34 @@ test('20. Pendências permanecem no relatório sem antecipar Agenda ou Frota', (
   assert.match(types, /TechnicalVisitPendingItem/);
   assert.doesNotMatch(types, /taskId|fleetId|calendarId/);
   assert.match(panel, /tarefas e integrações serão tratadas nas ordens próprias/i);
+});
+
+test('21. Snapshot resolve a evidência pela ligação canônica da OE-007.004', () => {
+  assert.match(integrityHardening, /from public\.field_evidence_links l/i);
+  assert.match(integrityHardening, /l\.entity_type = 'visit'/);
+  assert.match(integrityHardening, /l\.entity_id = p_visit_id::text/);
+  assert.match(
+    integrityHardening,
+    /e\.property_id is not distinct from v_current\.property_id/
+  );
+});
+
+test('22. Banco recusa identificadores duplicados e fora do limite', () => {
+  assert.match(integrityHardening, /not between 1 and 120/);
+  assert.match(integrityHardening, /group by btrim\(item ->> 'id'\)/);
+  assert.match(integrityHardening, /having count\(\*\) > 1/);
+});
+
+test('23. Concorrência não pode ser contornada com versão esperada nula', () => {
+  assert.match(integrityHardening, /p_expected_version is null/);
+  assert.match(integrityHardening, /p_expected_report_version is null/);
+});
+
+test('24. Pendências são normalizadas no servidor antes da persistência', () => {
+  assert.match(integrityHardening, /v_pending_items jsonb/);
+  assert.match(integrityHardening, /'id', btrim\(item ->> 'id'\)/);
+  assert.match(integrityHardening, /'description', btrim\(item ->> 'description'\)/);
+  assert.match(integrityHardening, /'pendingItems', v_pending_items/);
 });
 
 console.log(`\nResultado OE-007.005: ${passed} aprovadas, ${failed} falhas.`);
