@@ -9,6 +9,7 @@ import {
   type ScheduleItemListFilters,
   type ScheduleMemberOption,
   type ScheduleRecurrenceDefinition,
+  type ScheduleSourceDomain,
   type ScheduleTransitionGatewayInput,
   type SetScheduleCollaborationGatewayInput,
   type UpdateScheduleItemGatewayInput,
@@ -87,6 +88,22 @@ const AUDIT_COLUMNS =
 const REVISION_COLUMNS =
   'id,organization_id,schedule_item_id,item_version,responsible_user_id,participant_user_ids,actor_user_id,occurred_at,reason';
 
+function parseSourceDomain(
+  value: string | null
+): ScheduleSourceDomain {
+  if (
+    value === 'technical_visit' ||
+    value === 'appraisal' ||
+    value === 'proposal'
+  ) {
+    return value;
+  }
+  throw new ScheduleDomainError(
+    'SERVICE_UNAVAILABLE',
+    'O registro integrado possui origem canônica inválida.'
+  );
+}
+
 function cloneRecurrence(
   recurrence: ScheduleRecurrenceDefinition
 ): ScheduleRecurrenceDefinition {
@@ -122,7 +139,7 @@ function mapItem(
           } as const)
         : ({
             type: 'domain_event',
-            sourceDomain: row.source_domain ?? '',
+            sourceDomain: parseSourceDomain(row.source_domain),
             sourceId: row.source_id ?? '',
             sourceVersion: row.source_version ?? 1,
             sourceEventKey: row.source_event_key ?? '',
