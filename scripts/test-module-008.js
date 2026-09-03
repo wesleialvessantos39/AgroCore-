@@ -19,10 +19,11 @@ try {
   run('scripts/test-schedule-foundation.ts');
   run('scripts/test-schedule-views.ts');
   run('scripts/test-schedule-collaboration.ts');
+  run('scripts/test-schedule-reconciliation.ts');
   run('scripts/test-schedule-accessibility.ts');
   run('scripts/test-schedule-theme.js');
   console.log(
-    '\n✅ MÓDULO 008 — GATE AUTOMATIZADO ATÉ ATRIBUIÇÃO E COLABORAÇÃO APROVADO'
+    '\n✅ MÓDULO 008 — GATE RECONCILIADO ATÉ OE-008.003 APROVADO'
   );
 } catch (error) {
   console.error('\n❌ Falha na homologação do Módulo 008.');
