@@ -10,6 +10,7 @@ import {
   type TechnicalVisitWrite,
 } from '../types/technicalVisit';
 import type { TechnicalVisitReport } from '../types/technicalVisitReport';
+import type { TechnicalVisitIntegrationSnapshot } from '../types/technicalVisitIntegration';
 
 export class UnavailableTechnicalVisitGateway implements TechnicalVisitGateway {
   private fail(): never {
@@ -72,6 +73,13 @@ export class UnavailableTechnicalVisitGateway implements TechnicalVisitGateway {
   async reviseReport(
     _input: ReviseTechnicalVisitReportGatewayInput
   ): Promise<TechnicalVisitReport> {
+    return this.fail();
+  }
+
+  async getIntegrationSnapshot(
+    _organizationId: string,
+    _visitId: string
+  ): Promise<TechnicalVisitIntegrationSnapshot> {
     return this.fail();
   }
 
