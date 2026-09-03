@@ -239,6 +239,7 @@ export interface SetScheduleCollaborationGatewayInput {
 export interface ScheduleTransitionGatewayInput {
   readonly organizationId: string;
   readonly actorUserId: string;
+  readonly actorCanManage: boolean;
   readonly scheduleItemId: string;
   readonly expectedVersion: number;
   readonly idempotencyKey: string;
