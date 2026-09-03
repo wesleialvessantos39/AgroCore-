@@ -12,6 +12,7 @@ import {
 import {
   assertScheduleIdempotencyKey,
   normalizeCreateScheduleItem,
+  normalizeScheduleListFilters,
   normalizeUpdateScheduleItem,
 } from './validation';
 
@@ -46,10 +47,11 @@ export class ScheduleService {
     signal?: AbortSignal
   ): Promise<readonly ScheduleItem[]> {
     this.assertActiveContext(context, 'schedule:view');
+    const normalizedFilters = normalizeScheduleListFilters(filters);
     return this.gateway.listItems(
       context.organizationId,
       context.actor.userId,
-      filters,
+      normalizedFilters,
       signal
     );
   }
