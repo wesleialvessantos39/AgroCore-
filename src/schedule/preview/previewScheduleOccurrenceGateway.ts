@@ -12,6 +12,7 @@ interface PreviewReceipt {
   readonly commandType: 'complete' | 'reopen' | 'cancel';
   readonly occurrenceId: string;
   readonly fingerprint: string;
+  readonly result: ScheduleOccurrence;
 }
 
 function cloneOccurrence(value: ScheduleOccurrence): ScheduleOccurrence {
@@ -26,11 +27,28 @@ function fingerprint(value: object): string {
   return JSON.stringify(value);
 }
 
+function occurrenceLocalDate(scheduledAt: string, timeZone: string): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const values = Object.fromEntries(
+    formatter
+      .formatToParts(new Date(scheduledAt))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 export class PreviewScheduleOccurrenceGateway
   implements ScheduleOccurrenceGateway
 {
   private readonly occurrences = new Map<string, ScheduleOccurrence>();
   private readonly occurrenceKeyToId = new Map<string, string>();
+  private readonly occurrenceDateById = new Map<string, string>();
   private readonly audits = new Map<string, ScheduleOccurrenceAuditEntry[]>();
   private readonly receipts = new Map<string, PreviewReceipt>();
 
@@ -39,9 +57,9 @@ export class PreviewScheduleOccurrenceGateway
   private occurrenceKey(
     organizationId: string,
     scheduleItemId: string,
-    scheduledAt: string
+    localDate: string
   ): string {
-    return `${organizationId}:${scheduleItemId}:${scheduledAt}`;
+    return `${organizationId}:${scheduleItemId}:${localDate}`;
   }
 
   async materializeOccurrences(
@@ -70,10 +88,11 @@ export class PreviewScheduleOccurrenceGateway
     const activeKeys = new Set<string>();
 
     for (const draft of drafts) {
+      const localDate = occurrenceLocalDate(draft.scheduledAt, item.timeZone);
       const key = this.occurrenceKey(
         organizationId,
         scheduleItemId,
-        draft.scheduledAt
+        localDate
       );
       activeKeys.add(key);
       const existingId = this.occurrenceKeyToId.get(key);
@@ -82,11 +101,13 @@ export class PreviewScheduleOccurrenceGateway
         if (
           existing.status === 'pending' &&
           (existing.sourceItemVersion < item.version ||
+            existing.scheduledAt !== draft.scheduledAt ||
             existing.endsAt !== draft.endsAt)
         ) {
           this.occurrences.set(existing.id, {
             ...existing,
             sourceItemVersion: item.version,
+            scheduledAt: draft.scheduledAt,
             endsAt: draft.endsAt,
             updatedAt: new Date().toISOString(),
             version: existing.version + 1,
@@ -114,6 +135,7 @@ export class PreviewScheduleOccurrenceGateway
       };
       this.occurrences.set(id, occurrence);
       this.occurrenceKeyToId.set(key, id);
+      this.occurrenceDateById.set(id, localDate);
     }
 
     for (const occurrence of Array.from(this.occurrences.values())) {
@@ -125,14 +147,18 @@ export class PreviewScheduleOccurrenceGateway
         occurrence.scheduledAt >= from &&
         occurrence.scheduledAt < to
       ) {
+        const localDate =
+          this.occurrenceDateById.get(occurrence.id) ??
+          occurrenceLocalDate(occurrence.scheduledAt, item.timeZone);
         const key = this.occurrenceKey(
           organizationId,
           scheduleItemId,
-          occurrence.scheduledAt
+          localDate
         );
         if (!activeKeys.has(key)) {
           this.occurrences.delete(occurrence.id);
           this.occurrenceKeyToId.delete(key);
+          this.occurrenceDateById.delete(occurrence.id);
         }
       }
     }
@@ -176,14 +202,7 @@ export class PreviewScheduleOccurrenceGateway
           'A operação já foi utilizada com conteúdo diferente.'
         );
       }
-      const replayed = this.occurrences.get(input.occurrenceId);
-      if (!replayed) {
-        throw new ScheduleDomainError(
-          'OCCURRENCE_NOT_FOUND',
-          'Ocorrência de agenda não encontrada.'
-        );
-      }
-      return cloneOccurrence(replayed);
+      return cloneOccurrence(receipt.result);
     }
 
     const current = this.occurrences.get(input.occurrenceId);
@@ -268,6 +287,7 @@ export class PreviewScheduleOccurrenceGateway
       commandType,
       occurrenceId: next.id,
       fingerprint: requestFingerprint,
+      result: cloneOccurrence(next),
     });
 
     const audit: ScheduleOccurrenceAuditEntry = {
@@ -326,6 +346,7 @@ export class PreviewScheduleOccurrenceGateway
   clearAllSessionData(): void {
     this.occurrences.clear();
     this.occurrenceKeyToId.clear();
+    this.occurrenceDateById.clear();
     this.audits.clear();
     this.receipts.clear();
   }
