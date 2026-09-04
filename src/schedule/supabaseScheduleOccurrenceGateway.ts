@@ -179,15 +179,15 @@ export class SupabaseScheduleOccurrenceGateway
     to: string,
     signal?: AbortSignal
   ): Promise<readonly ScheduleOccurrence[]> {
-    const request = this.client.rpc('agrocore_materialize_schedule_occurrences', {
-      p_organization_id: organizationId,
-      p_schedule_item_id: scheduleItemId,
-      p_from: from,
-      p_to: to,
+    const { data, error } = await executeWithRetry(() => {
+      const request = this.client.rpc('agrocore_materialize_schedule_occurrences', {
+        p_organization_id: organizationId,
+        p_schedule_item_id: scheduleItemId,
+        p_from: from,
+        p_to: to,
+      });
+      return signal ? request.abortSignal(signal) : request;
     });
-    const { data, error } = signal
-      ? await request.abortSignal(signal)
-      : await request;
     if (error) throw mapError(error);
     return ((data ?? []) as unknown as ScheduleOccurrenceRow[])
       .map(mapOccurrence)
