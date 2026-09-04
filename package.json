@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "npm run test:environment-contract && node scripts/verify-release-invariants.js && tsc --noEmit && npm run test:module-001 && npm run test:module-002 && npm run test:module-003 && npm run test:module-004 && npm run test:module-005 && npm run test:module-006 && npm run test:module-007 && npm run test:module-008 && vite build && node scripts/build-sw.js && node scripts/verify-leak-free-build.js",
+    "build": "npm run test:environment-contract && node scripts/verify-release-invariants.js && npm run test:module-008-closure && tsc --noEmit && npm run test:module-001 && npm run test:module-002 && npm run test:module-003 && npm run test:module-004 && npm run test:module-005 && npm run test:module-006 && npm run test:module-007 && npm run test:module-008 && vite build && node scripts/build-sw.js && node scripts/verify-leak-free-build.js",
     "preview": "vite preview",
     "test:environment-contract": "node scripts/verify-environment-contract.js",
     "clean": "rm -rf dist server.js",
@@ -71,6 +71,7 @@
     "test:schedule-accessibility": "node --import tsx scripts/test-schedule-accessibility.ts",
     "test:schedule-theme": "node scripts/test-schedule-theme.js",
     "test:module-008": "node --import tsx scripts/test-module-008.js",
+    "test:module-008-closure": "node scripts/verify-module-008-closure.js",
     "test:schedule-views": "node --import tsx scripts/test-schedule-views.ts",
     "test:schedule-collaboration": "node --import tsx scripts/test-schedule-collaboration.ts",
     "test:schedule-reconciliation": "node --import tsx scripts/test-schedule-reconciliation.ts",
