@@ -319,8 +319,7 @@ begin
       version = public.schedule_item_occurrences.version + 1
     where public.schedule_item_occurrences.status = 'pending'
       and (
-        public.schedule_item_occurrences.source_item_version
-          < excluded.source_item_version
+        public.schedule_item_occurrences.source_item_version < excluded.source_item_version
         or public.schedule_item_occurrences.scheduled_at
           is distinct from excluded.scheduled_at
         or public.schedule_item_occurrences.ends_at
