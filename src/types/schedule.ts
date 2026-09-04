@@ -84,6 +84,63 @@ export interface CalendarAppointment extends ScheduleItemBase {
 
 export type ScheduleItem = CorporateTask | CalendarAppointment;
 
+export type ScheduleOccurrenceStatus =
+  | 'pending'
+  | 'completed'
+  | 'cancelled';
+
+export interface ScheduleOccurrence {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly scheduleItemId: string;
+  readonly sourceItemVersion: number;
+  readonly scheduledAt: string;
+  readonly endsAt: string | null;
+  readonly status: ScheduleOccurrenceStatus;
+  readonly completedAt: string | null;
+  readonly cancelledAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly version: number;
+}
+
+export interface ScheduleOccurrenceDraft {
+  readonly scheduledAt: string;
+  readonly endsAt: string | null;
+}
+
+export interface ScheduleOccurrenceWindowInput {
+  readonly from: string;
+  readonly to: string;
+}
+
+export interface ScheduleOccurrenceTransitionInput {
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
+  readonly reason: string;
+}
+
+export interface ScheduleOccurrenceTransitionGatewayInput {
+  readonly organizationId: string;
+  readonly actorUserId: string;
+  readonly actorCanManage: boolean;
+  readonly occurrenceId: string;
+  readonly expectedVersion: number;
+  readonly idempotencyKey: string;
+  readonly reason: string;
+}
+
+export interface ScheduleOccurrenceAuditEntry {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly occurrenceId: string;
+  readonly action: 'completed' | 'cancelled' | 'reopened';
+  readonly actorUserId: string;
+  readonly occurredAt: string;
+  readonly occurrenceVersion: number;
+  readonly reason: string;
+}
+
 export interface ScheduleItemAuditEntry {
   readonly id: string;
   readonly organizationId: string;
@@ -280,6 +337,27 @@ export interface ScheduleGateway {
   cancelItem(
     input: ScheduleTransitionGatewayInput
   ): Promise<ScheduleItem>;
+  materializeOccurrences(
+    organizationId: string,
+    scheduleItemId: string,
+    from: string,
+    to: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleOccurrence[]>;
+  completeOccurrence(
+    input: ScheduleOccurrenceTransitionGatewayInput
+  ): Promise<ScheduleOccurrence>;
+  reopenOccurrence(
+    input: ScheduleOccurrenceTransitionGatewayInput
+  ): Promise<ScheduleOccurrence>;
+  cancelOccurrence(
+    input: ScheduleOccurrenceTransitionGatewayInput
+  ): Promise<ScheduleOccurrence>;
+  listOccurrenceAudit(
+    organizationId: string,
+    occurrenceId: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleOccurrenceAuditEntry[]>;
   listCollaborationRevisions(
     organizationId: string,
     scheduleItemId: string,
@@ -307,9 +385,11 @@ export type ScheduleDomainErrorCode =
   | 'ORGANIZATION_REQUIRED'
   | 'PERMISSION_DENIED'
   | 'ITEM_NOT_FOUND'
+  | 'OCCURRENCE_NOT_FOUND'
   | 'INVALID_INPUT'
   | 'INVALID_DATE'
   | 'INVALID_TIME_ZONE'
+  | 'INVALID_RECURRENCE'
   | 'CONCURRENCY_CONFLICT'
   | 'IDEMPOTENCY_CONFLICT'
   | 'SOURCE_OWNED'
