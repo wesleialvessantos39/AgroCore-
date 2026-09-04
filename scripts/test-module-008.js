@@ -21,6 +21,7 @@ try {
   run('scripts/test-schedule-collaboration.ts');
   run('scripts/test-schedule-reconciliation.ts');
   run('scripts/test-schedule-recurrence.ts');
+  run('scripts/test-schedule-recurrence-hardening.ts');
   run('scripts/test-schedule-accessibility.ts');
   run('scripts/test-schedule-theme.js');
   console.log(
