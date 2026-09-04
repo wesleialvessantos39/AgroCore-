@@ -1,16 +1,13 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import {
-  Bell,
-  Check,
-  RefreshCw,
-  Settings2,
-} from 'lucide-react';
+import { Bell, Check, RefreshCw, Settings2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { ExternalNotificationSettings } from './ExternalNotificationSettings';
 import { useNotifications } from './useNotifications';
 import {
   NOTIFICATION_CATEGORY_LABELS,
@@ -84,7 +81,6 @@ function NotificationRow({
           <p className="mt-2 text-[11px] font-medium text-[#0B3D2E]/55">
             {formatInstant(notification.availableAt)}
           </p>
-
           <div className="mt-3 flex flex-wrap gap-2">
             {safeRoute(notification.route) && (
               <button
@@ -95,7 +91,6 @@ function NotificationRow({
                 Abrir
               </button>
             )}
-
             {isUnread && (
               <button
                 type="button"
@@ -112,10 +107,10 @@ function NotificationRow({
   );
 }
 
-export function NotificationCenter({
-  variant = 'light',
-}: NotificationCenterProps) {
+export function NotificationCenter({ variant = 'light' }: NotificationCenterProps) {
   const navigate = useNavigate();
+  const rawPanelId = useId();
+  const panelId = `agrocore-notification-center-${rawPanelId.replace(/:/g, '')}`;
   const {
     status,
     isEnabled,
@@ -131,8 +126,7 @@ export function NotificationCenter({
 
   const [open, setOpen] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
-  const [busyPreference, setBusyPreference] =
-    useState<NotificationCategory | null>(null);
+  const [busyPreference, setBusyPreference] = useState<NotificationCategory | null>(null);
   const [busyAction, setBusyAction] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -150,14 +144,9 @@ export function NotificationCenter({
 
   useEffect(() => {
     if (!open) return;
-
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target;
-      if (
-        target instanceof Node &&
-        rootRef.current &&
-        !rootRef.current.contains(target)
-      ) {
+      if (target instanceof Node && rootRef.current && !rootRef.current.contains(target)) {
         setOpen(false);
       }
     };
@@ -167,7 +156,6 @@ export function NotificationCenter({
         buttonRef.current?.focus();
       }
     };
-
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -216,10 +204,7 @@ export function NotificationCenter({
     }
   };
 
-  const handlePreference = async (
-    category: NotificationCategory,
-    enabled: boolean
-  ) => {
+  const handlePreference = async (category: NotificationCategory, enabled: boolean) => {
     setBusyPreference(category);
     try {
       await setPreference(category, enabled);
@@ -237,7 +222,7 @@ export function NotificationCenter({
         type="button"
         aria-label={`Central de notificações. ${liveLabel}`}
         aria-expanded={open}
-        aria-controls="agrocore-notification-center-panel"
+        aria-controls={panelId}
         className={
           'relative inline-flex h-11 w-11 items-center justify-center rounded-xl focus:outline-none focus:ring-2 focus:ring-[#78C89A] ' +
           (variant === 'dark'
@@ -257,23 +242,19 @@ export function NotificationCenter({
         )}
       </button>
 
-      <span className="sr-only" aria-live="polite">
-        {liveLabel}
-      </span>
+      <span className="sr-only" aria-live="polite">{liveLabel}</span>
 
       {open && (
         <section
-          id="agrocore-notification-center-panel"
+          id={panelId}
           role="dialog"
           aria-label="Central de notificações"
-          className="absolute right-0 top-[calc(100%+0.65rem)] z-50 flex max-h-[min(76vh,680px)] w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[#0B3D2E]/15 bg-white text-[#0B3D2E] shadow-2xl"
+          className="absolute right-0 top-[calc(100%+0.65rem)] z-50 flex max-h-[min(82vh,760px)] w-[28rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[#0B3D2E]/15 bg-white text-[#0B3D2E] shadow-2xl"
         >
           <header className="flex items-start justify-between gap-3 border-b border-[#0B3D2E]/10 p-4">
             <div className="min-w-0">
               <h3 className="text-base font-bold">Notificações</h3>
-              <p className="mt-1 text-xs text-[#0B3D2E]/65">
-                {liveLabel}
-              </p>
+              <p className="mt-1 text-xs text-[#0B3D2E]/65">{liveLabel}</p>
             </div>
             <div className="flex shrink-0 gap-1">
               <button
@@ -283,13 +264,7 @@ export function NotificationCenter({
                 disabled={status === 'loading' || busyAction}
                 onClick={() => void refresh().catch(() => undefined)}
               >
-                <RefreshCw
-                  className={
-                    'h-4 w-4 ' +
-                    (status === 'loading' ? 'animate-spin' : '')
-                  }
-                  aria-hidden="true"
-                />
+                <RefreshCw className={`h-4 w-4 ${status === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -301,9 +276,7 @@ export function NotificationCenter({
                 }
                 aria-label="Preferências de notificações"
                 aria-pressed={showPreferences}
-                onClick={() =>
-                  setShowPreferences((current) => !current)
-                }
+                onClick={() => setShowPreferences((current) => !current)}
               >
                 <Settings2 className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -311,53 +284,45 @@ export function NotificationCenter({
           </header>
 
           {errorMessage && (
-            <div
-              role="alert"
-              className="mx-4 mt-3 rounded-xl border border-[#0B3D2E]/20 bg-[#78C89A]/10 p-3 text-xs font-medium"
-            >
+            <div role="alert" className="mx-4 mt-3 rounded-xl border border-[#0B3D2E]/20 bg-[#78C89A]/10 p-3 text-xs font-medium">
               {errorMessage}
             </div>
           )}
 
           {showPreferences && (
-            <fieldset className="border-b border-[#0B3D2E]/10 p-4">
-              <legend className="text-sm font-semibold">
-                Preferências internas
-              </legend>
-              <p className="mt-1 text-xs text-[#0B3D2E]/65">
-                Estas opções afetam somente avisos dentro do AgroCore.
-              </p>
-              <div className="mt-3 grid gap-2">
-                {preferences.map((preference) => (
-                  <label
-                    key={preference.category}
-                    className="flex min-h-[44px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#0B3D2E]/15 bg-white px-3 py-2 text-sm"
-                  >
-                    <span className="min-w-0">
-                      {NOTIFICATION_CATEGORY_LABELS[preference.category]}
-                    </span>
-                    <input
-                      type="checkbox"
-                      className="h-5 w-5 accent-[#0B3D2E]"
-                      checked={preference.enabled}
-                      disabled={busyPreference === preference.category}
-                      onChange={(event) =>
-                        void handlePreference(
-                          preference.category,
-                          event.target.checked
-                        )
-                      }
-                    />
-                  </label>
-                ))}
+            <div className="max-h-[52vh] overflow-y-auto border-b border-[#0B3D2E]/10 p-4">
+              <fieldset>
+                <legend className="text-sm font-semibold">Preferências internas</legend>
+                <p className="mt-1 text-xs text-[#0B3D2E]/65">
+                  Estas opções afetam somente avisos dentro do AgroCore.
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {preferences.map((preference) => (
+                    <label
+                      key={preference.category}
+                      className="flex min-h-[44px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#0B3D2E]/15 bg-white px-3 py-2 text-sm"
+                    >
+                      <span className="min-w-0">{NOTIFICATION_CATEGORY_LABELS[preference.category]}</span>
+                      <input
+                        type="checkbox"
+                        className="h-5 w-5 accent-[#0B3D2E]"
+                        checked={preference.enabled}
+                        disabled={busyPreference === preference.category}
+                        onChange={(event) => void handlePreference(preference.category, event.target.checked)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div className="mt-4">
+                <ExternalNotificationSettings />
               </div>
-            </fieldset>
+            </div>
           )}
 
           <div className="flex items-center justify-between gap-3 border-b border-[#0B3D2E]/10 px-4 py-3">
-            <span className="text-xs font-semibold">
-              Avisos válidos e disponíveis
-            </span>
+            <span className="text-xs font-semibold">Avisos válidos e disponíveis</span>
             <button
               type="button"
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-[#0B3D2E] hover:bg-[#78C89A]/15 focus:outline-none focus:ring-2 focus:ring-[#78C89A] disabled:opacity-50"
@@ -376,16 +341,9 @@ export function NotificationCenter({
               </p>
             ) : notifications.length === 0 ? (
               <div className="py-8 text-center">
-                <Bell
-                  className="mx-auto h-7 w-7 text-[#0B3D2E]/35"
-                  aria-hidden="true"
-                />
-                <p className="mt-3 text-sm font-semibold">
-                  Nenhuma notificação disponível
-                </p>
-                <p className="mt-1 text-xs text-[#0B3D2E]/65">
-                  Novos avisos aparecerão aqui quando forem válidos.
-                </p>
+                <Bell className="mx-auto h-7 w-7 text-[#0B3D2E]/35" aria-hidden="true" />
+                <p className="mt-3 text-sm font-semibold">Nenhuma notificação disponível</p>
+                <p className="mt-1 text-xs text-[#0B3D2E]/65">Novos avisos aparecerão aqui quando forem válidos.</p>
               </div>
             ) : (
               <div className="grid gap-2.5">
