@@ -333,7 +333,7 @@ export function ExternalNotificationSettings() {
             <h4 className="text-sm font-semibold text-[#0B3D2E]">Escalonamento da organização</h4>
           </div>
           <p className="mt-1 text-xs leading-5 text-[#0B3D2E]/65">
-            Gestão define criticidade, atraso e canais. O aviso interno continua sendo a origem canônica.
+            Gestão define criticidade, atraso e canais. O aviso interno continua sendo a origem principal.
           </p>
 
           <div className="mt-3 grid gap-2">
