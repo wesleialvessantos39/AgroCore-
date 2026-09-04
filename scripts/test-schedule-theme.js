@@ -5,6 +5,7 @@ const files = [
   'src/pages/SchedulePage.tsx',
   'src/schedule/ScheduleBrowsePanel.tsx',
   'src/schedule/ScheduleItemCollaborationPanel.tsx',
+  'src/schedule/ScheduleOccurrencePanel.tsx',
   'src/schedule/calendar.ts',
   'src/schedule/theme.ts',
 ];
@@ -22,6 +23,6 @@ assert.match(source, /bg-white/);
 assert.doesNotMatch(source, forbiddenFamilies);
 assert.doesNotMatch(source, /dark:/);
 assert.doesNotMatch(source, /bg-black|text-black|border-black/);
-assert.doesNotMatch(source, /OE-008|008\.00[123]/i);
+assert.doesNotMatch(source, /OE-008|008\.00[1-4]/i);
 
 console.log('✅ Identidade visual da Agenda restrita à paleta oficial AgroCore.');
