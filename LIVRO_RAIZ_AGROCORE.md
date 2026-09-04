@@ -347,6 +347,8 @@ Mensagem de encerramento:
 | `test-schedule-accessibility.ts` | **33 adicionais** |
 | `test-schedule-theme.js` | auditoria adicional |
 
+Além das suítes acima, `scripts/verify-module-008-closure.js` é a guarda estrutural de encerramento: verifica que o build continua referenciando as migrations finais, as fontes canônicas corretas, os relatórios de fechamento, a ausência de fonte paralela e a regra de não fabricar evidência física.
+
 ---
 
 ## 6. EVIDÊNCIA REMOTA DO FECHAMENTO
@@ -396,6 +398,7 @@ A ausência de evidência física no ambiente vazio não corresponde a código f
 
 - `docs/OE-008-007-RELATORIO-FECHAMENTO.md`;
 - `docs/OE-008-007-ROTEIRO-HOMOLOGACAO-OPERACIONAL.md`;
+- `docs/OE-008-007-EVIDENCIA-RELEASE-INFRA.md`;
 - `docs/MODULO-008-RELATORIO-FINAL.md`.
 
 ---
@@ -411,10 +414,12 @@ A ausência de evidência física no ambiente vazio não corresponde a código f
 | Canais externos | implementados com fail-closed |
 | Homologação final | 80 verificações + 2 hardenings remotos |
 | Total específico | 432 |
+| Guarda de fechamento | `scripts/verify-module-008-closure.js` integrada ao build |
 | Acessibilidade | 33 verificações adicionais |
 | Tema | auditoria adicional |
 | Dados fictícios | nenhum criado |
 | Prova física e-mail/Push | não fabricada; roteiro operacional pronto |
+| Release externo | evidência separada em `docs/OE-008-007-EVIDENCIA-RELEASE-INFRA.md` |
 | Próxima fronteira | **Módulo 009 — OE-009.001 — Cadastro de veículos** |
 
 ---
@@ -431,4 +436,17 @@ Módulos 009–016 continuam não declarados implementados por este Livro-Raiz a
 
 ---
 
-**Decisão documental:** o Livro-Raiz está sincronizado com o encerramento técnico do AgroCore **até OE-008.007**, e o **Módulo 008 está concluído** no escopo de implementação e homologação automatizada previsto. A evidência física de canais externos permanece explicitamente dependente de ambiente real e não foi inventada.
+## 11. EVIDÊNCIA DE RELEASE E CI
+
+A execução externa é registrada separadamente da implementação para evitar conclusões falsas:
+
+- GitHub Actions foi disparado e repetido no fechamento observado, mas os jobs terminaram antes de qualquer step, com runner não alocado; isso não comprova falha dos testes nem aprovação do código;
+- o último deploy Vercel observado como verde antes da OE-008.007 foi o commit `4c87d7e451eca29a572bacda56ab0d87a7db163b`;
+- deploys posteriores do fechamento retornaram falha genérica, sem build log acessível pela conexão disponível nesta sessão;
+- nenhuma dessas condições externas é convertida artificialmente em `success` ou em erro de código sem evidência.
+
+O registro detalhado está em `docs/OE-008-007-EVIDENCIA-RELEASE-INFRA.md`.
+
+---
+
+**Decisão documental final:** o Livro-Raiz está sincronizado com o encerramento técnico do AgroCore **até OE-008.007**, incluindo a guarda estrutural de fechamento e a evidência separada de release. O **Módulo 008 está concluído** no escopo de implementação, hardening remoto e homologação automatizada previsto. A evidência física de canais externos permanece dependente de ambiente real e não foi inventada.
