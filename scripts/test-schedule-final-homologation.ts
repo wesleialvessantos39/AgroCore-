@@ -14,18 +14,20 @@ import type {
   ScheduleRecurrenceDefinition,
 } from '../src/types/schedule.ts';
 
-let passed = 0;
-let failed = 0;
+let checks = 0;
 
-async function test(name: string, operation: () => void | Promise<void>) {
+function check(name: string, condition: unknown) {
+  assert.ok(condition, name);
+  checks += 1;
+  console.log(`  [PASS] ${String(checks).padStart(2, '0')}. ${name}`);
+}
+
+function throws(operation: () => unknown): boolean {
   try {
-    await operation();
-    passed += 1;
-    console.log(`  [PASS] ${name}`);
-  } catch (error) {
-    failed += 1;
-    console.error(`  [FAIL] ${name}`);
-    console.error(error);
+    operation();
+    return false;
+  } catch {
+    return true;
   }
 }
 
@@ -80,10 +82,6 @@ const baseMigration = readFileSync(
   'supabase/migrations/20260903153944_oe_008_001_schedule_model.sql',
   'utf8'
 );
-const recurrenceMigration = readFileSync(
-  'supabase/migrations/20260904100000_oe_008_004_deadlines_recurrence.sql',
-  'utf8'
-);
 const recurrenceHardening = readFileSync(
   'supabase/migrations/20260904123000_oe_008_004_idempotency_identity_hardening.sql',
   'utf8'
@@ -104,15 +102,16 @@ const finalHardening = readFileSync(
   'supabase/migrations/20260904224802_oe_008_007_final_homologation_hardening.sql',
   'utf8'
 );
+const finalCompletion = readFileSync(
+  'supabase/migrations/20260904230337_oe_008_007_final_homologation_completion.sql',
+  'utf8'
+);
+const finalMigrations = `${finalHardening}\n${finalCompletion}`;
 const routePaths = readFileSync('src/routes/paths.ts', 'utf8');
 const appRoutes = readFileSync('src/routes/AppRoutes.tsx', 'utf8');
 const center = readFileSync('src/notifications/NotificationCenter.tsx', 'utf8');
 const notificationGateway = readFileSync(
   'src/notifications/supabaseNotificationGateway.ts',
-  'utf8'
-);
-const externalGateway = readFileSync(
-  'src/notifications/externalNotificationGateway.ts',
   'utf8'
 );
 const externalSettings = readFileSync(
@@ -132,10 +131,7 @@ const channelConfig = readFileSync(
   'supabase/functions/notification-channel-config/index.ts',
   'utf8'
 );
-const accessibility = readFileSync(
-  'scripts/test-schedule-accessibility.ts',
-  'utf8'
-);
+const accessibility = readFileSync('scripts/test-schedule-accessibility.ts', 'utf8');
 const theme = readFileSync('scripts/test-schedule-theme.js', 'utf8');
 const moduleGate = readFileSync('scripts/test-module-008.js', 'utf8');
 const packageManifest = readFileSync('package.json', 'utf8');
@@ -156,439 +152,342 @@ console.log('====================================================');
 console.log(' AGROCORE — OE-008.007 — HOMOLOGAÇÃO FINAL');
 console.log('====================================================\n');
 
-// Fusos e mudanças de horário.
-await test('01. America/Sao_Paulo é fuso IANA válido', () => {
-  assert.equal(isValidScheduleTimeZone('America/Sao_Paulo'), true);
-});
-await test('02. America/New_York é fuso IANA válido', () => {
-  assert.equal(isValidScheduleTimeZone('America/New_York'), true);
-});
-await test('03. UTC é fuso válido', () => {
-  assert.equal(isValidScheduleTimeZone('UTC'), true);
-});
-await test('04. fuso inexistente é recusado', () => {
-  assert.equal(isValidScheduleTimeZone('AgroCore/Invalid'), false);
-});
-await test('05. conversão de São Paulo preserva instante esperado', () => {
-  assert.equal(
-    scheduleLocalDateTimeToUtc('2026-09-10T12:00:00', 'America/Sao_Paulo'),
+// 01–08 — Fusos e DST.
+check('America/Sao_Paulo é fuso IANA válido', isValidScheduleTimeZone('America/Sao_Paulo'));
+check('America/New_York é fuso IANA válido', isValidScheduleTimeZone('America/New_York'));
+check('UTC é fuso válido', isValidScheduleTimeZone('UTC'));
+check('fuso inexistente é recusado', !isValidScheduleTimeZone('AgroCore/Invalid'));
+check(
+  'São Paulo converte relógio local para o instante esperado',
+  scheduleLocalDateTimeToUtc('2026-09-10T12:00:00', 'America/Sao_Paulo') ===
     '2026-09-10T15:00:00.000Z'
-  );
-});
-await test('06. horário inexistente no início do DST é recusado', () => {
-  assert.throws(() =>
-    scheduleLocalDateTimeToUtc('2026-03-08T02:30:00', 'America/New_York')
-  );
-});
-await test('07. horário ambíguo no fim do DST é recusado', () => {
-  assert.throws(() =>
-    scheduleLocalDateTimeToUtc('2026-11-01T01:30:00', 'America/New_York')
-  );
-});
-await test('08. horário não ambíguo após mudança de DST é aceito', () => {
-  assert.match(
-    scheduleLocalDateTimeToUtc('2026-11-01T03:30:00', 'America/New_York'),
-    /^2026-11-01T08:30:00\.000Z$/
-  );
-});
+);
+check(
+  'horário inexistente no início do DST é recusado',
+  throws(() => scheduleLocalDateTimeToUtc('2026-03-08T02:30:00', 'America/New_York'))
+);
+check(
+  'horário ambíguo no fim do DST é recusado',
+  throws(() => scheduleLocalDateTimeToUtc('2026-11-01T01:30:00', 'America/New_York'))
+);
+check(
+  'horário não ambíguo após DST é aceito',
+  scheduleLocalDateTimeToUtc('2026-11-01T03:30:00', 'America/New_York') ===
+    '2026-11-01T08:30:00.000Z'
+);
 
-// Recorrência e exceções.
-await test('09. janela positiva curta é normalizada', () => {
-  assert.equal(
-    normalizeOccurrenceWindow({
-      from: '2026-09-10T00:00:00Z',
-      to: '2026-09-11T00:00:00Z',
-    }).from,
-    '2026-09-10T00:00:00.000Z'
-  );
-});
-await test('10. janela invertida é recusada', () => {
-  assert.throws(() =>
-    normalizeOccurrenceWindow({
-      from: '2026-09-11T00:00:00Z',
-      to: '2026-09-10T00:00:00Z',
-    })
-  );
-});
-await test('11. janela superior a 366 dias é recusada', () => {
-  assert.throws(() =>
-    normalizeOccurrenceWindow({
-      from: '2026-01-01T00:00:00Z',
-      to: '2027-01-03T00:00:00Z',
-    })
-  );
-});
-await test('12. recorrência diária mantém relógio local', () => {
-  const values = buildScheduleOccurrenceDrafts(
-    taskFixture('2026-09-10T15:00:00.000Z', recurrence('daily')),
-    { from: '2026-09-10T00:00:00Z', to: '2026-09-13T00:00:00Z' }
-  );
-  assert.deepEqual(
-    values.map((value) => value.scheduledAt),
-    [
-      '2026-09-10T15:00:00.000Z',
-      '2026-09-11T15:00:00.000Z',
-      '2026-09-12T15:00:00.000Z',
-    ]
-  );
-});
-await test('13. recorrência diária respeita intervalo', () => {
-  const values = buildScheduleOccurrenceDrafts(
-    taskFixture('2026-09-10T15:00:00.000Z', recurrence('daily', 2)),
-    { from: '2026-09-10T00:00:00Z', to: '2026-09-16T00:00:00Z' }
-  );
-  assert.deepEqual(
-    values.map((value) => value.scheduledAt.slice(0, 10)),
-    ['2026-09-10', '2026-09-12', '2026-09-14']
-  );
-});
-await test('14. recorrência semanal exige weekdays', () => {
-  assert.throws(() =>
-    buildScheduleOccurrenceDrafts(
-      taskFixture('2026-09-10T15:00:00.000Z', recurrence('weekly')),
-      { from: '2026-09-10T00:00:00Z', to: '2026-09-17T00:00:00Z' }
-    )
-  );
-});
-await test('15. recorrência semanal respeita dia selecionado', () => {
-  const values = buildScheduleOccurrenceDrafts(
-    taskFixture('2026-09-10T15:00:00.000Z', recurrence('weekly', 1, [4])),
-    { from: '2026-09-10T00:00:00Z', to: '2026-09-25T00:00:00Z' }
-  );
-  assert.equal(values.length, 3);
-});
-await test('16. mensal não inventa 31 de fevereiro', () => {
-  const values = buildScheduleOccurrenceDrafts(
-    taskFixture('2026-01-31T15:00:00.000Z', recurrence('monthly')),
-    { from: '2026-01-01T00:00:00Z', to: '2026-04-01T00:00:00Z' }
-  );
-  assert.deepEqual(
-    values.map((value) => value.scheduledAt.slice(0, 10)),
-    ['2026-01-31', '2026-03-31']
-  );
-});
-await test('17. anual preserva mês e dia', () => {
-  const values = buildScheduleOccurrenceDrafts(
-    taskFixture('2026-09-10T15:00:00.000Z', recurrence('yearly')),
-    { from: '2026-09-10T00:00:00Z', to: '2027-09-11T00:00:00Z' }
-  );
-  assert.deepEqual(
-    values.map((value) => value.scheduledAt.slice(0, 10)),
-    ['2026-09-10', '2027-09-10']
-  );
-});
-await test('18. endsAt encerra a série', () => {
-  const values = buildScheduleOccurrenceDrafts(
+// 09–20 — Recorrência e exceções.
+check(
+  'janela positiva curta é normalizada',
+  normalizeOccurrenceWindow({
+    from: '2026-09-10T00:00:00Z',
+    to: '2026-09-11T00:00:00Z',
+  }).from === '2026-09-10T00:00:00.000Z'
+);
+check(
+  'janela invertida é recusada',
+  throws(() => normalizeOccurrenceWindow({
+    from: '2026-09-11T00:00:00Z',
+    to: '2026-09-10T00:00:00Z',
+  }))
+);
+check(
+  'janela superior a 366 dias é recusada',
+  throws(() => normalizeOccurrenceWindow({
+    from: '2026-01-01T00:00:00Z',
+    to: '2027-01-03T00:00:00Z',
+  }))
+);
+const daily = buildScheduleOccurrenceDrafts(
+  taskFixture('2026-09-10T15:00:00.000Z', recurrence('daily')),
+  { from: '2026-09-10T00:00:00Z', to: '2026-09-13T00:00:00Z' }
+);
+check(
+  'recorrência diária mantém relógio local',
+  daily.map((value) => value.scheduledAt).join('|') ===
+    '2026-09-10T15:00:00.000Z|2026-09-11T15:00:00.000Z|2026-09-12T15:00:00.000Z'
+);
+const everyTwoDays = buildScheduleOccurrenceDrafts(
+  taskFixture('2026-09-10T15:00:00.000Z', recurrence('daily', 2)),
+  { from: '2026-09-10T00:00:00Z', to: '2026-09-16T00:00:00Z' }
+);
+check(
+  'recorrência diária respeita intervalo',
+  everyTwoDays.map((value) => value.scheduledAt.slice(0, 10)).join('|') ===
+    '2026-09-10|2026-09-12|2026-09-14'
+);
+check(
+  'recorrência semanal exige weekdays',
+  throws(() => buildScheduleOccurrenceDrafts(
+    taskFixture('2026-09-10T15:00:00.000Z', recurrence('weekly')),
+    { from: '2026-09-10T00:00:00Z', to: '2026-09-17T00:00:00Z' }
+  ))
+);
+const weekly = buildScheduleOccurrenceDrafts(
+  taskFixture('2026-09-10T15:00:00.000Z', recurrence('weekly', 1, [4])),
+  { from: '2026-09-10T00:00:00Z', to: '2026-09-25T00:00:00Z' }
+);
+check('recorrência semanal respeita dia selecionado', weekly.length === 3);
+const monthly = buildScheduleOccurrenceDrafts(
+  taskFixture('2026-01-31T15:00:00.000Z', recurrence('monthly')),
+  { from: '2026-01-01T00:00:00Z', to: '2026-04-01T00:00:00Z' }
+);
+check(
+  'mensal não inventa 31 de fevereiro',
+  monthly.map((value) => value.scheduledAt.slice(0, 10)).join('|') ===
+    '2026-01-31|2026-03-31'
+);
+const yearly = buildScheduleOccurrenceDrafts(
+  taskFixture('2026-09-10T15:00:00.000Z', recurrence('yearly')),
+  { from: '2026-09-10T00:00:00Z', to: '2027-09-11T00:00:00Z' }
+);
+check(
+  'anual preserva mês e dia',
+  yearly.map((value) => value.scheduledAt.slice(0, 10)).join('|') ===
+    '2026-09-10|2027-09-10'
+);
+const bounded = buildScheduleOccurrenceDrafts(
+  taskFixture(
+    '2026-09-10T15:00:00.000Z',
+    recurrence('daily', 1, [], '2026-09-11T15:00:00.000Z')
+  ),
+  { from: '2026-09-10T00:00:00Z', to: '2026-09-14T00:00:00Z' }
+);
+check('endsAt encerra a série', bounded.length === 2);
+check(
+  'item concluído não cria novas ocorrências',
+  buildScheduleOccurrenceDrafts(
     taskFixture(
       '2026-09-10T15:00:00.000Z',
-      recurrence('daily', 1, [], '2026-09-11T15:00:00.000Z')
+      recurrence('daily'),
+      'America/Sao_Paulo',
+      'completed'
     ),
-    { from: '2026-09-10T00:00:00Z', to: '2026-09-14T00:00:00Z' }
-  );
-  assert.equal(values.length, 2);
-});
-await test('19. item concluído não cria novas ocorrências', () => {
-  assert.deepEqual(
-    buildScheduleOccurrenceDrafts(
-      taskFixture(
-        '2026-09-10T15:00:00.000Z',
-        recurrence('daily'),
-        'America/Sao_Paulo',
-        'completed'
-      ),
-      { from: '2026-09-10T00:00:00Z', to: '2026-09-13T00:00:00Z' }
+    { from: '2026-09-10T00:00:00Z', to: '2026-09-13T00:00:00Z' }
+  ).length === 0
+);
+check(
+  'item cancelado não cria novas ocorrências',
+  buildScheduleOccurrenceDrafts(
+    taskFixture(
+      '2026-09-10T15:00:00.000Z',
+      recurrence('daily'),
+      'America/Sao_Paulo',
+      'cancelled'
     ),
-    []
-  );
-});
-await test('20. item cancelado não cria novas ocorrências', () => {
-  assert.deepEqual(
-    buildScheduleOccurrenceDrafts(
-      taskFixture(
-        '2026-09-10T15:00:00.000Z',
-        recurrence('daily'),
-        'America/Sao_Paulo',
-        'cancelled'
-      ),
-      { from: '2026-09-10T00:00:00Z', to: '2026-09-13T00:00:00Z' }
-    ),
-    []
-  );
-});
+    { from: '2026-09-10T00:00:00Z', to: '2026-09-13T00:00:00Z' }
+  ).length === 0
+);
 
-// Perfis positivos/negativos e rota.
-await test('21. owner visualiza Agenda', () => {
-  assert.ok(getRolePermissions('owner').includes('schedule:view'));
-});
-await test('22. owner gerencia Agenda', () => {
-  assert.ok(getRolePermissions('owner').includes('schedule:manage'));
-});
-await test('23. company_admin gerencia Agenda', () => {
-  assert.ok(getRolePermissions('company_admin').includes('schedule:manage'));
-});
-await test('24. manager gerencia Agenda', () => {
-  assert.ok(getRolePermissions('manager').includes('schedule:manage'));
-});
-await test('25. project_designer visualiza sem gerenciar', () => {
-  const permissions = getRolePermissions('project_designer');
-  assert.ok(permissions.includes('schedule:view'));
-  assert.ok(!permissions.includes('schedule:manage'));
-});
-await test('26. capturer visualiza sem gerenciar', () => {
-  const permissions = getRolePermissions('capturer');
-  assert.ok(permissions.includes('schedule:view'));
-  assert.ok(!permissions.includes('schedule:manage'));
-});
-await test('27. finance não herda acesso à Agenda', () => {
-  const permissions = getRolePermissions('finance');
-  assert.ok(!permissions.includes('schedule:view'));
-  assert.ok(!permissions.includes('schedule:manage'));
-});
-await test('28. platform_super_admin não herda Agenda organizacional', () => {
-  const permissions = getRolePermissions('platform_super_admin');
-  assert.ok(!permissions.includes('schedule:view'));
-  assert.ok(!permissions.includes('schedule:manage'));
-});
-await test('29. papel none não possui permissões de Agenda', () => {
-  assert.deepEqual(getRolePermissions('none'), []);
-});
-await test('30. rota /agenda exige schedule:view', () => {
-  assert.match(routePaths, /SCHEDULE:\s*'\/agenda'/);
-  assert.match(
-    appRoutes,
-    /path=\{ROUTES\.SCHEDULE\}[\s\S]*RequirePermission permission="schedule:view"/
-  );
-});
+// 21–30 — Perfis positivos/negativos e rota.
+check('owner visualiza Agenda', getRolePermissions('owner').includes('schedule:view'));
+check('owner gerencia Agenda', getRolePermissions('owner').includes('schedule:manage'));
+check('company_admin gerencia Agenda', getRolePermissions('company_admin').includes('schedule:manage'));
+check('manager gerencia Agenda', getRolePermissions('manager').includes('schedule:manage'));
+check(
+  'project_designer visualiza sem gerenciar',
+  getRolePermissions('project_designer').includes('schedule:view') &&
+    !getRolePermissions('project_designer').includes('schedule:manage')
+);
+check(
+  'capturer visualiza sem gerenciar',
+  getRolePermissions('capturer').includes('schedule:view') &&
+    !getRolePermissions('capturer').includes('schedule:manage')
+);
+check(
+  'finance não herda acesso à Agenda',
+  !getRolePermissions('finance').includes('schedule:view') &&
+    !getRolePermissions('finance').includes('schedule:manage')
+);
+check(
+  'platform_super_admin não herda Agenda organizacional',
+  !getRolePermissions('platform_super_admin').includes('schedule:view') &&
+    !getRolePermissions('platform_super_admin').includes('schedule:manage')
+);
+check('papel none não possui permissões', getRolePermissions('none').length === 0);
+check(
+  'rota /agenda exige schedule:view',
+  /SCHEDULE:\s*'\/agenda'/.test(routePaths) &&
+    /path=\{ROUTES\.SCHEDULE\}[\s\S]*RequirePermission permission="schedule:view"/.test(appRoutes)
+);
 
-// Multi-tenant, IDOR e RLS.
-await test('31. schedule_items mantém organization_id obrigatório', () => {
-  assert.match(baseMigration, /organization_id uuid not null references public\.organizations/);
-});
-await test('32. select da Agenda passa pelo autorizador organizacional', () => {
-  assert.match(baseMigration, /agrocore_schedule_items_select[\s\S]*can_view_schedule\(organization_id\)/);
-});
-await test('33. ocorrência lógica é única por organização/item/data local', () => {
-  assert.match(
-    recurrenceHardening,
-    /unique index[\s\S]*organization_id,[\s\S]*schedule_item_id,[\s\S]*occurrence_local_date/i
-  );
-});
-await test('34. materialização valida acesso ao item', () => {
-  assert.match(
-    recurrenceHardening,
-    /can_view_schedule_item\([\s\S]*p_organization_id,[\s\S]*p_schedule_item_id/
-  );
-});
-await test('35. notificação direta é recipient-only', () => {
-  assert.match(
-    finalHardening,
-    /recipient_user_id = \(select auth\.uid\(\)\)/
-  );
-});
-await test('36. notificação direta exige organização ativa', () => {
-  assert.match(
-    finalHardening,
-    /from public\.organizations o[\s\S]*o\.status = 'active'[\s\S]*m\.status = 'active'/
-  );
-});
-await test('37. elegibilidade de destinatário exige organização ativa', () => {
-  assert.match(
-    finalHardening,
-    /is_notification_recipient_eligible[\s\S]*o\.status = 'active'/
-  );
-});
-await test('38. RLS direto exige available_at já alcançado', () => {
-  assert.match(finalHardening, /available_at <= statement_timestamp\(\)/);
-});
-await test('39. RLS direto exclui notificação expirada', () => {
-  assert.match(finalHardening, /expires_at > statement_timestamp\(\)/);
-});
-await test('40. RLS direto respeita preferência da categoria', () => {
-  assert.match(
-    finalHardening,
-    /notification_category_enabled\([\s\S]*organization_id,[\s\S]*recipient_user_id,[\s\S]*category/
-  );
-});
+// 31–40 — Multi-tenant, IDOR e RLS.
+check(
+  'schedule_items mantém organization_id obrigatório',
+  /organization_id uuid not null references public\.organizations/.test(baseMigration)
+);
+check(
+  'SELECT da Agenda passa pelo autorizador organizacional',
+  /agrocore_schedule_items_select[\s\S]*can_view_schedule\(organization_id\)/.test(baseMigration)
+);
+check(
+  'ocorrência é única por organização/item/data local',
+  /unique index[\s\S]*organization_id,[\s\S]*schedule_item_id,[\s\S]*occurrence_local_date/i.test(recurrenceHardening)
+);
+check(
+  'materialização valida acesso ao item',
+  /can_view_schedule_item\([\s\S]*p_organization_id,[\s\S]*p_schedule_item_id/.test(recurrenceHardening)
+);
+check(
+  'notificação direta é recipient-only',
+  /recipient_user_id = \(select auth\.uid\(\)\)/.test(finalHardening)
+);
+check(
+  'notificação direta exige organização ativa',
+  /from public\.organizations o[\s\S]*o\.status = 'active'[\s\S]*m\.status = 'active'/.test(finalHardening)
+);
+check(
+  'elegibilidade do destinatário exige organização ativa',
+  /is_notification_recipient_eligible[\s\S]*o\.status = 'active'/.test(finalHardening)
+);
+check('RLS direto exige available_at alcançado', /available_at <= statement_timestamp\(\)/.test(finalHardening));
+check('RLS direto exclui notificação expirada', /expires_at > statement_timestamp\(\)/.test(finalHardening));
+check(
+  'RLS direto respeita preferência da categoria',
+  /notification_category_enabled\([\s\S]*organization_id,[\s\S]*recipient_user_id,[\s\S]*category/.test(finalHardening)
+);
 
-// Links, validade, preferências e leitura.
-await test('41. rota interna de notificação rejeita protocolo externo no banco', () => {
-  assert.match(notificationMigration, /position\(':\/\/' in route\) = 0/);
-});
-await test('42. Central valida novamente a rota antes de navegar', () => {
-  assert.match(center, /function safeRoute/);
-  assert.match(center, /route\.includes\(':\/\/'\)/);
-});
-await test('43. rota canônica de avisos da Agenda é /agenda', () => {
-  assert.match(notificationMigration, /'\/agenda'/);
-});
-await test('44. snapshot filtra janela temporal válida', () => {
-  assert.match(
-    notificationMigration,
-    /agrocore_notification_snapshot[\s\S]*available_at <= statement_timestamp\(\)[\s\S]*expires_at > statement_timestamp\(\)/
-  );
-});
-await test('45. snapshot filtra categoria desabilitada', () => {
-  assert.match(
-    notificationMigration,
-    /agrocore_notification_snapshot[\s\S]*notification_category_enabled/
-  );
-});
-await test('46. leitura individual final só aceita notificação válida', () => {
-  assert.match(
-    finalHardening,
-    /agrocore_mark_notification_read[\s\S]*available_at <= statement_timestamp\(\)[\s\S]*expires_at > statement_timestamp\(\)/
-  );
-});
-await test('47. expiração final não mantém janela artificial de um segundo', () => {
-  assert.match(
-    finalHardening,
-    /expires_at = greatest\(n\.available_at, statement_timestamp\(\)\)/
-  );
-  assert.ok(!/available_at \+ interval '1 second'/.test(finalHardening));
-});
-await test('48. constraint final permite invalidação exata sem visibilidade', () => {
-  assert.match(finalHardening, /check \(expires_at >= available_at\)/);
-});
-await test('49. preferências internas usam expectedVersion e idempotência', () => {
-  assert.match(notificationMigration, /AGROCORE_NOTIFICATION_CONCURRENCY_CONFLICT/);
-  assert.match(notificationMigration, /AGROCORE_NOTIFICATION_IDEMPOTENCY_CONFLICT/);
-});
-await test('50. gateway interno só repete falha transitória', () => {
-  assert.match(notificationGateway, /200/);
-  assert.match(notificationGateway, /600/);
-  assert.match(notificationGateway, /transient/i);
-});
+// 41–50 — Links, validade, preferências e leitura.
+check(
+  'rota interna rejeita protocolo externo no banco',
+  /position\(':\/\/' in route\) = 0/.test(notificationMigration)
+);
+check(
+  'Central valida a rota antes de navegar',
+  /function safeRoute/.test(center) && /route\.includes\(':\/\/'\)/.test(center)
+);
+check('rota canônica de avisos é /agenda', /'\/agenda'/.test(notificationMigration));
+check(
+  'snapshot filtra janela temporal válida',
+  /agrocore_notification_snapshot[\s\S]*available_at <= statement_timestamp\(\)[\s\S]*expires_at > statement_timestamp\(\)/.test(notificationMigration)
+);
+check(
+  'snapshot filtra categoria desabilitada',
+  /agrocore_notification_snapshot[\s\S]*notification_category_enabled/.test(notificationMigration)
+);
+check(
+  'leitura individual só aceita notificação válida e categoria habilitada',
+  /agrocore_mark_notification_read[\s\S]*recipient_user_id = v_actor[\s\S]*available_at <= statement_timestamp\(\)[\s\S]*expires_at > statement_timestamp\(\)[\s\S]*notification_category_enabled/.test(finalCompletion)
+);
+check(
+  'expiração final não mantém janela artificial de um segundo',
+  /expires_at = greatest\(n\.available_at, statement_timestamp\(\)\)/.test(finalHardening) &&
+    !/available_at \+ interval '1 second'/.test(finalHardening)
+);
+check(
+  'constraint final permite invalidação exata sem visibilidade',
+  /check \(expires_at >= available_at\)/.test(finalHardening)
+);
+check(
+  'preferências internas usam concorrência e idempotência',
+  /AGROCORE_NOTIFICATION_CONCURRENCY_CONFLICT/.test(notificationMigration) &&
+    /AGROCORE_NOTIFICATION_IDEMPOTENCY_CONFLICT/.test(notificationMigration)
+);
+check(
+  'gateway interno só repete falha transitória',
+  /200/.test(notificationGateway) && /600/.test(notificationGateway) && /transient/i.test(notificationGateway)
+);
 
-// Canais externos, consentimento e escalonamento.
-await test('51. e-mail externo é opt-in por padrão', () => {
-  assert.match(
-    externalMigration,
-    /notification_external_preferences[\s\S]*enabled boolean not null default false/
-  );
-});
-await test('52. política externa inicia canais desligados', () => {
-  assert.match(externalMigration, /email_enabled boolean not null default false/);
-  assert.match(externalMigration, /push_enabled boolean not null default false/);
-});
-await test('53. política registra prioridade mínima e crítica', () => {
-  assert.match(externalMigration, /minimum_priority/);
-  assert.match(externalMigration, /critical_priority/);
-});
-await test('54. política registra atraso normal e crítico', () => {
-  assert.match(externalMigration, /delay_minutes/);
-  assert.match(externalMigration, /critical_delay_minutes/);
-});
-await test('55. somente gestão pode alterar escalonamento no frontend', () => {
-  assert.match(externalSettings, /can\('schedule:manage'\)/);
-});
-await test('56. Push exige consentimento explícito do navegador', () => {
-  assert.match(pushSubscription, /Notification\.requestPermission\(\)/);
-});
-await test('57. Push utiliza Service Worker dedicado', () => {
-  assert.match(pushSubscription, /scope:\s*'\/push-notifications\/'/);
-});
-await test('58. clique Push restringe destino à mesma aplicação', () => {
-  assert.match(pushWorker, /function safeRoute/);
-  assert.match(pushWorker, /self\.location\.origin/);
-});
-await test('59. configuração de canal não expõe chave VAPID privada', () => {
-  assert.match(channelConfig, /vapidPublicKey/);
-  assert.ok(!/vapidPrivateKey\s*:/.test(channelConfig));
-});
-await test('60. UI não solicita secrets de provedor', () => {
-  assert.ok(!/digite.*(?:api.?key|secret|service.?role|token)/i.test(externalSettings));
-});
+// 51–60 — Canais externos, consentimento e escalonamento.
+check(
+  'e-mail externo é opt-in por padrão',
+  /notification_external_preferences[\s\S]*enabled boolean not null default false/.test(externalMigration)
+);
+check(
+  'política externa inicia canais desligados',
+  /email_enabled boolean not null default false/.test(externalMigration) &&
+    /push_enabled boolean not null default false/.test(externalMigration)
+);
+check(
+  'política registra prioridade mínima e crítica',
+  /minimum_priority/.test(externalMigration) && /critical_priority/.test(externalMigration)
+);
+check(
+  'política registra atraso normal e crítico',
+  /delay_minutes/.test(externalMigration) && /critical_delay_minutes/.test(externalMigration)
+);
+check('somente gestão altera escalonamento no frontend', /can\('schedule:manage'\)/.test(externalSettings));
+check('Push exige consentimento explícito', /Notification\.requestPermission\(\)/.test(pushSubscription));
+check('Push usa Service Worker dedicado', /scope:\s*'\/push-notifications\/'/.test(pushSubscription));
+check(
+  'clique Push restringe destino à mesma aplicação',
+  /function safeRoute/.test(pushWorker) && /self\.location\.origin/.test(pushWorker)
+);
+check(
+  'configuração não expõe chave VAPID privada',
+  /vapidPublicKey/.test(channelConfig) && !/vapidPrivateKey\s*:/.test(channelConfig)
+);
+check(
+  'UI não solicita secrets de provedor',
+  !/digite.*(?:api.?key|secret|service.?role|token)/i.test(externalSettings)
+);
 
-// Falha de entrega, retry, volume, idempotência e auditoria.
-await test('61. worker de e-mail possui adaptador Resend real', () => {
-  assert.match(deliveryWorker, /api\.resend\.com\/emails/);
-});
-await test('62. worker de Push possui envio Web Push real', () => {
-  assert.match(deliveryWorker, /webpush\.sendNotification/);
-});
-await test('63. provedor ausente bloqueia sem simular entrega', () => {
-  assert.match(deliveryWorker, /provider_unconfigured/);
-  assert.match(externalMigration, /status='blocked'|status = 'blocked'/);
-});
-await test('64. 429 e 5xx são classificados como transitórios', () => {
-  assert.match(deliveryWorker, /429/);
-  assert.match(deliveryWorker, />= 500/);
-});
-await test('65. retry possui backoff determinístico', () => {
-  assert.match(
-    externalMigration,
-    /when 1 then 60[\s\S]*when 2 then 300[\s\S]*when 3 then 900/
-  );
-});
-await test('66. fila concorrente usa SKIP LOCKED', () => {
-  assert.match(externalHardening + externalMigration, /skip locked/i);
-});
-await test('67. claim usa lease token e expiração', () => {
-  assert.match(externalMigration, /lease_token uuid/);
-  assert.match(externalMigration, /lease_expires_at/);
-});
-await test('68. versão antiga da mesma notificação é suprimida', () => {
-  assert.match(externalHardening, /superseded_notification_version/);
-  assert.match(externalHardening, /notification_version = n\.version/);
-});
-await test('69. entrega por e-mail possui identidade idempotente no provedor', () => {
-  assert.match(deliveryWorker, /Idempotency-Key/);
-  assert.match(deliveryWorker, /row\.delivery_id/);
-});
-await test('70. auditoria externa persiste resultados sem criar segunda notificação', () => {
-  assert.match(externalMigration, /notification_external_audit/);
-  assert.ok(!/create table if not exists public\.schedule_notifications/i.test(externalMigration));
-});
+// 61–70 — Entrega, retry, volume, idempotência e auditoria.
+check('worker de e-mail possui adaptador Resend real', /api\.resend\.com\/emails/.test(deliveryWorker));
+check('worker de Push possui Web Push real', /webpush\.sendNotification/.test(deliveryWorker));
+check(
+  'provedor ausente bloqueia sem simular entrega',
+  /provider_unconfigured/.test(deliveryWorker) && /status='blocked'|status = 'blocked'/.test(externalMigration)
+);
+check('429 e 5xx são transitórios', /429/.test(deliveryWorker) && />= 500/.test(deliveryWorker));
+check(
+  'retry possui backoff determinístico',
+  /when 1 then 60[\s\S]*when 2 then 300[\s\S]*when 3 then 900/.test(externalMigration)
+);
+check('fila concorrente usa SKIP LOCKED', /skip locked/i.test(externalHardening + externalMigration));
+check(
+  'claim usa lease token e expiração',
+  /lease_token uuid/.test(externalMigration) && /lease_expires_at/.test(externalMigration)
+);
+check(
+  'versão antiga da notificação é suprimida',
+  /superseded_notification_version/.test(externalHardening) &&
+    /notification_version = n\.version/.test(externalHardening)
+);
+check(
+  'e-mail possui identidade idempotente no provedor',
+  /Idempotency-Key/.test(deliveryWorker) && /row\.delivery_id/.test(deliveryWorker)
+);
+check(
+  'auditoria externa existe sem segunda notificação',
+  /notification_external_audit/.test(externalMigration) &&
+    !/create table if not exists public\.schedule_notifications/i.test(externalMigration)
+);
 
-// Fechamento integral, acessibilidade e rastreabilidade.
-await test('71. migration final não recria schedule_items', () => {
-  assert.ok(!/create table[\s\S]*schedule_items/i.test(finalHardening));
-});
-await test('72. migration final não recria notifications', () => {
-  assert.ok(!/create table[\s\S]*public\.notifications/i.test(finalHardening));
-});
-await test('73. migration final não recria fila externa', () => {
-  assert.ok(!/create table[\s\S]*notification_external_deliveries/i.test(finalHardening));
-});
-await test('74. gate final executa esta homologação antes da acessibilidade', () => {
-  const finalIndex = moduleGate.indexOf('test-schedule-final-homologation.ts');
-  const a11yIndex = moduleGate.indexOf('test-schedule-accessibility.ts');
-  assert.ok(finalIndex >= 0 && a11yIndex > finalIndex);
-});
-await test('75. gate final mantém auditoria de tema depois da acessibilidade', () => {
-  const a11yIndex = moduleGate.indexOf('test-schedule-accessibility.ts');
-  const themeIndex = moduleGate.indexOf('test-schedule-theme.js');
-  assert.ok(a11yIndex >= 0 && themeIndex > a11yIndex);
-});
-await test('76. gate declara Módulo 008 concluído de OE-008.001 a OE-008.007', () => {
-  assert.match(
-    moduleGate,
-    /MÓDULO 008 — CONCLUÍDO — OE-008\.001 A OE-008\.007/
-  );
-});
-await test('77. package expõe comando dedicado de homologação final', () => {
-  assert.match(packageManifest, /"test:schedule-final-homologation"/);
-});
-await test('78. roteiro operacional proíbe dado fictício e exige ambiente físico real', () => {
-  assert.match(runbook, /não criar dados fictícios/i);
-  assert.match(runbook, /dispositivo real/i);
-  assert.match(runbook, /provedor/i);
-});
-await test('79. fechamento distingue implementação completa de evidência física não fabricada', () => {
-  assert.match(closingReport, /implementação.*completa/i);
-  assert.match(closingReport, /não foi fabricada/i);
-  assert.match(closingReport, /ambiente atual/i);
-});
-await test('80. relatório final declara o Módulo 008 concluído sem remover gates existentes', () => {
-  assert.match(finalModuleReport, /Módulo 008.*concluído/i);
-  assert.match(accessibility, /schedule/i);
-  assert.match(theme, /schedule|agenda/i);
-});
+// 71–80 — Fechamento integral, acessibilidade e rastreabilidade.
+check('migrations finais não recriam schedule_items', !/create table[\s\S]*schedule_items/i.test(finalMigrations));
+check('migrations finais não recriam notifications', !/create table[\s\S]*public\.notifications/i.test(finalMigrations));
+check(
+  'migrations finais não recriam fila externa',
+  !/create table[\s\S]*notification_external_deliveries/i.test(finalMigrations)
+);
+const finalIndex = moduleGate.indexOf('test-schedule-final-homologation.ts');
+const a11yIndex = moduleGate.indexOf('test-schedule-accessibility.ts');
+const themeIndex = moduleGate.indexOf('test-schedule-theme.js');
+check('gate executa homologação final antes da acessibilidade', finalIndex >= 0 && a11yIndex > finalIndex);
+check('gate mantém tema depois da acessibilidade', a11yIndex >= 0 && themeIndex > a11yIndex);
+check(
+  'gate declara Módulo 008 concluído de OE-008.001 a OE-008.007',
+  /MÓDULO 008 — CONCLUÍDO — OE-008\.001 A OE-008\.007/.test(moduleGate)
+);
+check('package expõe comando dedicado de homologação final', /"test:schedule-final-homologation"/.test(packageManifest));
+check(
+  'roteiro operacional proíbe dado fictício e exige ambiente físico real',
+  /não criar dados fictícios/i.test(runbook) && /dispositivo real/i.test(runbook) && /provedor/i.test(runbook)
+);
+check(
+  'fechamento distingue implementação completa de evidência física não fabricada',
+  /implementação.*completa/i.test(closingReport) &&
+    /não foi fabricada/i.test(closingReport) &&
+    /ambiente atual/i.test(closingReport)
+);
+check(
+  'relatório final declara módulo concluído sem remover gates existentes',
+  /Módulo 008.*concluído/i.test(finalModuleReport) &&
+    /schedule/i.test(accessibility) &&
+    /schedule|agenda/i.test(theme)
+);
 
-console.log(`\nOE-008.007: ${passed} aprovadas; ${failed} falharam.`);
-if (failed > 0) {
-  process.exit(1);
-}
-
-assert.equal(passed, 80);
+assert.equal(checks, 80);
+console.log(`\n✅ OE-008.007 — ${checks} verificações finais aprovadas.`);
 console.log('✅ OE-008.007 — HOMOLOGAÇÃO AUTOMATIZADA FINAL APROVADA.');

@@ -264,13 +264,15 @@ Cobertura específica: **51 verificações**.
 
 A OE-.007 não criou nova entidade de negócio. Ela homologou o que já existia e corrigiu arestas encontradas durante a revisão final.
 
-### Migration final
+### Migrations finais
 
-`20260904224802 — oe_008_007_final_homologation_hardening`
+- `20260904224802 — oe_008_007_final_homologation_hardening`;
+- `20260904230337 — oe_008_007_final_homologation_completion`.
 
-Arquivo:
+Arquivos:
 
-`supabase/migrations/20260904224802_oe_008_007_final_homologation_hardening.sql`
+- `supabase/migrations/20260904224802_oe_008_007_final_homologation_hardening.sql`;
+- `supabase/migrations/20260904230337_oe_008_007_final_homologation_completion.sql`.
 
 ### Hardening aplicado
 
@@ -279,7 +281,7 @@ Arquivo:
 3. `can_access_notifications` agora exige organização ativa, membership ativa e papel elegível;
 4. `is_notification_recipient_eligible` também exige organização ativa;
 5. RLS direto de `public.notifications` impõe recipient, organização autorizada, `available_at <= now`, `expires_at > now` e preferência de categoria habilitada;
-6. `agrocore_mark_notification_read` só aceita notificação atualmente válida/preference-enabled.
+6. a migration R2 `20260904230337` endurece `agrocore_mark_notification_read`, que agora só aceita notificação do destinatário atualmente válida e com categoria habilitada.
 
 ### Fusos/DST
 
@@ -349,9 +351,11 @@ Mensagem de encerramento:
 
 ## 6. EVIDÊNCIA REMOTA DO FECHAMENTO
 
-No Supabase foi observado após a migration final:
+No Supabase foi observado após os hardenings finais:
 
-- migration `20260904224802` registrada;
+- migration `20260904224802 — oe_008_007_final_homologation_hardening` registrada;
+- migration `20260904230337 — oe_008_007_final_homologation_completion` registrada;
+- `agrocore_mark_notification_read` remoto exige recipient, `available_at <= now`, `expires_at > now` e categoria habilitada;
 - `notifications_validity_ck = CHECK ((expires_at >= available_at))`;
 - policy `agrocore_notifications_select` com recipient, organização autorizada, disponibilidade, expiração e preferência;
 - `can_access_notifications`/`is_notification_recipient_eligible` exigindo organização ativa;
@@ -405,7 +409,7 @@ A ausência de evidência física no ambiente vazio não corresponde a código f
 | Recorrência | implementada/endurecida |
 | Central interna | implementada/endurecida |
 | Canais externos | implementados com fail-closed |
-| Homologação final | 80 verificações + hardening remoto |
+| Homologação final | 80 verificações + 2 hardenings remotos |
 | Total específico | 432 |
 | Acessibilidade | 33 verificações adicionais |
 | Tema | auditoria adicional |

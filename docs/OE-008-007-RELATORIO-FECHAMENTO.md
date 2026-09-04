@@ -17,15 +17,17 @@ A OE-008.007 foi executada como fechamento, sem criar segunda Agenda, segunda Ce
 
 Foram homologados por teste executável e auditoria de código: fuso IANA, DST, recorrência e exceções, perfis positivos/negativos, rota `/agenda`, RLS/IDOR, links seguros, preferências internas/externas, escalonamento, retries, leases, versão/idempotência, falhas de provedor, Push, e-mail, acessibilidade, tema e ausência de fonte paralela.
 
-## 2. Hardening final aplicado ao Supabase
+## 2. Hardenings finais aplicados ao Supabase
 
-Migration aplicada remotamente:
+Migrations aplicadas remotamente:
 
-`20260904224802 — oe_008_007_final_homologation_hardening`
+- `20260904224802 — oe_008_007_final_homologation_hardening`;
+- `20260904230337 — oe_008_007_final_homologation_completion`.
 
-Arquivo canônico versionado:
+Arquivos canônicos versionados:
 
-`supabase/migrations/20260904224802_oe_008_007_final_homologation_hardening.sql`
+- `supabase/migrations/20260904224802_oe_008_007_final_homologation_hardening.sql`;
+- `supabase/migrations/20260904230337_oe_008_007_final_homologation_completion.sql`.
 
 Correções efetivas:
 
@@ -34,18 +36,19 @@ Correções efetivas:
 3. `can_access_notifications` exige organização ativa, membership ativa e papel elegível;
 4. `is_notification_recipient_eligible` também exige organização ativa;
 5. RLS de `public.notifications` passa a impor, além de recipient/tenant, `available_at <= now`, `expires_at > now` e preferência de categoria habilitada;
-6. `agrocore_mark_notification_read` só aceita notificação atualmente válida e visível para o destinatário.
+6. a migration R2 endurece `agrocore_mark_notification_read`: leitura individual agora exige recipient correto, notificação atualmente disponível, não expirada e categoria interna habilitada.
 
-Nenhuma tabela empresarial nova foi criada por esse hardening.
+Nenhuma tabela empresarial nova foi criada por esses hardenings.
 
-## 3. Evidência remota observada após a migration
+## 3. Evidência remota observada após as migrations
 
 Foi verificado no projeto Supabase:
 
-- migration `20260904224802` registrada;
+- migrations `20260904224802` e `20260904230337` registradas;
 - constraint `notifications_validity_ck` = `CHECK ((expires_at >= available_at))`;
 - policy `agrocore_notifications_select` contendo recipient-only, organização autorizada, janela temporal válida e categoria habilitada;
 - `can_access_notifications` e `is_notification_recipient_eligible` exigindo `organizations.status='active'`;
+- `agrocore_mark_notification_read` remoto contendo recipient, `available_at <= statement_timestamp()`, `expires_at > statement_timestamp()` e `notification_category_enabled(...)`;
 - fusos `America/Sao_Paulo`, `America/New_York` e `UTC` presentes no catálogo PostgreSQL;
 - job `agrocore-notification-delivery-worker` ativo em `* * * * *`;
 - execuções recentes do cron com status `succeeded`;
@@ -53,7 +56,7 @@ Foi verificado no projeto Supabase:
 
 ## 4. Homologação automatizada final
 
-Foi adicionada a suíte:
+Foi adicionada e endurecida a suíte:
 
 `scripts/test-schedule-final-homologation.ts`
 
@@ -67,6 +70,8 @@ Ela contém **80 verificações finais** organizadas nos seguintes grupos:
 - canais externos, consentimento e escalonamento;
 - falha/retry/volume/idempotência/auditoria;
 - fechamento integral, acessibilidade e rastreabilidade.
+
+A suíte foi corrigida para validar a leitura individual contra a migration R2 real, em vez de atribuir esse hardening à migration anterior.
 
 O gate `scripts/test-module-008.js` executa a OE-008.007 antes das auditorias finais de acessibilidade e tema e encerra com:
 
@@ -113,7 +118,7 @@ Isso é uma dependência de ambiente/evidência física, não uma lacuna de cód
 
 ## 7. Segurança
 
-A OE-008.007 não adiciona segredo ao repositório nem à UI. Não solicita API key, service role, chave VAPID privada ou token do worker ao usuário. As advertências genéricas do advisor sobre RPCs `SECURITY DEFINER` autenticadas foram avaliadas no contexto do padrão atual: essas RPCs possuem autorização explícita e são intencionalmente a fronteira do backend. Nenhuma permissão foi revogada cegamente para não quebrar os fluxos autorizados.
+A OE-008.007 não adiciona segredo ao repositório nem à UI. Não solicita API key, service role, chave VAPID privada ou token do worker ao usuário. As RPCs `SECURITY DEFINER` expostas a autenticados permanecem autorizadas explicitamente e atuam como fronteira do backend.
 
 ## 8. Decisão de fechamento
 

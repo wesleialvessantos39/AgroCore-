@@ -42,7 +42,8 @@ O fechamento preserva deny-by-default e multi-tenant estrito:
 - organização ativa + membership ativa para acesso à Agenda/Notificações;
 - tenant sempre validado por `organization_id`;
 - recipient-only para notificação interna;
-- RLS direto de `notifications` agora filtra disponibilidade, expiração e preferência;
+- RLS direto de `notifications` filtra disponibilidade, expiração e preferência;
+- leitura individual também exige recipient, validade temporal e categoria habilitada;
 - rota `/agenda` requer `schedule:view`;
 - gestão exige `schedule:manage`;
 - `finance` e `platform_super_admin` não recebem acesso organizacional à Agenda por herança implícita;
@@ -69,7 +70,7 @@ A Central interna possui:
 - UI única em desktop/mobile;
 - IDs ARIA distintos por instância.
 
-No hardening final, uma notificação invalidada pela mudança do item pode expirar exatamente em `available_at`, sem janela artificial de um segundo.
+No hardening final, uma notificação invalidada pela mudança do item pode expirar exatamente em `available_at`, sem janela artificial de um segundo. A R2 da OE-008.007 também impede marcar como lida notificação futura, expirada ou cuja categoria esteja desabilitada.
 
 ## 7. Canais externos
 
@@ -97,7 +98,8 @@ Migrations do fechamento do Módulo 008 presentes no Supabase incluem:
 - `20260904151711 — oe_008_005_internal_notification_center`;
 - `20260904172154 — oe_008_006_external_channels_escalation`;
 - `20260904172859 — oe_008_006_delivery_version_hardening`;
-- `20260904224802 — oe_008_007_final_homologation_hardening`.
+- `20260904224802 — oe_008_007_final_homologation_hardening`;
+- `20260904230337 — oe_008_007_final_homologation_completion`.
 
 Edge Functions relevantes observadas ativas:
 

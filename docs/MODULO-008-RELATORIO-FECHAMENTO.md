@@ -43,6 +43,7 @@ O módulo fecha com:
 - `finance` sem herança da Agenda;
 - `platform_super_admin` sem acesso automático a dados privados de organizações;
 - RLS recipient-only com validade e preferência aplicadas diretamente em `notifications`;
+- leitura individual também limitada a recipient + validade temporal + categoria habilitada;
 - idempotência, expectedVersion, receipts e fingerprints;
 - leases e `SKIP LOCKED` na fila externa;
 - rotas internas seguras;
@@ -69,19 +70,20 @@ O módulo fecha com:
 
 O gate `scripts/test-module-008.js` executa todas as suítes e só declara o módulo concluído depois da homologação final, acessibilidade e tema.
 
-## 5. Hardening final remoto
+## 5. Hardenings finais remotos
 
-Migration aplicada:
+Migrations aplicadas:
 
-`20260904224802 — oe_008_007_final_homologation_hardening`
+- `20260904224802 — oe_008_007_final_homologation_hardening`;
+- `20260904230337 — oe_008_007_final_homologation_completion`.
 
-Ela:
+Em conjunto elas:
 
-- permite expiração exata `expires_at >= available_at`;
-- remove a antiga janela residual de um segundo;
-- exige organização ativa para notificação/destinatário;
-- faz RLS direto obedecer `available_at`, `expires_at` e preferência de categoria;
-- restringe leitura individual a notificação atualmente válida.
+- permitem expiração exata `expires_at >= available_at`;
+- removem a antiga janela residual de um segundo;
+- exigem organização ativa para notificação/destinatário;
+- fazem RLS direto obedecer `available_at`, `expires_at` e preferência de categoria;
+- restringem leitura individual à notificação do próprio destinatário, atualmente válida e com categoria habilitada.
 
 ## 6. Infraestrutura observada
 
@@ -92,6 +94,7 @@ No fechamento remoto foram observados:
 - `notification-delivery-worker` ACTIVE;
 - `notification-channel-config` ACTIVE;
 - fusos IANA de homologação presentes no PostgreSQL;
+- migrations finais `20260904224802` e `20260904230337` registradas;
 - zero organizações, memberships, usuários Auth, itens de Agenda, notificações, políticas, entregas, tentativas e assinaturas Push empresariais.
 
 ## 7. Limite de evidência física
