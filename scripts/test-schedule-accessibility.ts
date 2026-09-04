@@ -10,8 +10,12 @@ const collaboration = fs.readFileSync(
   'src/schedule/ScheduleItemCollaborationPanel.tsx',
   'utf8'
 );
+const occurrences = fs.readFileSync(
+  'src/schedule/ScheduleOccurrencePanel.tsx',
+  'utf8'
+);
 const theme = fs.readFileSync('src/schedule/theme.ts', 'utf8');
-const rendered = page + '\n' + browse + '\n' + collaboration;
+const rendered = page + '\n' + browse + '\n' + collaboration + '\n' + occurrences;
 
 let passed = 0;
 let failed = 0;
@@ -190,6 +194,39 @@ test('32. formulários de colaboração e ciclo possuem motivo obrigatório', ()
 
 test('33. botões de colaboração preservam ícones decorativos ocultos', () => {
   assert.ok((collaboration.match(/aria-hidden="true"/g) ?? []).length >= 4);
+});
+
+test('34. ocorrências recorrentes usam região semântica identificada', () => {
+  assert.match(occurrences, /aria-label="Ocorrências da recorrência"/);
+});
+
+test('35. expansão de ocorrências informa estado ao leitor de tela', () => {
+  assert.match(occurrences, /aria-expanded=\{expanded\}/);
+  assert.match(occurrences, /Ocorrências recorrentes/);
+});
+
+test('36. carregamento de ocorrências usa status e aria-live', () => {
+  assert.match(occurrences, /role="status"/);
+  assert.match(occurrences, /aria-live="polite"/);
+});
+
+test('37. erros de recorrência são anunciados como alertas', () => {
+  assert.match(occurrences, /role="alert"/);
+});
+
+test('38. ações de ocorrência exigem motivo com limites explícitos', () => {
+  assert.match(occurrences, /required/);
+  assert.match(occurrences, /minLength=\{3\}/);
+  assert.match(occurrences, /maxLength=\{500\}/);
+});
+
+test('39. controles de ocorrência se reorganizam no celular', () => {
+  assert.match(occurrences, /flex-col-reverse[\s\S]*sm:flex-row/);
+  assert.match(occurrences, /w-full[\s\S]*sm:w-auto/);
+});
+
+test('40. recorrência não introduz tabela larga nem overflow horizontal', () => {
+  assert.doesNotMatch(occurrences, /<table|overflow-x-auto/i);
 });
 
 console.log('\n====================================================');
