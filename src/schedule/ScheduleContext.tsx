@@ -20,11 +20,16 @@ import {
   type ScheduleItemAuditEntry,
   type ScheduleItemListFilters,
   type ScheduleMemberOption,
+  type ScheduleOccurrence,
+  type ScheduleOccurrenceTransitionInput,
+  type ScheduleOccurrenceWindowInput,
   type ScheduleTransitionInput,
   type SetScheduleCollaborationInput,
   type UpdateScheduleItemInput,
 } from '../types/schedule';
 import { getScheduleGateway } from './gatewayFactory';
+import { getScheduleOccurrenceGateway } from './occurrenceGatewayFactory';
+import { ScheduleOccurrenceService } from './scheduleOccurrenceService';
 import { ScheduleService } from './scheduleService';
 
 export type ScheduleContextStatus =
@@ -55,6 +60,22 @@ export interface ScheduleContextValue {
   readonly getCollaborationRevisions: (
     scheduleItemId: string
   ) => Promise<readonly ScheduleCollaborationRevision[]>;
+  readonly materializeOccurrences: (
+    scheduleItemId: string,
+    window: ScheduleOccurrenceWindowInput
+  ) => Promise<readonly ScheduleOccurrence[]>;
+  readonly completeOccurrence: (
+    occurrenceId: string,
+    input: ScheduleOccurrenceTransitionInput
+  ) => Promise<ScheduleOccurrence>;
+  readonly reopenOccurrence: (
+    occurrenceId: string,
+    input: ScheduleOccurrenceTransitionInput
+  ) => Promise<ScheduleOccurrence>;
+  readonly cancelOccurrence: (
+    occurrenceId: string,
+    input: ScheduleOccurrenceTransitionInput
+  ) => Promise<ScheduleOccurrence>;
   readonly createTask: (
     input: Omit<CreateCorporateTaskInput, 'kind'>
   ) => Promise<ScheduleItem>;
@@ -126,7 +147,15 @@ export function ScheduleProvider({
   const canManage = can('schedule:manage');
 
   const gateway = useMemo(() => getScheduleGateway(), []);
+  const occurrenceGateway = useMemo(
+    () => getScheduleOccurrenceGateway(),
+    []
+  );
   const service = useMemo(() => new ScheduleService(gateway), [gateway]);
+  const occurrenceService = useMemo(
+    () => new ScheduleOccurrenceService(gateway, occurrenceGateway),
+    [gateway, occurrenceGateway]
+  );
 
   const applicationContext =
     useMemo<ScheduleApplicationContext | null>(() => {
@@ -371,6 +400,46 @@ export function ScheduleProvider({
     [ensureContext, service]
   );
 
+  const materializeOccurrences = useCallback(
+    (scheduleItemId: string, window: ScheduleOccurrenceWindowInput) =>
+      occurrenceService.materializeOccurrences(
+        ensureContext(),
+        scheduleItemId,
+        window
+      ),
+    [ensureContext, occurrenceService]
+  );
+
+  const completeOccurrence = useCallback(
+    (occurrenceId: string, input: ScheduleOccurrenceTransitionInput) =>
+      occurrenceService.completeOccurrence(
+        ensureContext(),
+        occurrenceId,
+        input
+      ),
+    [ensureContext, occurrenceService]
+  );
+
+  const reopenOccurrence = useCallback(
+    (occurrenceId: string, input: ScheduleOccurrenceTransitionInput) =>
+      occurrenceService.reopenOccurrence(
+        ensureContext(),
+        occurrenceId,
+        input
+      ),
+    [ensureContext, occurrenceService]
+  );
+
+  const cancelOccurrence = useCallback(
+    (occurrenceId: string, input: ScheduleOccurrenceTransitionInput) =>
+      occurrenceService.cancelOccurrence(
+        ensureContext(),
+        occurrenceId,
+        input
+      ),
+    [ensureContext, occurrenceService]
+  );
+
   const setCollaboration = useCallback(
     async (
       scheduleItemId: string,
@@ -470,6 +539,10 @@ export function ScheduleProvider({
       getItemById,
       getAudit,
       getCollaborationRevisions,
+      materializeOccurrences,
+      completeOccurrence,
+      reopenOccurrence,
+      cancelOccurrence,
       createTask,
       createAppointment,
       updateItem,
@@ -479,9 +552,11 @@ export function ScheduleProvider({
       cancelItem,
     }),
     [
+      cancelOccurrence,
       clearFilters,
       canManage,
       cancelItem,
+      completeOccurrence,
       completeItem,
       createAppointment,
       createTask,
@@ -493,7 +568,9 @@ export function ScheduleProvider({
       getCollaborationRevisions,
       getItemById,
       items,
+      materializeOccurrences,
       refresh,
+      reopenOccurrence,
       reopenItem,
       setCollaboration,
       setFilters,
