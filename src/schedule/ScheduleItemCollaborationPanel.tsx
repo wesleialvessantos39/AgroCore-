@@ -6,6 +6,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { SCHEDULE_THEME } from './theme';
+import { ScheduleOccurrencePanel } from './ScheduleOccurrencePanel';
 import type {
   ScheduleItem,
   ScheduleMemberOption,
@@ -515,6 +516,8 @@ export function ScheduleItemCollaborationPanel({
           </div>
         </form>
       )}
+
+      <ScheduleOccurrencePanel item={item} />
     </div>
   );
 }
