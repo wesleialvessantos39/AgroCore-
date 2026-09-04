@@ -1,47 +1,51 @@
 # LIVRO-RAIZ OFICIAL DO PROJETO AGROCORE
 
 > **Edição canônica atualizada em 04/09/2026**  
-> **Estado técnico consolidado até:** OE-008.007 — Homologação final e fechamento do Módulo 008  
+> **Estado técnico consolidado até:** OE-008.007 — Homologação final e encerramento do Módulo 008  
 > **Branch de referência:** `main`  
 > **Estado base imediatamente anterior:** `4c87d7e451eca29a572bacda56ab0d87a7db163b`  
-> **Regra:** este Livro-Raiz registra implementação e evidência observadas. Planejamento futuro não é promovido a funcionalidade pronta.
+> **Regra:** este arquivo registra implementação e evidência efetivamente observadas. Prova física dependente de provedor, usuário ou dispositivo real não é inventada.
 
 ---
 
 ## 0. GOVERNANÇA DESTA EDIÇÃO
 
-Esta edição fecha o **Módulo 008 — Agenda Corporativa, Tarefas, Prazos e Notificações** até a OE-008.007.
+Esta edição fecha o **Módulo 008 — Agenda corporativa, tarefas, prazos e notificações** de OE-008.001 a OE-008.007 e substitui a edição que terminava em OE-008.006.
 
-A edição imediatamente anterior foi preservada integralmente em:
+A edição imediatamente anterior permanece preservada integralmente em:
 
 `docs/archive/LIVRO_RAIZ_AGROCORE_PRE_OE008007_2026-09-04.md`
 
-Históricos anteriores permanecem em `docs/archive/`.
+Históricos anteriores permanecem em:
+
+- `docs/archive/LIVRO_RAIZ_AGROCORE_PRE_OE008006_2026-09-04.md`;
+- `docs/archive/LIVRO_RAIZ_AGROCORE_PRE_OE008005_2026-09-04.md`.
 
 ### Precedência documental
 
 1. **Livro-Raiz:** estado técnico efetivamente observado no código e, quando verificado, na infraestrutura remota.
-2. **Especificação Técnica:** arquitetura-alvo e requisitos.
-3. **Plano/Relatórios Mestres:** backlog, ordem de execução e critérios de aceite.
-4. Divergências não autorizam duplicação de cadastros, tabelas, eventos, filas ou fontes de verdade.
-5. Nenhuma OE ou módulo posterior é considerado implementado por inferência.
+2. **Especificação Técnica:** arquitetura-alvo e requisitos detalhados.
+3. **Plano/Relatórios Mestres:** backlog, ordem de execução, critérios e limites de aceite.
+4. Divergência não autoriza duplicar cadastros, tabelas, eventos, filas, gateways ou fontes de verdade.
+5. Uma prova física só pode ser declarada quando executada com ambiente real; ausência de tenant/provedor/dispositivo nunca é substituída por dado fictício.
 
 ---
 
 ## 1. IDENTIDADE E PRINCÍPIOS PERMANENTES
 
-- **Nome oficial:** AgroCore
-- **Namespace visual:** `agrocore-*`
-- **Paleta:** `#0B3D2E`, `#78C89A`, `#FFFFFF`
-- **Multi-tenant:** `organization_id` é fronteira obrigatória.
-- **Deny-by-default:** ausência de vínculo/papel/permissão válida nega acesso.
-- **RBAC + RLS/backend:** controle visual nunca substitui autorização de serviço/banco.
-- **Fonte única da verdade:** módulos consumidores referenciam entidades canônicas.
-- **Concorrência/idempotência:** versões, locks, fingerprints, receipts e leases conforme o domínio.
-- **Auditoria sanitizada:** rastreabilidade sem duplicar conteúdo sensível desnecessário.
-- **Sem dados fictícios em produção:** preview e homologação estrutural não inventam persistência.
-- **Sem secrets no cliente:** credenciais externas pertencem ao backend/ambiente seguro.
-- **Acessibilidade/responsividade:** teclado, ARIA, foco e uso desktop/tablet/mobile.
+- **Nome oficial:** AgroCore.
+- **Namespace visual:** `agrocore-*`.
+- **Paleta:** `#0B3D2E`, `#78C89A`, `#FFFFFF`.
+- **Multi-tenant estrito:** `organization_id` é a fronteira de dados empresariais.
+- **Deny-by-default:** ausência de vínculo/papel/permissão válida nega a operação.
+- **RBAC + backend/RLS:** autorização visual nunca substitui autorização persistente.
+- **Fonte única da verdade:** consumidores referenciam entidades canônicas por IDs estáveis.
+- **Idempotência/concorrência:** versão, lock, fingerprint, receipt e lease conforme o domínio.
+- **Auditoria sanitizada:** rastreabilidade sem PII excessiva.
+- **Sem dados fictícios em produção.**
+- **Sem secrets no cliente/repositório.**
+- **PWA resiliente e cache controlado.**
+- **Acessibilidade e responsividade obrigatórias.**
 
 ---
 
@@ -49,43 +53,37 @@ Históricos anteriores permanecem em `docs/archive/`.
 
 | Perfil | Identificador | Regra geral |
 |---|---|---|
-| Superadministrador | `platform_super_admin` | Governança da plataforma; não herda dados privados de organizações. |
-| Proprietário | `owner` | Governança integral da organização. |
-| Administrador | `company_admin` | Gestão administrativa e operacional. |
+| Superadministrador | `platform_super_admin` | Governança de plataforma; não herda dados privados da organização. |
+| Proprietário | `owner` | Governança integral conforme permissões. |
+| Administrador | `company_admin` | Gestão administrativa/operacional. |
 | Gerente | `manager` | Coordenação e gestão operacional. |
 | Projetista | `project_designer` | Execução técnica autorizada. |
-| Financeiro | `finance` | Domínio financeiro autorizado; sem Agenda por herança. |
+| Financeiro | `finance` | Domínio financeiro; sem Agenda por herança implícita. |
 | Captador | `capturer` | Prospecção/atendimento e operações autorizadas. |
+
+No Módulo 008 especificamente:
+
+- `owner`, `company_admin`, `manager`: `schedule:view` + `schedule:manage`;
+- `project_designer`, `capturer`: `schedule:view`;
+- `finance`: sem `schedule:view`/`schedule:manage`;
+- `platform_super_admin`: sem acesso automático à Agenda organizacional.
 
 ---
 
 ## 3. CHECKPOINT DOS MÓDULOS 000–007
 
-### Módulo 000 — Fundação Técnica e Offline-First
-**Status:** concluído no escopo registrado.
+| Módulo | Estado registrado |
+|---|---|
+| 000 — Fundação Técnica/Offline | concluído no escopo histórico |
+| 001 — Autenticação/Organizações/RBAC | concluído até OE-001.006 |
+| 002 — Clientes/Produtores | concluído até OE-002.003 |
+| 003 — Imóveis | concluído no escopo registrado, incluindo georreferenciamento/revisões |
+| 004 — Laudos | implementado até OE-004.003 no escopo registrado |
+| 005 — Propostas | implementado até OE-005.007 no escopo registrado |
+| 006 — Gestão Documental | implementado até OE-006.007 no código registrado |
+| 007 — Visitas/Operação de Campo | implementado até OE-007.007; evidência física separada |
 
-### Módulo 001 — Autenticação, Organizações e RBAC
-**Status:** concluído até OE-001.006 no escopo registrado.
-
-### Módulo 002 — Clientes e Produtores
-**Status:** concluído até OE-002.003 no escopo registrado.
-
-### Módulo 003 — Imóveis Rurais e Urbanos
-**Status:** concluído no escopo registrado, incluindo georreferenciamento e revisões.
-
-### Módulo 004 — Laudos de Avaliação
-**Status:** implementado até OE-004.003 no escopo registrado.
-
-### Módulo 005 — Propostas
-**Status:** implementado até OE-005.007 no escopo registrado.
-
-### Módulo 006 — Gestão Documental
-**Status:** implementado até OE-006.007 no código registrado.
-
-### Módulo 007 — Visitas e Operação de Campo
-**Status:** implementado até OE-007.007 no escopo registrado.
-
-Regra de integração: `technical_visit_integration_events` permanece a fonte do evento do Módulo 007; Agenda apenas consome esse evento idempotentemente.
+Regras de não duplicação continuam válidas: clientes vêm do Módulo 002; imóveis do Módulo 003; profissionais de usuários/memberships; visitas do Módulo 007; integração de visitas usa `technical_visit_integration_events`.
 
 ---
 
@@ -93,89 +91,111 @@ Regra de integração: `technical_visit_integration_events` permanece a fonte do
 
 ## Status geral
 
-**CONCLUÍDO ATÉ OE-008.007.**
+**MÓDULO 008 CONCLUÍDO EM IMPLEMENTAÇÃO E HOMOLOGAÇÃO AUTOMATIZADA — OE-008.001 A OE-008.007.**
 
-Não há OE pendente dentro do Módulo 008 nesta edição.
+A conclusão de software não fabrica evidência física externa. E-mail e Push ponta a ponta exigem tenant, usuário, provedor e dispositivo reais; o procedimento está em `docs/OE-008-007-ROTEIRO-HOMOLOGACAO-OPERACIONAL.md`.
 
-### Fontes canônicas
+## Fontes canônicas e derivadas
 
-- Agenda: `public.schedule_items`.
-- Ocorrências: `public.schedule_item_occurrences`, estrutura derivada.
-- Notificações internas: `public.notifications`.
-- Preferências internas: `public.notification_preferences`.
-- Entregas externas: fila derivada de `public.notifications`; não é uma segunda Central.
+- `public.schedule_items` — fonte persistente única da Agenda;
+- `public.schedule_item_occurrences` — materialização derivada de recorrência;
+- `public.notifications` — fonte canônica das notificações internas;
+- `public.notification_preferences` — preferências internas;
+- `public.notification_external_preferences` — opt-in de canais externos;
+- `public.notification_escalation_policies` — política organizacional de escalonamento;
+- `agrocore_private.notification_external_deliveries` — fila externa derivada;
+- `agrocore_private.notification_external_attempts` — tentativas;
+- `agrocore_private.notification_push_subscriptions` — assinaturas Push privadas.
+
+Não existe segunda `schedule_items`, segunda Central, segunda fonte de visita ou notificação paralela criada pelas OEs 008.001–007.
 
 ---
 
 ## 4.1 OE-008.001 — Modelo de tarefas e compromissos
 
-**Status:** concluída.
+**Status: implementada.**
 
-Inclui tarefas/compromissos tipados, organização, autoria, responsável, prioridade, estado, datas, fuso, origem integrada e comandos com contratos de concorrência/idempotência.
+- tarefas/compromissos tipados;
+- organização, autoria, responsável, prioridade, estado, datas e fuso;
+- origem manual ou evento de domínio;
+- `source_domain`, `source_id`, `source_version`, `source_event_key`;
+- RLS e autorização de Agenda;
+- criação/atualização com idempotência e concorrência.
 
 ---
 
 ## 4.2 OE-008.002 — Listas e Agenda
 
-**Status:** concluída.
+**Status: implementada.**
 
-Inclui visão pessoal/equipe, calendário, lista móvel, filtros, estados vazios reais e autorização sem coleção paralela.
+- visão pessoal/equipe;
+- calendário desktop;
+- lista móvel;
+- estados vazios reais;
+- filtros e autorização sem coleção paralela.
 
 ---
 
 ## 4.3 OE-008.003 — Atribuição e colaboração
 
-**Status:** concluída.
+**Status: implementada.**
 
-Inclui responsável canônico, participantes, elegibilidade organizacional, conclusão, cancelamento, reabertura, histórico e diretório restrito à gestão autorizada.
+- `responsible_user_id` canônico;
+- participantes por `schedule_item_participants`;
+- elegibilidade organizacional;
+- conclusão, reabertura e cancelamento;
+- histórico/auditoria;
+- gestão de equipe limitada a perfis autorizados.
 
-A reconciliação 001–003 preserva `technical_visit_integration_events` e impede regressão por versão antiga de integração.
+### Reconciliação 001–003 com Módulo 007
+
+Agenda consome `technical_visit_integration_events` sem copiar a outbox de visitas. `source_version` monotônico impede regressão por evento antigo.
 
 ---
 
 ## 4.4 OE-008.004 — Prazos e recorrência
 
-**Status:** concluída e endurecida.
+**Status: implementada e endurecida.**
 
-Principais contratos:
-
-- frequências diária, semanal, mensal e anual;
+- frequências `daily`, `weekly`, `monthly`, `yearly`;
+- intervalo e `endsAt`;
 - fuso IANA;
-- DST determinístico;
-- rejeição de horário inexistente/ambíguo;
-- janela finita de materialização;
-- identidade lógica única por item/data local;
-- `source_item_version`;
-- replay idempotente com snapshot imutável;
-- retry apenas para falha transitória.
+- DST inexistente/ambíguo tratado de forma determinística e fail-closed;
+- janela máxima de materialização;
+- identidade lógica por `occurrence_local_date`;
+- unique `(organization_id, schedule_item_id, occurrence_local_date)`;
+- replay idempotente por `result_snapshot` imutável;
+- retry apenas para falhas transitórias.
 
-Migrations remotas registradas:
+Migrations remotas relevantes:
 
 - `20260904115537 — oe_008_004_deadlines_recurrence`;
 - `20260904123600 — oe_008_004_idempotency_identity_hardening`.
 
-Cobertura específica: **57 verificações**.
+Cobertura registrada da OE-.004: **57 verificações**.
 
 ---
 
 ## 4.5 OE-008.005 — Central de Notificações Internas
 
-**Status:** concluída.
+**Status: implementada.**
 
 Fonte canônica: `public.notifications`.
 
-Contratos:
+Inclui:
 
-- contador não lido calculado no banco;
-- `available_at`/`expires_at`;
-- leitura individual/em lote;
+- `public.notification_preferences`;
+- `public.notification_audit`;
+- `agrocore_private.notification_command_receipts`;
+- contador não lido real no banco;
+- validade `available_at`/`expires_at`;
+- leitura individual e em lote;
 - preferências por categoria;
 - Realtime;
-- sincronização temporal;
-- RLS recipient-only;
-- idempotência/concorrência de preferência;
+- sincronização/reconciliação temporal;
+- recipient-only e organização autorizada;
 - Central única desktop/mobile;
-- nenhuma persistência empresarial em storage local.
+- sem persistência empresarial em localStorage/sessionStorage/IndexedDB.
 
 Migration remota:
 
@@ -187,42 +207,52 @@ Cobertura específica: **32 verificações**.
 
 ## 4.6 OE-008.006 — Canais externos e escalonamento
 
-**Status:** concluída.
+**Status: implementada no código e Supabase.**
 
-Canais implementados:
+### E-mail
 
-- e-mail via adaptador Resend;
-- Web Push/VAPID.
+- worker real com Resend;
+- destinatário resolvido pelo backend a partir do usuário canônico;
+- conteúdo minimizado;
+- `Idempotency-Key` estável por entrega;
+- 429/5xx transitório;
+- rejeição permanente definitiva;
+- provedor ausente = `blocked`, nunca sucesso simulado.
 
-Regras:
+### Web Push
 
-- opt-in individual (`enabled=false` por padrão);
-- política organizacional também desabilitada por padrão;
-- criticidade e atraso;
-- fila transacional privada;
-- attempts, lease, `SKIP LOCKED`, retry e backoff;
-- idempotência por entrega;
-- hardening por `notification_version`;
-- assinatura Push privada;
-- chave VAPID privada nunca exposta ao cliente;
-- ausência de provedor = `blocked`, nunca sucesso falso;
-- falha externa não bloqueia Agenda/Central.
+- Web Push/VAPID;
+- chave privada não sai do backend;
+- cliente recebe somente capacidade e VAPID pública quando configurada;
+- `Notification.requestPermission()` apenas por ação explícita;
+- assinatura privada;
+- endpoint 404/410 revogado;
+- Service Worker dedicado `/push-notifications/`.
+
+### Escalonamento/fila
+
+- prioridade mínima/crítica;
+- atraso normal/crítico;
+- `max_attempts`;
+- opt-in por usuário/canal;
+- `SKIP LOCKED`;
+- lease token/expiração;
+- backoff determinístico e `Retry-After`;
+- recibos de configuração com fingerprint/snapshot;
+- versão obsoleta suprimida por `superseded_notification_version`;
+- auditoria sanitizada.
+
+### Infraestrutura
+
+- Edge Function `notification-delivery-worker` ativa;
+- Edge Function `notification-channel-config` ativa com JWT;
+- `pg_cron` + `pg_net` chamam worker a cada minuto;
+- falha externa não bloqueia tarefa, compromisso, recorrência ou notificação interna.
 
 Migrations remotas:
 
 - `20260904172154 — oe_008_006_external_channels_escalation`;
 - `20260904172859 — oe_008_006_delivery_version_hardening`.
-
-Edge Functions observadas ACTIVE:
-
-- `notification-delivery-worker`;
-- `notification-channel-config`.
-
-Scheduler observado:
-
-- `agrocore-notification-delivery-worker`;
-- `* * * * *`;
-- execuções recentes `succeeded`.
 
 Cobertura específica: **51 verificações**.
 
@@ -230,65 +260,77 @@ Cobertura específica: **51 verificações**.
 
 ## 4.7 OE-008.007 — Homologação final
 
-**Status:** CONCLUÍDA.
+**Status: CONCLUÍDA em hardening remoto, homologação automatizada, documentação e gate final.**
 
-### Hardening remoto final
+A OE-.007 não criou nova entidade de negócio. Ela homologou o que já existia e corrigiu arestas encontradas durante a revisão final.
 
-Migration:
+### Migration final
 
 `20260904224802 — oe_008_007_final_homologation_hardening`
 
-Alterações:
+Arquivo:
 
-1. a validade de `public.notifications` permite `expires_at = available_at` exclusivamente para invalidação imediata;
-2. `expire_schedule_notifications` não mantém mais a margem residual de um segundo;
-3. acesso/eligibilidade de notificações exigem organização ativa;
-4. SELECT direto em `public.notifications` passa a aplicar recipient-only, organização ativa, disponibilidade, expiração e preferência interna.
+`supabase/migrations/20260904224802_oe_008_007_final_homologation_hardening.sql`
 
-### Homologação de fuso/DST
+### Hardening aplicado
 
-Validados no contrato automatizado:
+1. `notifications_validity_ck` passou de `expires_at > available_at` para `expires_at >= available_at`;
+2. `expire_schedule_notifications` passou a expirar em `greatest(available_at, statement_timestamp())`, eliminando a aresta anterior de aproximadamente um segundo;
+3. `can_access_notifications` agora exige organização ativa, membership ativa e papel elegível;
+4. `is_notification_recipient_eligible` também exige organização ativa;
+5. RLS direto de `public.notifications` impõe recipient, organização autorizada, `available_at <= now`, `expires_at > now` e preferência de categoria habilitada;
+6. `agrocore_mark_notification_read` só aceita notificação atualmente válida/preference-enabled.
+
+### Fusos/DST
+
+Homologação automatizada verifica:
 
 - `America/Sao_Paulo`;
 - `America/New_York`;
-- horário inexistente em avanço de DST;
-- horário ambíguo em retorno de DST;
-- timezone inválido;
-- recorrência mensal em dia 31 sem inventar datas.
+- `UTC`;
+- fuso inexistente;
+- horário inexistente na entrada do DST;
+- horário ambíguo na saída do DST;
+- horário válido adjacente;
+- recorrência diária/semanal/mensal/anual e exceções.
 
-O banco remoto confirmou os fusos `America/Sao_Paulo`, `America/New_York` e `UTC`.
+O catálogo remoto PostgreSQL confirmou os três fusos utilizados na prova automatizada.
 
-### RBAC final
+### Perfis/IDOR/links
 
-- `owner`, `company_admin`, `manager`: `schedule:view` + `schedule:manage`;
-- `project_designer`, `capturer`: `schedule:view`, sem `schedule:manage`;
-- `finance`: sem Agenda por padrão;
-- `platform_super_admin`: sem herança automática de dados privados da organização.
+A suíte final verifica os perfis positivos e negativos, guarda `/agenda`, RLS multi-tenant, recipient-only, janela de validade, categoria habilitada e recusa de rotas externas.
 
-### Isolamento e rotas
+### Canais externos/falhas
 
-- `/agenda` exige `schedule:view`;
-- notificações diretas são recipient-only e válidas;
-- rotas externas são rejeitadas pela Central e pelo Service Worker de Push;
-- fila externa permanece vinculada à versão corrente da notificação.
+A homologação verifica os contratos de opt-in, políticas, consentimento Push, Resend/Web Push, 429/5xx, provider-unconfigured, retry, backoff, leases, `SKIP LOCKED`, idempotência de provedor, supressão de versão obsoleta e auditoria.
 
-### Dados e evidência física
+### Cobertura da OE-.007
 
-Nenhum dado fictício foi criado.
+`scripts/test-schedule-final-homologation.ts`: **80 verificações finais**.
 
-No fechamento remoto foram observados `0` registros em organizações, memberships, usuários, itens de Agenda, ocorrências, notificações, preferências, políticas, entregas, tentativas e assinaturas Push.
+O gate integral agora executa:
 
-Por inexistir usuário/destinatário real, uma entrega física de e-mail/Push **não foi simulada nem inventada**. Scheduler, Edge Functions, contratos, fila, autorização e persistência foram homologados com a infraestrutura disponível.
+1. fundação;
+2. views;
+3. colaboração;
+4. reconciliação;
+5. recorrência;
+6. hardening de recorrência;
+7. notificações internas;
+8. canais externos;
+9. homologação final OE-.007;
+10. acessibilidade;
+11. tema.
 
-### Suíte final
+Mensagem de encerramento:
 
-`scripts/test-schedule-final-homologation.ts`: **45 verificações**.
+`MÓDULO 008 — CONCLUÍDO — OE-008.001 A OE-008.007`
 
 ---
 
-# 5. COBERTURA CONSOLIDADA DO MÓDULO 008
+## 5. COBERTURA CONSOLIDADA DO MÓDULO 008
 
-| Suíte | Verificações |
+| Suíte | Cobertura |
 |---|---:|
 | `test-schedule-foundation.ts` | 66 |
 | `test-schedule-views.ts` | 41 |
@@ -298,56 +340,91 @@ Por inexistir usuário/destinatário real, uma entrega física de e-mail/Push **
 | `test-schedule-recurrence-hardening.ts` | 6 |
 | `test-schedule-notifications.ts` | 32 |
 | `test-schedule-external-notifications.ts` | 51 |
-| `test-schedule-final-homologation.ts` | 45 |
-| **Total específico** | **397** |
-| `test-schedule-accessibility.ts` | 33 adicionais |
-| `test-schedule-theme.js` | auditoria visual/tema |
-
-O `scripts/test-module-008.js` executa todas as suítes acima antes de declarar o módulo concluído.
+| `test-schedule-final-homologation.ts` | 80 |
+| **Total específico OE-008.001–007** | **432** |
+| `test-schedule-accessibility.ts` | **33 adicionais** |
+| `test-schedule-theme.js` | auditoria adicional |
 
 ---
 
-# 6. EVIDÊNCIA REMOTA DO FECHAMENTO
+## 6. EVIDÊNCIA REMOTA DO FECHAMENTO
 
-Observado no Supabase AgroCore:
+No Supabase foi observado após a migration final:
 
-- migration final `20260904224802`;
-- policy de `notifications` contendo recipient-only + disponibilidade + expiração + preferência;
-- `can_access_notifications` e `is_notification_recipient_eligible` exigindo organização ativa;
-- scheduler `agrocore-notification-delivery-worker` ativo;
-- execuções recentes de cron `succeeded`;
-- duas Edge Functions de notificações externas ACTIVE;
-- nenhuma entidade empresarial fictícia criada.
+- migration `20260904224802` registrada;
+- `notifications_validity_ck = CHECK ((expires_at >= available_at))`;
+- policy `agrocore_notifications_select` com recipient, organização autorizada, disponibilidade, expiração e preferência;
+- `can_access_notifications`/`is_notification_recipient_eligible` exigindo organização ativa;
+- cron `agrocore-notification-delivery-worker` ativo a cada minuto;
+- execuções recentes do cron com `succeeded`;
+- Edge Functions de entrega/configuração ativas.
+
+Também foi observado **zero** em todas as entidades empresariais usadas pela prova:
+
+- organizações;
+- memberships;
+- usuários Auth;
+- `schedule_items`;
+- ocorrências;
+- notificações;
+- preferências internas/externas;
+- políticas de escalonamento;
+- entregas/tentativas;
+- assinaturas Push.
+
+Nenhum dado artificial foi criado para alterar esse estado.
 
 ---
 
-# 7. RELATÓRIOS DE FECHAMENTO
+## 7. PROVA FÍSICA DE E-MAIL/PUSH
 
-- `docs/OE-008-007-RELATORIO-FECHAMENTO.md`
-- `docs/MODULO-008-RELATORIO-FECHAMENTO.md`
+A Especificação/Plano exige validar falhas reais de entrega, e-mail com provedor configurado e Push em navegador/dispositivo real. No ambiente observado não existe tenant, usuário ou destinatário real; portanto essa evidência **não foi fabricada**.
+
+O procedimento está fechado e versionado em:
+
+`docs/OE-008-007-ROTEIRO-HOMOLOGACAO-OPERACIONAL.md`
+
+A ausência de evidência física no ambiente vazio não corresponde a código faltante. É um checkpoint de aceitação operacional a ser executado quando houver ambiente real autorizado. Nenhuma nova OE de desenvolvimento é criada por isso.
 
 ---
 
-# 8. CHECKPOINT OFICIAL
+## 8. RELATÓRIOS DE FECHAMENTO
+
+- `docs/OE-008-007-RELATORIO-FECHAMENTO.md`;
+- `docs/OE-008-007-ROTEIRO-HOMOLOGACAO-OPERACIONAL.md`;
+- `docs/MODULO-008-RELATORIO-FINAL.md`.
+
+---
+
+## 9. CHECKPOINT OFICIAL
 
 | Área | Estado |
 |---|---|
-| Módulos 000–003 | concluídos conforme histórico registrado |
-| Módulo 004 | implementado até OE-004.003 no escopo registrado |
-| Módulo 005 | implementado até OE-005.007 |
-| Módulo 006 | implementado até OE-006.007 no código registrado |
-| Módulo 007 | implementado até OE-007.007 |
-| Módulo 008 | **CONCLUÍDO até OE-008.007** |
-| OE-008.007 | **concluída e migration remota aplicada** |
-| Dados fictícios na homologação final | **nenhum** |
-| Módulos 009–016 | não declarados implementados por esta edição |
+| Módulo 008 | **CONCLUÍDO — OE-008.001 a OE-008.007** |
+| Agenda canônica | `public.schedule_items` |
+| Recorrência | implementada/endurecida |
+| Central interna | implementada/endurecida |
+| Canais externos | implementados com fail-closed |
+| Homologação final | 80 verificações + hardening remoto |
+| Total específico | 432 |
+| Acessibilidade | 33 verificações adicionais |
+| Tema | auditoria adicional |
+| Dados fictícios | nenhum criado |
+| Prova física e-mail/Push | não fabricada; roteiro operacional pronto |
+| Próxima fronteira | **Módulo 009 — OE-009.001 — Cadastro de veículos** |
 
 ---
 
-## 9. PRÓXIMA FRONTEIRA
+## 10. PRÓXIMA FRONTEIRA
 
-O Módulo 008 está encerrado. A próxima execução deve seguir o **Módulo 009 conforme o Plano Mestre vigente**, sem reabrir Agenda/notificações nem duplicar suas fontes canônicas.
+O Módulo 008 não possui nova ordem pendente no Plano Mestre após OE-008.007.
+
+A próxima ordem funcional passa a ser:
+
+**OE-009.001 — Cadastro de veículos**, dentro do **Módulo 009 — Gestão de Frota e Logística Operacional**.
+
+Módulos 009–016 continuam não declarados implementados por este Livro-Raiz até que suas respectivas ordens sejam executadas e evidenciadas.
 
 ---
 
-**Decisão documental final:** o Livro-Raiz está sincronizado com o estado observado do AgroCore **até OE-008.007**, e o **Módulo 008 está concluído**.
+**Decisão documental:** o Livro-Raiz está sincronizado com o encerramento técnico do AgroCore **até OE-008.007**, e o **Módulo 008 está concluído** no escopo de implementação e homologação automatizada previsto. A evidência física de canais externos permanece explicitamente dependente de ambiente real e não foi inventada.

@@ -74,7 +74,10 @@
     "test:schedule-views": "node --import tsx scripts/test-schedule-views.ts",
     "test:schedule-collaboration": "node --import tsx scripts/test-schedule-collaboration.ts",
     "test:schedule-reconciliation": "node --import tsx scripts/test-schedule-reconciliation.ts",
-    "test:schedule-recurrence": "node --import tsx scripts/test-schedule-recurrence.ts"
+    "test:schedule-recurrence": "node --import tsx scripts/test-schedule-recurrence.ts",
+    "test:schedule-notifications": "node --import tsx scripts/test-schedule-notifications.ts",
+    "test:schedule-external-notifications": "node --import tsx scripts/test-schedule-external-notifications.ts",
+    "test:schedule-final-homologation": "node --import tsx scripts/test-schedule-final-homologation.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

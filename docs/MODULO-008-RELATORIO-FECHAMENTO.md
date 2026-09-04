@@ -4,7 +4,7 @@
 
 **Projeto:** AgroCore  
 **Data:** 04/09/2026  
-**Estado:** **CONCLUÍDO**
+**Estado:** **CONCLUÍDO — OE-008.001 a OE-008.007**
 
 ## 1. Escopo encerrado
 
@@ -13,39 +13,41 @@ O Módulo 008 foi implementado e reconciliado em sete ordens:
 | Ordem | Entrega | Estado |
 |---|---|---|
 | OE-008.001 | modelo canônico de tarefas e compromissos | concluída |
-| OE-008.002 | listas, agenda pessoal/equipe e calendário | concluída |
+| OE-008.002 | listas, Agenda pessoal/equipe e calendário | concluída |
 | OE-008.003 | atribuição, colaboração e ciclo operacional | concluída |
-| OE-008.004 | prazos, recorrência, ocorrências e hardening | concluída |
+| OE-008.004 | prazos, recorrência, ocorrências e hardening de identidade | concluída |
 | OE-008.005 | Central interna, preferências, validade e contadores | concluída |
-| OE-008.006 | e-mail/Push, fila externa e escalonamento | concluída |
-| OE-008.007 | homologação final e hardening transversal | concluída |
+| OE-008.006 | e-mail/Push, fila externa, retries e escalonamento | concluída |
+| OE-008.007 | homologação final, hardening transversal e fechamento | concluída |
 
 ## 2. Fontes de verdade
 
-O fechamento preserva estas regras:
-
 - `public.schedule_items` é a única fonte persistente da Agenda;
 - `public.schedule_item_occurrences` é materialização derivada de recorrência;
-- `public.notifications` é a fonte canônica de notificações in-app;
-- entregas externas derivam de `public.notifications`;
-- `technical_visit_integration_events` continua sendo a fonte do evento de integração do Módulo 007;
-- usuários, clientes, imóveis e profissionais continuam referenciados por suas fontes canônicas, sem duplicação no Módulo 008.
+- `public.notifications` é a fonte canônica de notificações internas;
+- preferências/políticas referenciam usuário/organização canônicos;
+- entregas externas derivam de `public.notifications` e de sua versão;
+- `technical_visit_integration_events` permanece no Módulo 007 como fonte do evento de visita.
 
-## 3. Segurança e governança
+Nenhuma OE do Módulo 008 criou segundo cadastro de cliente, imóvel, profissional, visita, Agenda ou Central.
 
-O módulo finaliza com:
+## 3. Segurança e governança finais
 
-- multi-tenant por `organization_id`;
-- organização e membership ativos;
+O módulo fecha com:
+
+- multi-tenant estrito por `organization_id`;
+- organização ativa + membership ativa;
 - RBAC deny-by-default;
-- RLS recipient-only nas notificações;
-- `schedule:manage` restrito à gestão;
-- idempotência e controle de concorrência;
-- receipts imutáveis;
+- rota `/agenda` protegida por `schedule:view`;
+- `schedule:manage` apenas para owner/company_admin/manager;
+- `finance` sem herança da Agenda;
+- `platform_super_admin` sem acesso automático a dados privados de organizações;
+- RLS recipient-only com validade e preferência aplicadas diretamente em `notifications`;
+- idempotência, expectedVersion, receipts e fingerprints;
 - leases e `SKIP LOCKED` na fila externa;
 - rotas internas seguras;
-- ausência de secrets no cliente;
-- ausência de armazenamento empresarial em localStorage/sessionStorage/IndexedDB;
+- ausência de secrets no cliente/repositório;
+- ausência de persistência empresarial em localStorage/sessionStorage/IndexedDB;
 - auditoria sanitizada.
 
 ## 4. Cobertura consolidada
@@ -60,12 +62,12 @@ O módulo finaliza com:
 | `test-schedule-recurrence-hardening.ts` | 6 |
 | `test-schedule-notifications.ts` | 32 |
 | `test-schedule-external-notifications.ts` | 51 |
-| `test-schedule-final-homologation.ts` | 45 |
-| **Total específico do Módulo 008** | **397** |
+| `test-schedule-final-homologation.ts` | **80** |
+| **Total específico do Módulo 008** | **432** |
 | `test-schedule-accessibility.ts` | 33 verificações adicionais |
-| `test-schedule-theme.js` | auditoria visual/tema |
+| `test-schedule-theme.js` | auditoria visual/tema adicional |
 
-O gate do módulo executa todas essas suítes em sequência.
+O gate `scripts/test-module-008.js` executa todas as suítes e só declara o módulo concluído depois da homologação final, acessibilidade e tema.
 
 ## 5. Hardening final remoto
 
@@ -73,26 +75,33 @@ Migration aplicada:
 
 `20260904224802 — oe_008_007_final_homologation_hardening`
 
-Ela encerra a dívida identificada de expiração residual de um segundo e faz a leitura direta de notificações obedecer às mesmas regras de validade aplicadas pelo snapshot.
+Ela:
 
-## 6. Infraestrutura
+- permite expiração exata `expires_at >= available_at`;
+- remove a antiga janela residual de um segundo;
+- exige organização ativa para notificação/destinatário;
+- faz RLS direto obedecer `available_at`, `expires_at` e preferência de categoria;
+- restringe leitura individual a notificação atualmente válida.
+
+## 6. Infraestrutura observada
 
 No fechamento remoto foram observados:
 
-- scheduler externo ativo a cada minuto;
+- scheduler `agrocore-notification-delivery-worker` ativo a cada minuto;
 - execuções recentes `succeeded`;
 - `notification-delivery-worker` ACTIVE;
 - `notification-channel-config` ACTIVE;
-- nenhuma organização/usuário/dado empresarial fictício presente.
+- fusos IANA de homologação presentes no PostgreSQL;
+- zero organizações, memberships, usuários Auth, itens de Agenda, notificações, políticas, entregas, tentativas e assinaturas Push empresariais.
 
 ## 7. Limite de evidência física
 
-O banco remoto estava sem usuários e sem dados empresariais. Por isso não existia destinatário real para disparar e-mail ou Push. Essa ausência **não foi mascarada**: nenhuma entrega física foi declarada sem evidência.
+Como o banco remoto estava sem tenant/usuário/destinatário real, não havia condição honesta de disparar e-mail ou Push ponta a ponta. A ausência não foi mascarada e nenhuma entrega foi declarada sem evidência.
 
-O desenho está pronto para operar quando credenciais de provedor e usuários reais existirem no ambiente seguro. Isso não exige nova fonte de verdade nem reabertura arquitetural do Módulo 008.
+O procedimento físico está versionado em `docs/OE-008-007-ROTEIRO-HOMOLOGACAO-OPERACIONAL.md` e exige provedor, usuário e dispositivo reais. Isso é aceitação operacional do ambiente; não corresponde a código pendente nem exige nova fonte de verdade.
 
-## 8. Decisão de fechamento
+## 8. Decisão
 
-**Módulo 008 CONCLUÍDO.**
+**Módulo 008 CONCLUÍDO — OE-008.001 a OE-008.007.**
 
-Novas necessidades futuras de Agenda/notificações devem ser tratadas como manutenção evolutiva ou como requisito de módulo posterior, sem reabrir as OEs encerradas por simples extensão de produto.
+A próxima fronteira do Plano Mestre é **Módulo 009 — Gestão de Frota**, começando pela **OE-009.001 — Cadastro de veículos**.

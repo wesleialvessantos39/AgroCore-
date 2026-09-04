@@ -1,126 +1,120 @@
-# OE-008.007 — Homologação final de Agenda e Notificações
+# OE-008.007 — Relatório de Fechamento
 
-**Projeto:** AgroCore  
+**Ordem:** OE-008.007 — Homologação de agenda e notificações  
 **Módulo:** 008 — Agenda corporativa, tarefas, prazos e notificações  
-**Ordem:** OE-008.007  
-**Data de fechamento técnico:** 04/09/2026  
-**Estado:** CONCLUÍDA no escopo técnico automatizável e remoto disponível.
+**Data:** 04/09/2026  
+**Resultado:** implementação completa da ordem no escopo de software, hardening remoto e homologação automatizada; evidência física externa separada e não fabricada.
 
-## 1. Objetivo
+## 1. Escopo homologado
 
-A OE-008.007 fecha o Módulo 008 por homologação transversal. Ela não cria uma segunda Agenda, uma segunda Central de notificações nem uma segunda fila externa. O objetivo é verificar e endurecer o que já foi implementado nas OE-008.001 a OE-008.006: fusos, recorrência, perfis, isolamento organizacional, validade, preferências, rotas, escalonamento, retries, acessibilidade, auditoria e ausência de duplicidade.
+A OE-008.007 foi executada como fechamento, sem criar segunda Agenda, segunda Central de notificações ou segunda fila externa. Permanecem canônicas/derivadas as mesmas estruturas das OEs anteriores:
 
-## 2. Hardening aplicado
+- `public.schedule_items` — fonte persistente da Agenda;
+- `public.schedule_item_occurrences` — materialização derivada de recorrência;
+- `public.notifications` — Central interna;
+- `agrocore_private.notification_external_deliveries` — fila derivada da notificação interna;
+- outboxes dos módulos de origem permanecem em seus próprios domínios.
 
-Migration versionada e aplicada no Supabase:
+Foram homologados por teste executável e auditoria de código: fuso IANA, DST, recorrência e exceções, perfis positivos/negativos, rota `/agenda`, RLS/IDOR, links seguros, preferências internas/externas, escalonamento, retries, leases, versão/idempotência, falhas de provedor, Push, e-mail, acessibilidade, tema e ausência de fonte paralela.
 
-`20260904224802_oe_008_007_final_homologation_hardening.sql`
+## 2. Hardening final aplicado ao Supabase
 
-Registro remoto observado:
+Migration aplicada remotamente:
 
 `20260904224802 — oe_008_007_final_homologation_hardening`
 
-O hardening corrige quatro pontos de fechamento:
+Arquivo canônico versionado:
 
-1. `notifications_validity_ck` passa a aceitar `expires_at >= available_at`, permitindo invalidar uma notificação exatamente no instante de disponibilidade sem criar um intervalo artificial.
-2. `agrocore_private.expire_schedule_notifications` remove a antiga margem `available_at + interval '1 second'` e usa `greatest(available_at, statement_timestamp())`.
-3. `agrocore_private.can_access_notifications` e `is_notification_recipient_eligible` passam a exigir também `organizations.status = 'active'`.
-4. a policy `agrocore_notifications_select` passa a aplicar, inclusive em SELECT direto autenticado, recipient-only + organização ativa + `available_at <= now` + `expires_at > now` + preferência interna habilitada.
+`supabase/migrations/20260904224802_oe_008_007_final_homologation_hardening.sql`
 
-Nenhuma tabela canônica foi recriada.
+Correções efetivas:
 
-## 3. Homologação de fuso e recorrência
+1. `notifications_validity_ck` passa a aceitar `expires_at >= available_at`, permitindo invalidar uma notificação futura exatamente no instante de disponibilidade, sem criar janela artificial;
+2. `expire_schedule_notifications` passa a usar `greatest(available_at, statement_timestamp())`, eliminando a aresta de aproximadamente um segundo da implementação anterior;
+3. `can_access_notifications` exige organização ativa, membership ativa e papel elegível;
+4. `is_notification_recipient_eligible` também exige organização ativa;
+5. RLS de `public.notifications` passa a impor, além de recipient/tenant, `available_at <= now`, `expires_at > now` e preferência de categoria habilitada;
+6. `agrocore_mark_notification_read` só aceita notificação atualmente válida e visível para o destinatário.
 
-A suíte final verifica conversões IANA e os casos de mudança de horário:
+Nenhuma tabela empresarial nova foi criada por esse hardening.
 
-- `America/Sao_Paulo` com conversão determinística;
-- `America/New_York` após mudança de DST;
-- horário inexistente no avanço de relógio rejeitado;
-- horário ambíguo no retorno de relógio rejeitado;
-- timezone inválido rejeitado;
-- recorrência mensal não inventa dia inexistente.
+## 3. Evidência remota observada após a migration
 
-No Supabase remoto também foi confirmada a disponibilidade dos fusos `America/Sao_Paulo`, `America/New_York` e `UTC`.
+Foi verificado no projeto Supabase:
 
-## 4. RBAC positivo e negativo
+- migration `20260904224802` registrada;
+- constraint `notifications_validity_ck` = `CHECK ((expires_at >= available_at))`;
+- policy `agrocore_notifications_select` contendo recipient-only, organização autorizada, janela temporal válida e categoria habilitada;
+- `can_access_notifications` e `is_notification_recipient_eligible` exigindo `organizations.status='active'`;
+- fusos `America/Sao_Paulo`, `America/New_York` e `UTC` presentes no catálogo PostgreSQL;
+- job `agrocore-notification-delivery-worker` ativo em `* * * * *`;
+- execuções recentes do cron com status `succeeded`;
+- Edge Functions `notification-delivery-worker` e `notification-channel-config` ativas.
 
-A homologação final reafirma a matriz vigente:
+## 4. Homologação automatizada final
 
-- `owner`, `company_admin`, `manager`: `schedule:view` + `schedule:manage`;
-- `project_designer`, `capturer`: `schedule:view`, sem herdar `schedule:manage`;
-- `finance`: não recebe Agenda por padrão;
-- `platform_super_admin`: não herda dados privados da Agenda de organizações.
-
-A rota `/agenda` continua protegida por `schedule:view`.
-
-## 5. Isolamento organizacional e validade
-
-A leitura direta de `public.notifications` está protegida por RLS com:
-
-- `recipient_user_id = auth.uid()`;
-- organização ativa;
-- vínculo organizacional ativo;
-- validade temporal corrente;
-- preferência interna habilitada.
-
-As RPCs continuam exigindo `organization_id` e ator autenticado. A fila externa continua derivada de `public.notifications` e o hardening da OE-008.006 exige igualdade de `notification_version` antes do claim.
-
-## 6. Preferências, escalonamento e falhas externas
-
-Foi preservado o desenho fail-closed:
-
-- e-mail e Push externos continuam `enabled=false` por padrão;
-- políticas de escalonamento continuam desabilitadas por padrão;
-- ausência de provedor não é convertida em entrega bem-sucedida;
-- retries permanecem assíncronos, com lease e backoff;
-- a falha externa não reverte tarefa, compromisso, ocorrência ou notificação interna;
-- UI não solicita API key, service role, VAPID privada ou token de worker.
-
-## 7. Worker e infraestrutura remota
-
-No fechamento foram observados:
-
-- job `agrocore-notification-delivery-worker` ativo, agenda `* * * * *`;
-- três execuções recentes do cron com status `succeeded`;
-- Edge Function `notification-delivery-worker` ACTIVE;
-- Edge Function `notification-channel-config` ACTIVE;
-- migration final registrada no projeto remoto.
-
-## 8. Dados de homologação
-
-Nenhum dado fictício foi criado.
-
-Contagens remotas observadas no fechamento:
-
-- `organizations=0`;
-- `organization_memberships=0`;
-- `schedule_items=0`;
-- `schedule_item_occurrences=0`;
-- `notifications=0`;
-- `notification_preferences=0`;
-- `notification_external_preferences=0`;
-- `notification_escalation_policies=0`;
-- `notification_external_deliveries=0`;
-- `notification_external_attempts=0`;
-- `notification_push_subscriptions=0`;
-- `auth.users=0`.
-
-Isso impede uma prova física de e-mail/Push com destinatário real neste ambiente. Essa prova **não foi simulada nem inventada**. O que foi homologado é o contrato de software, segurança, persistência, fila, scheduler e Edge Functions disponíveis. Quando houver usuário real e provedor configurado, a validação física pode ser executada operacionalmente sem nova arquitetura ou nova OE.
-
-## 9. Suíte final
-
-Arquivo:
+Foi adicionada a suíte:
 
 `scripts/test-schedule-final-homologation.ts`
 
-Cobertura: **45 verificações finais** de fuso, DST, recorrência, RBAC, RLS, organização ativa, validade, preferências, derivação da fila, versionamento, rotas seguras, secrets, ARIA, documentação e integridade do gate.
+Ela contém **80 verificações finais** organizadas nos seguintes grupos:
 
-O `scripts/test-module-008.js` executa todas as suítes anteriores e a homologação final antes de declarar:
+- fusos e mudanças de horário;
+- recorrência e exceções;
+- perfis positivos/negativos e guarda de rota;
+- multi-tenant, IDOR e RLS;
+- links, validade, preferências e leitura;
+- canais externos, consentimento e escalonamento;
+- falha/retry/volume/idempotência/auditoria;
+- fechamento integral, acessibilidade e rastreabilidade.
 
-`MÓDULO 008 — CONCLUÍDO`
+O gate `scripts/test-module-008.js` executa a OE-008.007 antes das auditorias finais de acessibilidade e tema e encerra com:
 
-## 10. Resultado
+`MÓDULO 008 — CONCLUÍDO — OE-008.001 A OE-008.007`
 
-**OE-008.007 concluída.**
+Cobertura específica consolidada do Módulo 008:
 
-O fechamento técnico do Módulo 008 não depende de criar dados artificiais nem de fingir uma entrega externa. O módulo fica encerrado com contratos, hardenings, gates, documentação e evidências remotas preservados.
+- 352 verificações específicas já existentes até OE-008.006;
+- + 80 verificações OE-008.007;
+- = **432 verificações específicas**;
+- + **33 verificações estruturais de acessibilidade**;
+- + auditoria de tema/linguagem.
+
+## 5. Perfis e isolamento
+
+A matriz final preserva:
+
+- `owner`, `company_admin`, `manager`: `schedule:view` + `schedule:manage`;
+- `project_designer`, `capturer`: `schedule:view`, sem gestão global;
+- `finance`: sem permissão de Agenda;
+- `platform_super_admin`: sem herança automática de dados organizacionais;
+- `none`: nenhuma permissão.
+
+A rota `/agenda` continua protegida por `schedule:view`, `ProtectedRoute`, `OrganizationGate` e autorização de backend/RLS.
+
+## 6. Dados e evidência física
+
+No **ambiente atual** da verificação final foram observados:
+
+- 0 organizações;
+- 0 memberships;
+- 0 usuários Auth;
+- 0 itens de Agenda;
+- 0 ocorrências;
+- 0 notificações;
+- 0 preferências internas/externas;
+- 0 políticas de escalonamento;
+- 0 entregas/tentativas Push/e-mail;
+- 0 assinaturas Push.
+
+Logo, uma entrega real ponta a ponta por e-mail ou Push exigiria criar artificialmente organização, usuário, destinatário ou dispositivo. Essa evidência **não foi fabricada**. O roteiro operacional `docs/OE-008-007-ROTEIRO-HOMOLOGACAO-OPERACIONAL.md` define a prova física para quando existir tenant, usuário, provedor e dispositivo reais autorizados.
+
+Isso é uma dependência de ambiente/evidência física, não uma lacuna de código: adaptadores, fila, policy, retry, lease, scheduler, Edge Functions e controles de segurança já estão implementados.
+
+## 7. Segurança
+
+A OE-008.007 não adiciona segredo ao repositório nem à UI. Não solicita API key, service role, chave VAPID privada ou token do worker ao usuário. As advertências genéricas do advisor sobre RPCs `SECURITY DEFINER` autenticadas foram avaliadas no contexto do padrão atual: essas RPCs possuem autorização explícita e são intencionalmente a fronteira do backend. Nenhuma permissão foi revogada cegamente para não quebrar os fluxos autorizados.
+
+## 8. Decisão de fechamento
+
+**OE-008.007 encerrada em implementação, hardening remoto, documentação e homologação automatizada.** O software do Módulo 008 está fechado de OE-008.001 a OE-008.007. A única evidência que permanece naturalmente dependente do ambiente é a prova física de e-mail/Push com provedor/destinatário/dispositivo reais; ela está explicitamente roteirizada e não altera a integridade do fechamento de software.
