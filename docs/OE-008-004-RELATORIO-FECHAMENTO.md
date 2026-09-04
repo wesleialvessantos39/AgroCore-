@@ -3,11 +3,11 @@
 **Ordem:** OE-008.004 — Regras de prazo e recorrência  
 **Módulo:** 008 — Agenda, tarefas, prazos e notificações  
 **Data da auditoria:** 04/09/2026  
-**Escopo deste fechamento:** revisão residual das OE-008.001, OE-008.002 e OE-008.003 + verificação da implementação da OE-008.004.
+**Escopo deste fechamento:** reinício da auditoria a partir do estado real já versionado, revisão residual das OE-008.001, OE-008.002 e OE-008.003 e fechamento/hardening da OE-008.004 sem recriar fontes, tabelas ou fluxos já existentes.
 
 ## 1. Fontes documentais confrontadas
 
-A auditoria foi executada contra os sete artefatos fornecidos pelo usuário:
+A auditoria foi reiniciada contra os sete artefatos fornecidos pelo usuário, antes de qualquer nova escrita:
 
 1. `AgroCore_Plano_Relatorio_Mestre_Consolidado.pdf`;
 2. `AgroCore_Documento_Tecnico_Mestre_Consolidado_000-016_2026-09-03.docx`;
@@ -17,9 +17,17 @@ A auditoria foi executada contra os sete artefatos fornecidos pelo usuário:
 6. `Especificação Técnica Completa AgroCore`;
 7. `Plano_Mestre_Execucao_AgroCore(2).md`.
 
-Os documentos convergem para a mesma fronteira da OE-008.004: materializar ocorrências de prazo/recorrência de forma determinística e idempotente, preservar `organization_id`, RBAC, RLS, concorrência, fusos e fonte canônica, sem antecipar a central de notificações da OE-008.005 nem os canais externos da OE-008.006.
+Os documentos convergem para a mesma fronteira da OE-008.004: materializar ocorrências de prazo/recorrência de forma determinística e idempotente, preservar `organization_id`, RBAC, RLS, concorrência, fusos e a fonte canônica já existente, sem antecipar a central de notificações da OE-008.005 nem os canais externos da OE-008.006.
 
-## 2. Auditoria de entrada — OE-008.001 a OE-008.003
+## 2. Regra de reinício: verificar antes de criar
+
+Antes de implementar qualquer coisa, foram inspecionados o `main` do GitHub e o Supabase AgroCore. A OE-008.004 já possuía uma implementação substancial: migration de ocorrências, motor de recorrência, gateways preview/Supabase/fail-closed, serviço, contexto, painel de ocorrências e suíte específica.
+
+Por isso, esta execução **não recriou** `schedule_items`, `schedule_item_participants`, `technical_visit_integration_events`, diretórios de membros, filas de calendário, entidades de visita nem uma segunda tabela mestre de Agenda. `public.schedule_items` continua sendo a fonte persistente autoritativa da Agenda e `public.schedule_item_occurrences` continua sendo somente uma projeção/materialização derivada da regra recorrente do item.
+
+No início desta auditoria, o Supabase real possuía `0` itens de Agenda, `0` ocorrências e `0` recibos privados de ocorrência. Nenhum registro fictício foi criado para demonstrar a implementação.
+
+## 3. Auditoria de entrada — OE-008.001 a OE-008.003
 
 ### OE-008.001 — Modelo de tarefas e compromissos
 
@@ -35,7 +43,7 @@ Permanece compatível com os documentos mestres:
 
 ### OE-008.002 — Listas e agenda
 
-A implementação mantém as visões pessoal/equipe e calendário sobre a mesma fonte canônica. Os índices específicos de leitura permanecem versionados e as regras de visibilidade não transformam a interface em mecanismo de autorização: o backend continua aplicando a fronteira organizacional e as regras de acesso.
+A implementação mantém as visões pessoal/equipe e calendário sobre a mesma coleção canônica. A ausência de escopo converge para a visão pessoal; a visão de equipe permanece restrita à gestão. As regras de interface não substituem autorização do backend: a fronteira organizacional e a leitura por item continuam protegidas por serviço/RLS.
 
 ### OE-008.003 — Atribuição e colaboração
 
@@ -49,94 +57,104 @@ A revisão confirmou a permanência de:
 - `expectedVersion`, chave idempotente, SHA-256, advisory/row locks e recibos privados;
 - sincronização da visita técnica por `technical_visit_integration_events`, sem criar segunda fonte de visita.
 
-**Resultado da auditoria residual:** não foi identificado bloqueador funcional novo nas OE-008.001–003 que justificasse reabrir seus contratos de domínio. A continuidade para a OE-008.004 permanece válida.
+**Resultado da auditoria residual:** não foi identificado bloqueador funcional novo nas OE-008.001–003 que justificasse recriar seus contratos ou persistências. As estruturas existentes foram preservadas.
 
-## 3. OE-008.004 — Implementação verificada
+## 4. OE-008.004 — Base já existente
 
-### 3.1 Persistência
-
-Migration versionada:
+A implementação já versionada antes deste reinício contém:
 
 `supabase/migrations/20260904100000_oe_008_004_deadlines_recurrence.sql`
 
-A migration acrescenta a camada de ocorrências sem substituir `schedule_items`:
+Ela acrescenta a camada derivada de ocorrências sem substituir `schedule_items`:
 
 - `public.schedule_item_occurrences`;
 - `public.schedule_item_occurrence_audit`;
-- recibos privados de comando para idempotência;
-- índices para consulta por item, organização, situação e instante;
+- recibos privados de comando;
+- índices de consulta por organização/item/situação/instante;
 - RLS de leitura por vínculo/autorização;
 - escrita direta revogada para o papel autenticado;
-- RPC de materialização e RPCs de transição.
+- RPC de materialização e RPCs explícitas de conclusão, cancelamento e reabertura.
 
-A inspeção do Supabase AgroCore confirmou a presença da migration aplicada e das tabelas/funções correspondentes. `schedule_items`, `schedule_item_participants`, `schedule_item_occurrences` e `schedule_item_occurrence_audit` permanecem com RLS habilitada. A inspeção também confirmou estado vazio no domínio de agenda/ocorrências no momento da auditoria, preservando a regra de não criar dados fictícios.
+O motor cobre frequência diária, semanal, mensal e anual, intervalos maiores que um, `endsAt`, tarefas por `dueAt`, compromissos por `startsAt`/`endsAt`, preservação de duração, fuso IANA e rejeição determinística de horário local inexistente/ambíguo por DST. A janela de materialização é finita para impedir série ilimitada.
 
-### 3.2 Motor determinístico de recorrência
+## 5. Resíduos encontrados e corrigidos nesta revisão
 
-A implementação cobre:
+A inspeção aprofundada encontrou quatro pontos que justificavam hardening, sem mudar a fonte canônica.
 
-- frequência diária;
-- frequência semanal;
-- frequência mensal;
-- frequência anual;
-- intervalos maiores que um;
-- limite explícito de materialização por janela, impedindo série infinita;
-- regra de término `endsAt`;
-- tarefas baseadas em `dueAt`;
-- compromissos baseados em `startsAt`/`endsAt`;
-- preservação da duração do compromisso;
-- cálculo no fuso IANA do item;
-- tratamento determinístico de transições de DST, sem inventar horário local inválido/ambíguo.
+### 5.1 Identidade lógica de ocorrência e prevenção de duplicidade semântica
 
-### 3.3 Idempotência, concorrência e integridade
+A base anterior identificava a ocorrência persistida pelo instante `scheduled_at`. Isso permitia um caso residual: uma ocorrência já concluída/cancelada poderia permanecer no horário antigo e uma alteração somente do horário do item recorrente poderia materializar outra ocorrência no **mesmo dia local**, gerando duplicidade semântica.
 
-A materialização preserva uma ocorrência única por identidade canônica e converge em reexecuções. Mudança de versão do item não regride ocorrências terminais já concluídas/canceladas. A camada de transição utiliza:
+Foi adicionada a migration:
 
-- `expectedVersion`;
-- advisory lock;
-- row lock;
-- fingerprint SHA-256 do comando;
-- recibo idempotente privado;
-- auditoria append-only;
-- estados `pending`, `completed` e `cancelled` com transições explícitas.
+`supabase/migrations/20260904123000_oe_008_004_idempotency_identity_hardening.sql`
 
-O responsável atual pode concluir a própria ocorrência quando autorizado pelo vínculo do item; cancelamento e reabertura continuam reservados à gestão autorizada.
+Ela acrescenta `occurrence_local_date`, derivada no fuso IANA do próprio `schedule_item`, e cria a unicidade:
 
-### 3.4 Aplicação e interface
+`(organization_id, schedule_item_id, occurrence_local_date)`.
 
-A OE-008.004 acrescenta gateway de ocorrências para preview, Supabase e modo indisponível/fail-closed; serviço de aplicação; integração ao `ScheduleContext`; e `ScheduleOccurrencePanel` na agenda. A interface somente materializa quando o usuário expande explicitamente o painel e usa uma janela finita, evitando geração automática ilimitada.
+A materialização passa a convergir por essa identidade lógica. Ocorrência `pending` pode acompanhar a nova hora da mesma data local; ocorrência terminal permanece histórica e impede que uma segunda ocorrência do mesmo item/data seja criada.
 
-Não foram introduzidos `schedule_notifications`, e-mail, SMS, push, webhook ou preferência de canal. Esses elementos continuam reservados para OE-008.005/OE-008.006.
+### 5.2 Replay idempotente imutável
 
-## 4. Gates e cobertura versionada
+O recibo anterior guardava a versão retornada, porém um replay consultava o estado **atual** da ocorrência. Assim, depois de `complete → reopen`, repetir exatamente a chave antiga de conclusão poderia observar a ocorrência já reaberta, em vez do resultado original daquele comando.
 
-A suíte `scripts/test-schedule-recurrence.ts` contém **51 verificações específicas da OE-008.004**. Ela está registrada como `test:schedule-recurrence` no `package.json` e integrada a `scripts/test-module-008.js`.
+O hardening acrescenta `result_snapshot jsonb NOT NULL` ao recibo privado. O primeiro comando armazena o snapshot integral da resposta; o replay idêntico reconstitui e devolve esse snapshot, mesmo que comandos posteriores tenham avançado a ocorrência. Reutilização divergente da chave continua falhando.
 
-O `test:module-008` executa, em sequência:
+### 5.3 Retry transitório na materialização remota
 
-- fundação;
-- listas/agenda;
-- atribuição/colaboração;
-- reconciliação 001–003;
-- prazos/recorrência;
-- acessibilidade;
-- tema.
+`SupabaseScheduleOccurrenceGateway.materializeOccurrences` passou a usar o mesmo mecanismo limitado de retry transitório já aplicado às mutações, recriando a chamada RPC a cada tentativa. Erros determinísticos de domínio não entram em retry.
 
-O `npm run build` inclui o gate do Módulo 008, TypeScript estrito, Vite, Service Worker e verificação de vazamentos.
+### 5.4 Chave idempotente estável na interface
 
-## 5. Evidência externa e limitação de homologação
+O painel de ocorrências antes gerava uma nova chave em cada envio. Em uma perda de resposta após commit remoto, o usuário poderia repetir a mesma intenção com uma chave nova. Agora a chave segura é criada uma única vez ao abrir a ação e permanece estável durante as tentativas daquela ação; fechar e iniciar outra ação cria uma nova chave.
 
-O código atual está versionado na `main` e a persistência da OE-008.004 está presente no Supabase AgroCore. Entretanto, a execução mais recente observada do **AgroCore CI** para o HEAD auditado terminou antes do primeiro step (`steps=[]`). Portanto este relatório **não declara o GitHub Actions aprovado** nem transforma a ausência de execução do runner em aprovação de testes remotos.
+## 6. Persistência remota verificada
 
-Essa indisponibilidade externa não demonstra defeito do código, mas impede declarar homologação remota integral do pipeline enquanto o runner não executar os steps normalmente.
+A migration de hardening foi aplicada com sucesso no projeto Supabase `AgroCore-` e registrada remotamente como:
 
-## 6. Decisão objetiva
+`20260904123600 — oe_008_004_idempotency_identity_hardening`.
 
-- **OE-008.001:** revisada; sem novo bloqueador funcional identificado.
-- **OE-008.002:** revisada; sem novo bloqueador funcional identificado.
-- **OE-008.003:** revisada; sem novo bloqueador funcional identificado.
-- **OE-008.004:** **IMPLEMENTADA no código e persistida no Supabase**, com ocorrências determinísticas/idempotentes, regras de prazo/recorrência, concorrência, RLS, auditoria, UI e gate versionado.
-- **Homologação externa integral:** **PENDENTE exclusivamente da execução observável do AgroCore CI**, que continua encerrando antes do primeiro step.
-- **OE-008.005:** não antecipada por esta entrega.
+Após a aplicação, foi confirmado no banco real:
 
-A próxima fronteira funcional do Módulo 008, após o gate externo voltar a executar normalmente, é **OE-008.005 — Central de notificações**.
+- `public.schedule_item_occurrences.occurrence_local_date` = `date NOT NULL`;
+- índice único `schedule_item_occurrences_org_item_local_date_uq` presente;
+- `agrocore_private.schedule_occurrence_command_receipts.result_snapshot` = `jsonb NOT NULL`;
+- domínio de Agenda continua vazio (`0` itens, `0` ocorrências, `0` recibos), portanto nenhum dado fictício foi introduzido;
+- helper privado `agrocore_private.transition_schedule_occurrence` não é executável por `authenticated`, `anon` nem `public`;
+- as quatro RPCs públicas da OE-008.004 são executáveis por `authenticated`, não por `anon/public`, e realizam as validações internas previstas.
+
+Os avisos genéricos do advisor sobre RPCs `SECURITY DEFINER` autenticadas foram confrontados com os grants reais acima. Nesse desenho, as RPCs públicas são deliberadamente a entrada autenticada e o helper privilegiado permanece privado; a simples presença do aviso não foi tratada como autorização irrestrita.
+
+## 7. Gates e cobertura versionada
+
+A suíte original `scripts/test-schedule-recurrence.ts` contém **51 verificações específicas**. Foi adicionada `scripts/test-schedule-recurrence-hardening.ts` com **6 verificações adicionais** para:
+
+1. impedir duplicação terminal após alteração somente do horário;
+2. garantir replay do snapshot original após transição posterior;
+3. validar estruturalmente a migration de identidade/snapshot;
+4. exigir retry transitório na materialização remota;
+5. exigir reaproveitamento da chave idempotente na mesma ação da interface;
+6. impedir antecipação de notificações/canais externos.
+
+Assim, a OE-008.004 possui **57 verificações específicas versionadas**. O `scripts/test-module-008.js` inclui fundação, listas/agenda, colaboração, reconciliação 001–003, recorrência base, hardening de recorrência, acessibilidade e tema.
+
+Essas verificações estão **versionadas no gate**, mas a execução externa integral mais recente não é declarada aprovada, conforme a seção seguinte.
+
+## 8. Evidência externa e limitação de homologação
+
+O HEAD desta revisão está versionado na `main`. O **AgroCore CI** do GitHub Actions continua encerrando antes de qualquer step: o job mais recente observado apresenta `steps=[]`, `runner_id=0` e `runner_name` vazio. Portanto não houve execução observável de `npm ci`, TypeScript, testes ou build nesse runner.
+
+Esse estado é registrado como indisponibilidade do runner/infraestrutura do workflow e **não** é transformado nem em aprovação nem em falha demonstrada do código. A persistência Supabase foi aplicada e verificada separadamente; a homologação externa integral do código permanece pendente até existir uma execução real dos steps.
+
+## 9. Decisão objetiva
+
+- **OE-008.001:** revisada novamente; sem novo bloqueador funcional identificado e sem recriação de fonte/tabela.
+- **OE-008.002:** revisada novamente; sem novo bloqueador funcional identificado e mantendo listas/calendário sobre `schedule_items`.
+- **OE-008.003:** revisada novamente; sem novo bloqueador funcional identificado e mantendo responsável/participantes canônicos.
+- **OE-008.004:** **IMPLEMENTADA E ENDURECIDA**, com base já existente preservada, migration adicional aplicada no Supabase, identidade lógica anti-duplicidade, replay idempotente imutável, retry remoto, chave de UI estável, RLS/RBAC e auditoria mantidos.
+- **Dados fictícios:** nenhum criado.
+- **OE-008.005/OE-008.006:** não antecipadas.
+- **Homologação externa integral de código:** pendente de runner que efetivamente execute os steps do AgroCore CI.
+
+A próxima fronteira funcional prevista pelos documentos é **OE-008.005 — Central de notificações**, mas ela não faz parte desta entrega.
