@@ -337,6 +337,20 @@ export interface ScheduleGateway {
   cancelItem(
     input: ScheduleTransitionGatewayInput
   ): Promise<ScheduleItem>;
+  listCollaborationRevisions(
+    organizationId: string,
+    scheduleItemId: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleCollaborationRevision[]>;
+  listAudit(
+    organizationId: string,
+    scheduleItemId: string,
+    signal?: AbortSignal
+  ): Promise<readonly ScheduleItemAuditEntry[]>;
+  clearAllSessionData(): void;
+}
+
+export interface ScheduleOccurrenceGateway {
   materializeOccurrences(
     organizationId: string,
     scheduleItemId: string,
@@ -358,16 +372,6 @@ export interface ScheduleGateway {
     occurrenceId: string,
     signal?: AbortSignal
   ): Promise<readonly ScheduleOccurrenceAuditEntry[]>;
-  listCollaborationRevisions(
-    organizationId: string,
-    scheduleItemId: string,
-    signal?: AbortSignal
-  ): Promise<readonly ScheduleCollaborationRevision[]>;
-  listAudit(
-    organizationId: string,
-    scheduleItemId: string,
-    signal?: AbortSignal
-  ): Promise<readonly ScheduleItemAuditEntry[]>;
   clearAllSessionData(): void;
 }
 
