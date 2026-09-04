@@ -26,14 +26,20 @@ const scheduleTests = read('scripts/test-schedule-foundation.ts');
 const scheduleViewTests = read('scripts/test-schedule-views.ts');
 const scheduleCollaborationTests = read('scripts/test-schedule-collaboration.ts');
 const scheduleReconciliationTests = read('scripts/test-schedule-reconciliation.ts');
+const scheduleRecurrenceTests = read('scripts/test-schedule-recurrence.ts');
 const scheduleModuleGate = read('scripts/test-module-008.js');
 const schedulePage = read('src/pages/SchedulePage.tsx');
 const scheduleBrowse = read('src/schedule/ScheduleBrowsePanel.tsx');
 const scheduleCollaborationPanel = read('src/schedule/ScheduleItemCollaborationPanel.tsx');
+const scheduleOccurrencePanel = read('src/schedule/ScheduleOccurrencePanel.tsx');
+const scheduleOccurrenceService = read('src/schedule/scheduleOccurrenceService.ts');
+const scheduleOccurrenceFactory = read('src/schedule/occurrenceGatewayFactory.ts');
+const scheduleOccurrenceGateway = read('src/schedule/supabaseScheduleOccurrenceGateway.ts');
 const scheduleViewMigration = read('supabase/migrations/20260903190345_oe_008_002_schedule_view_indexes.sql');
 const scheduleCollaborationMigration = read('supabase/migrations/20260903193026_oe_008_003_assignment_collaboration.sql');
 const scheduleReconciliationMigration = read('supabase/migrations/20260903204000_oe_008_001_003_requirements_reconciliation.sql');
 const scheduleReconciliationBackfill = read('supabase/migrations/20260903205500_oe_008_001_003_reconciliation_backfill.sql');
+const scheduleRecurrenceMigration = read('supabase/migrations/20260904100000_oe_008_004_deadlines_recurrence.sql');
 const scheduleMigration = read('supabase/migrations/20260903153944_oe_008_001_schedule_model.sql');
 const scheduleCommandHardening = read('supabase/migrations/20260903175453_oe_008_001_command_idempotency_hardening.sql');
 const scheduleGateway = read('src/schedule/supabaseScheduleGateway.ts');
@@ -220,13 +226,45 @@ assert(
     scheduleReconciliationBackfill.includes('v_event.source_version > v_visit.version') &&
     !scheduleReconciliationMigration.includes('schedule_occurrences') &&
     !scheduleReconciliationMigration.includes('schedule_notifications'),
-  'A Agenda deve manter RLS por item e consumir a fonte canônica de visitas sem antecipar OE-008.004/005.'
+  'A Agenda deve manter RLS por item e consumir a fonte canônica de visitas sem antecipar etapas antes da reconciliação.'
 );
 assert(
   scheduleBrowse.includes('{canManage && (') &&
     scheduleBrowse.includes('Origem: visita técnica') &&
     schedulePage.includes('Agenda corporativa'),
   'Equipe deve ser exclusiva da gestão e origens canônicas devem ser apresentadas sem IDs internos.'
+);
+assert(
+  !scheduleRecurrenceTests.includes('process.exit(0)') &&
+    scheduleRecurrenceTests.includes('Resultado Prazos e Recorrência') &&
+    scheduleModuleGate.includes("run('scripts/test-schedule-recurrence.ts')"),
+  'A suíte da OE-008.004 deve permanecer ativa dentro do gate do Módulo 008.'
+);
+assert(
+  scheduleRecurrenceMigration.includes('schedule_item_occurrences') &&
+    scheduleRecurrenceMigration.includes('source_item_version') &&
+    scheduleRecurrenceMigration.includes('agrocore_materialize_schedule_occurrences') &&
+    scheduleRecurrenceMigration.includes('agrocore_complete_schedule_occurrence') &&
+    scheduleRecurrenceMigration.includes('agrocore_cancel_schedule_occurrence') &&
+    scheduleRecurrenceMigration.includes('agrocore_reopen_schedule_occurrence') &&
+    scheduleRecurrenceMigration.includes("interval '366 days'") &&
+    !scheduleRecurrenceMigration.includes('schedule_notifications'),
+  'A OE-008.004 deve materializar somente ocorrências derivadas, limitadas e idempotentes, sem antecipar notificações.'
+);
+assert(
+  scheduleOccurrencePanel.includes('Ocorrências recorrentes') &&
+    scheduleOccurrencePanel.includes('aria-expanded={expanded}') &&
+    scheduleOccurrencePanel.includes('Motivo da alteração') &&
+    scheduleCollaborationPanel.includes('<ScheduleOccurrencePanel item={item} />') &&
+    !scheduleOccurrencePanel.includes('OE-008'),
+  'Prazos recorrentes devem estar acessíveis na interface sem códigos internos.'
+);
+assert(
+  scheduleOccurrenceService.includes("schedule:view") &&
+    scheduleOccurrenceService.includes('participantUserIds.includes') &&
+    scheduleOccurrenceGateway.includes('executeWithRetry') &&
+    scheduleOccurrenceFactory.includes('UnavailableScheduleOccurrenceGateway'),
+  'A recorrência deve respeitar RBAC por item, retry seguro e fail-closed em produção.'
 );
 assert(
   scheduleMigration.includes('create table if not exists public.schedule_items') &&
@@ -246,6 +284,11 @@ assert(
   'O build de produção não pode depender do prebuild temporário de diagnóstico.'
 );
 assert(
+  typeof packageJson.scripts?.['test:schedule-recurrence'] === 'string' &&
+    packageJson.scripts['test:schedule-recurrence'].includes('test-schedule-recurrence.ts'),
+  'A suíte de recorrência deve estar registrada no package.json.'
+);
+assert(
   typeof packageJson.scripts?.build === 'string' &&
     packageJson.scripts.build.includes('test:environment-contract') &&
     packageJson.scripts.build.includes('test:module-001') &&
@@ -259,4 +302,4 @@ assert(
   'O gate de produção deve validar ambiente sem chaves e regressões dos Módulos 001 a 008.'
 );
 
-console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e Módulo 008 reconciliado até OE-008.003.');
+console.log('✅ Invariantes de release aprovadas: base 000–007 preservada e Módulo 008 reconciliado até OE-008.004.');
