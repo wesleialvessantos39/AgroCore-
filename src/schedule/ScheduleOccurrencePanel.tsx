@@ -62,6 +62,7 @@ export function ScheduleOccurrencePanel({
   const [activeAction, setActiveAction] = useState<{
     readonly occurrenceId: string;
     readonly action: OccurrenceAction;
+    readonly idempotencyKey: string;
   } | null>(null);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -97,9 +98,22 @@ export function ScheduleOccurrencePanel({
     (currentUserId !== null && item.responsibleUserId === currentUserId);
 
   const openAction = (occurrenceId: string, action: OccurrenceAction) => {
-    setActiveAction({ occurrenceId, action });
-    setReason('');
-    setErrorMessage(null);
+    try {
+      setActiveAction({
+        occurrenceId,
+        action,
+        idempotencyKey: secureCommandId(),
+      });
+      setReason('');
+      setErrorMessage(null);
+    } catch (error) {
+      setActiveAction(null);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível preparar a operação com segurança.'
+      );
+    }
   };
 
   const closeAction = () => {
@@ -119,7 +133,7 @@ export function ScheduleOccurrencePanel({
     try {
       const input = {
         expectedVersion: occurrence.version,
-        idempotencyKey: secureCommandId(),
+        idempotencyKey: activeAction.idempotencyKey,
         reason,
       };
       const updated =
