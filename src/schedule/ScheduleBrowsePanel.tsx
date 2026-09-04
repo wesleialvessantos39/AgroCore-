@@ -375,9 +375,7 @@ export function ScheduleBrowsePanel({
                     }
                     aria-pressed={scope === 'team'}
                     onClick={() => setScope('team')}
-                  >
-                    Equipe
-                  </button>
+                  >Equipe</button>
                 )}
               </div>
             </fieldset>
@@ -403,7 +401,7 @@ export function ScheduleBrowsePanel({
                   onClick={() => setMode('list')}
                 >
                   <List className="h-4 w-4" aria-hidden="true" />
-                  Lista
+                  <span>Lista</span>
                 </button>
                 <button
                   type="button"
@@ -417,7 +415,7 @@ export function ScheduleBrowsePanel({
                   onClick={() => setMode('calendar')}
                 >
                   <CalendarDays className="h-4 w-4" aria-hidden="true" />
-                  Calendário
+                  <span>Calendário</span>
                 </button>
               </div>
             </fieldset>
@@ -564,9 +562,7 @@ export function ScheduleBrowsePanel({
                     onClick={() =>
                       setMonthKey(currentScheduleMonthKey(viewTimeZone))
                     }
-                  >
-                    Hoje
-                  </button>
+                  >Hoje</button>
                   <button
                     type="button"
                     className={SCHEDULE_THEME.buttonSecondary}

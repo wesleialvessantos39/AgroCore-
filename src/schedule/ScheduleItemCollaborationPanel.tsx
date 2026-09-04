@@ -357,7 +357,7 @@ export function ScheduleItemCollaborationPanel({
           className={SCHEDULE_THEME.surfaceSoft + ' mt-4 p-3 text-sm'}
         >
           O diretório de integrantes está indisponível. A atribuição fica
-          bloqueada até que a lista canônica da organização possa ser
+          bloqueada até que a lista oficial da organização possa ser
           carregada com segurança.
         </div>
       )}
@@ -511,7 +511,7 @@ export function ScheduleItemCollaborationPanel({
               className={SCHEDULE_THEME.buttonPrimary}
               disabled={submitting || actionReason.trim().length < 3}
             >
-              {submitting ? 'Registrando...' : 'Confirmar'}
+              {submitting ? 'Registrando...' : <span>Confirmar</span>}
             </button>
           </div>
         </form>

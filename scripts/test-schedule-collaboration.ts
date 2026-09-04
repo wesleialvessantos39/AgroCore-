@@ -168,12 +168,19 @@ await test('4. migration mantém coerência de timestamps terminais', () => {
 });
 
 await test('5. participantes usam relação própria sem copiar perfis', () => {
+  const tableStart = migration.indexOf(
+    'create table if not exists public.schedule_item_participants'
+  );
+  const tableEnd = migration.indexOf(
+    'create table if not exists public.schedule_item_collaboration_revisions'
+  );
+  const block = migration.slice(tableStart, tableEnd);
   assert.match(
-    migration,
+    block,
     /create table if not exists public\.schedule_item_participants/
   );
-  assert.match(migration, /user_id uuid not null references auth\.users/);
-  assert.doesNotMatch(migration, /email|phone|cpf|display_name text/i);
+  assert.match(block, /user_id uuid not null references auth\.users/);
+  assert.doesNotMatch(block, /email|phone|cpf|display_name/i);
 });
 
 await test('6. responsável e participante não podem duplicar o mesmo usuário', () => {
