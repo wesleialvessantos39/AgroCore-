@@ -15,6 +15,7 @@ import { ProposalsProvider } from './proposals/ProposalsContext';
 import { DocumentsProvider } from './documents/DocumentsContext';
 import { FieldVisitsProvider } from './fieldVisits/FieldVisitsContext';
 import { ScheduleProvider } from './schedule/ScheduleContext';
+import { NotificationProvider } from './notifications/NotificationContext';
 import { AppRoutes } from './routes/AppRoutes';
 
 export default function App() {
@@ -32,11 +33,13 @@ export default function App() {
                         <DocumentsProvider>
                           <FieldVisitsProvider>
                             <ScheduleProvider>
-                              <ConnectivityNotice />
-                              <UpdateNotice />
-                              <RouteAnnouncer />
-                              <SkipToContent />
-                              <AppRoutes />
+                              <NotificationProvider>
+                                <ConnectivityNotice />
+                                <UpdateNotice />
+                                <RouteAnnouncer />
+                                <SkipToContent />
+                                <AppRoutes />
+                              </NotificationProvider>
                             </ScheduleProvider>
                           </FieldVisitsProvider>
                         </DocumentsProvider>

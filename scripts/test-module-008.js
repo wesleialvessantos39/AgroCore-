@@ -22,10 +22,11 @@ try {
   run('scripts/test-schedule-reconciliation.ts');
   run('scripts/test-schedule-recurrence.ts');
   run('scripts/test-schedule-recurrence-hardening.ts');
+  run('scripts/test-schedule-notifications.ts');
   run('scripts/test-schedule-accessibility.ts');
   run('scripts/test-schedule-theme.js');
   console.log(
-    '\n✅ MÓDULO 008 — GATE RECONCILIADO ATÉ OE-008.004 APROVADO'
+    '\n✅ MÓDULO 008 — GATE RECONCILIADO ATÉ OE-008.005 APROVADO'
   );
 } catch (error) {
   console.error('\n❌ Falha na homologação do Módulo 008.');
