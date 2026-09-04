@@ -78,7 +78,6 @@ await test('1. alteração somente de horário não duplica ocorrência terminal
   const { scheduleService, occurrenceService } = stack();
   const ctx = ownerContext();
   const item = await scheduleService.createTask(ctx, {
-    kind: 'task',
     title: 'Prazo recorrente',
     description: null,
     priority: 'medium',
@@ -124,7 +123,6 @@ await test('2. replay antigo devolve o snapshot original mesmo após reabertura 
   const { scheduleService, occurrenceService } = stack();
   const ctx = ownerContext();
   const item = await scheduleService.createTask(ctx, {
-    kind: 'task',
     title: 'Replay recorrente',
     description: null,
     priority: 'medium',
