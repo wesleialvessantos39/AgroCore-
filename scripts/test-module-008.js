@@ -12,7 +12,7 @@ function run(script) {
 }
 
 console.log('====================================================');
-console.log(' AGROCORE — HOMOLOGAÇÃO DO MÓDULO 008');
+console.log(' AGROCORE — HOMOLOGAÇÃO FINAL DO MÓDULO 008');
 console.log('====================================================\n');
 
 try {
@@ -26,10 +26,11 @@ try {
   run('scripts/test-schedule-external-notifications.ts');
   run('scripts/test-schedule-accessibility.ts');
   run('scripts/test-schedule-theme.js');
+  run('scripts/test-schedule-final-homologation.ts');
   console.log(
-    '\n✅ MÓDULO 008 — GATE RECONCILIADO ATÉ OE-008.006 APROVADO'
+    '\n✅ MÓDULO 008 — CONCLUÍDO — GATE FINAL OE-008.007 APROVADO'
   );
 } catch (error) {
-  console.error('\n❌ Falha na homologação do Módulo 008.');
+  console.error('\n❌ Falha na homologação final do Módulo 008.');
   process.exit(1);
 }
